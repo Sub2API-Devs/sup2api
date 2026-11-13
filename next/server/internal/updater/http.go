@@ -128,7 +128,8 @@ func registerRoutes(r *httpapi.Router, available bool, client *http.Client, toke
 	r.Perm("GET", "/system/offload", "settings:read", handler)
 	r.Perm("PUT", "/system/offload", "settings:manage", handler)
 	r.Perm("GET", "/system/update-source", "settings:read", handler)
-	r.Perm("PUT", "/system/update-source", "settings:manage", handler)
+	// The update source decides what code the next upgrade runs.
+	update.Perm("PUT", "/system/update-source", "settings:manage", handler)
 	r.Perm("GET", "/system/update-check", "system:update:read", handler)
 	update.Perm("POST", "/system/releases/import", "system:update:execute", handler)
 }

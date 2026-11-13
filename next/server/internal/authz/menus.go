@@ -8,6 +8,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // MenuItem is one sidebar entry.
@@ -31,7 +32,8 @@ type coreMenuItem struct {
 	label core.LocalizedText
 	icon  string // console icon name (see web/)
 	path  string
-	// anyOf lists the permissions granting visibility; empty = any user.
+	// anyOf lists the permissions granting visibility, each held with any
+	// scope (PermissionSet.HasAction); empty = any user.
 	anyOf []string
 }
 
@@ -65,8 +67,8 @@ var coreMenus = []coreMenuSection{
 	// Accounts and the proxies they go out through, each for the keys of its
 	// list endpoint (GET /accounts, GET /proxies).
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
-		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read", "account:own:read"}},
-		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read"}},
+		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read"}},
+		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read"}},
 	}},
 	// No core items: request guards and moderation are plugins and join it.
 	{"security", lt("Security", "安全"), nil},
@@ -229,7 +231,7 @@ func hasAny(set core.PermissionSet, perms []string) bool {
 		return true
 	}
 	for _, p := range perms {
-		if set.Has(p) {
+		if a, err := perm.Parse(p); err == nil && set.HasAction(a.Action) {
 			return true
 		}
 	}

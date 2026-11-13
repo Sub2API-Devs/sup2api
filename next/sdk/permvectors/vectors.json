@@ -1,0 +1,604 @@
+{
+ "canonical": [
+  {
+   "in": "account:update",
+   "out": "account:update"
+  },
+  {
+   "in": "account:update:*",
+   "out": "account:update"
+  },
+  {
+   "in": "account:own:update",
+   "out": "account:update:own"
+  },
+  {
+   "in": "account:own:credential:view",
+   "out": "account:credential:view:own"
+  },
+  {
+   "in": "proxy:own:manage",
+   "out": "proxy:manage:own"
+  },
+  {
+   "in": "proxy:own:read",
+   "out": "proxy:read:own"
+  },
+  {
+   "in": "account:update:own",
+   "out": "account:update:own"
+  },
+  {
+   "in": "account:update:group/12",
+   "out": "account:update:group/12"
+  },
+  {
+   "in": "account:update:group/12/*",
+   "out": "account:update:group/12"
+  },
+  {
+   "in": "account:update:group/12/account/*",
+   "out": "account:update:group/12"
+  },
+  {
+   "in": "account:update:group/*/account/*",
+   "out": "account:update:group/*"
+  },
+  {
+   "in": "account:update:group/*",
+   "out": "account:update:group/*"
+  },
+  {
+   "in": "account:update:group/*/*",
+   "out": "account:update:group/*"
+  },
+  {
+   "in": "account:update:account/*",
+   "out": "account:update"
+  },
+  {
+   "in": "account:update:account/125",
+   "out": "account:update:account/125"
+  },
+  {
+   "in": "account:update:group/12/account/125",
+   "out": "account:update:group/12/account/125"
+  },
+  {
+   "in": "account:update:group/*/account/125",
+   "out": "account:update:group/*/account/125"
+  },
+  {
+   "in": "account:credential:view",
+   "out": "account:credential:view"
+  },
+  {
+   "in": "account:credential:view:group/3",
+   "out": "account:credential:view:group/3"
+  },
+  {
+   "in": "proxy:manage:proxy/8",
+   "out": "proxy:manage:proxy/8"
+  },
+  {
+   "in": "proxy:manage:proxy/*",
+   "out": "proxy:manage"
+  },
+  {
+   "in": "proxy:read:*",
+   "out": "proxy:read"
+  },
+  {
+   "in": "account:create:group/12",
+   "out": "account:create:group/12"
+  },
+  {
+   "in": "account:create:own",
+   "out": "account:create:own"
+  },
+  {
+   "in": "account:create:group/*",
+   "out": "account:create:group/*"
+  },
+  {
+   "in": "system:update:execute",
+   "out": "system:update:execute"
+  },
+  {
+   "in": "user:read",
+   "out": "user:read"
+  },
+  {
+   "in": "plugin.dynweight:reset",
+   "out": "plugin.dynweight:reset"
+  },
+  {
+   "in": "account:update:group/012",
+   "invalid": true
+  },
+  {
+   "in": "account:update:group/0",
+   "invalid": true
+  },
+  {
+   "in": "account:update:group/-1",
+   "invalid": true
+  },
+  {
+   "in": "account:update:group/x",
+   "invalid": true
+  },
+  {
+   "in": "account:update:proxy/8",
+   "invalid": true
+  },
+  {
+   "in": "proxy:manage:group/1",
+   "invalid": true
+  },
+  {
+   "in": "proxy:manage:account/1",
+   "invalid": true
+  },
+  {
+   "in": "account:create:account/5",
+   "invalid": true
+  },
+  {
+   "in": "account:create:group/1/account/5",
+   "invalid": true
+  },
+  {
+   "in": "user:read:own",
+   "invalid": true
+  },
+  {
+   "in": "user:read:*",
+   "invalid": true
+  },
+  {
+   "in": "settings:manage:group/1",
+   "invalid": true
+  },
+  {
+   "in": "account:update:group/1/proxy/2",
+   "invalid": true
+  },
+  {
+   "in": "account:update:account/1/group/2",
+   "invalid": true
+  },
+  {
+   "in": "account:update:own/1",
+   "invalid": true
+  },
+  {
+   "in": "account:own:read:own",
+   "invalid": true
+  },
+  {
+   "in": "account:update:account/+5",
+   "invalid": true
+  },
+  {
+   "in": "account:update:/",
+   "invalid": true
+  },
+  {
+   "in": "plugin.x:y:own",
+   "invalid": true
+  },
+  {
+   "in": "account:own:read",
+   "out": "account:read:own"
+  },
+  {
+   "in": "account:own:create",
+   "out": "account:create:own"
+  },
+  {
+   "in": "account:own:delete",
+   "out": "account:delete:own"
+  },
+  {
+   "in": "account:own:test",
+   "out": "account:test:own"
+  },
+  {
+   "in": "account:create:group/12/account/*",
+   "out": "account:create:group/12"
+  },
+  {
+   "in": "proxy:read:proxy/*/*",
+   "out": "proxy:read"
+  },
+  {
+   "in": "account:update:group/12/account/*/*",
+   "out": "account:update:group/12"
+  },
+  {
+   "in": "account:read:foo/*",
+   "invalid": true
+  },
+  {
+   "in": "account:read:proxy/*",
+   "invalid": true
+  },
+  {
+   "in": "proxy:read:account/*",
+   "invalid": true
+  },
+  {
+   "in": "account:read:x/*/y/*",
+   "invalid": true
+  },
+  {
+   "in": "account:read:*/*",
+   "invalid": true
+  },
+  {
+   "in": "account:update:group//account/1",
+   "invalid": true
+  },
+  {
+   "in": "account:update:account/9223372036854775808",
+   "invalid": true
+  },
+  {
+   "in": "proxy:manage:group/*",
+   "invalid": true
+  }
+ ],
+ "implies": [
+  {
+   "have": "account:update",
+   "want": "account:update",
+   "ok": true
+  },
+  {
+   "have": "account:update",
+   "want": "account:update:own",
+   "ok": true
+  },
+  {
+   "have": "account:update",
+   "want": "account:update:group/*",
+   "ok": true
+  },
+  {
+   "have": "account:update",
+   "want": "account:update:group/12",
+   "ok": true
+  },
+  {
+   "have": "account:update",
+   "want": "account:update:group/*/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update",
+   "want": "account:update:group/12/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update",
+   "want": "account:update:account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update",
+   "ok": false
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update:own",
+   "ok": true
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update:group/*",
+   "ok": false
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update:group/12",
+   "ok": false
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update:group/*/account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update:group/12/account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:own",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update:own",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update:group/*",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update:group/12",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update:group/*/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update:group/12/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/*",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:own",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:group/*",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:group/12",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:group/*/account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:group/12/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:own",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:group/*",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:group/12",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:group/*/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:group/12/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:own",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/*",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/12",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/*/account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/12/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:own",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:group/*",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:group/12",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:group/*/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:group/12/account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:account/125",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:group/13",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/13/account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:account/126",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12",
+   "want": "account:update:account/125",
+   "ok": false
+  },
+  {
+   "have": "account:update",
+   "want": "account:read",
+   "ok": false
+  },
+  {
+   "have": "account:read",
+   "want": "account:read:own",
+   "ok": true
+  },
+  {
+   "have": "account:own:read",
+   "want": "account:read:own",
+   "ok": true
+  },
+  {
+   "have": "account:read:own",
+   "want": "account:read",
+   "ok": false
+  },
+  {
+   "have": "proxy:manage",
+   "want": "proxy:manage:proxy/8",
+   "ok": true
+  },
+  {
+   "have": "proxy:manage:proxy/8",
+   "want": "proxy:manage:proxy/9",
+   "ok": false
+  },
+  {
+   "have": "proxy:manage:own",
+   "want": "proxy:manage:proxy/8",
+   "ok": false
+  },
+  {
+   "have": "proxy:manage:proxy/8",
+   "want": "proxy:manage",
+   "ok": false
+  },
+  {
+   "have": "user:read",
+   "want": "user:read",
+   "ok": true
+  },
+  {
+   "have": "user:read",
+   "want": "user:create",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/*",
+   "want": "account:update:group/12/account/7",
+   "ok": true
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/12/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:group/12/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:group/12/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/*",
+   "want": "account:update:group/13/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/*",
+   "want": "account:update:own",
+   "ok": false
+  }
+ ]
+}

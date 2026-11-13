@@ -189,7 +189,8 @@ func fieldCode(err error, field string) string {
 // assigning roles without defining them, groups, user groups, accounts
 // without other people's credentials or the guarded settings, proxies, and
 // read access to prices, balances, usage, nodes, audit logs and tasks (which
-// it may also run), next to what a user and a supplier have.
+// it may also run), next to what a user has; with the credentials of the
+// accounts it created itself, it covers what a supplier has.
 var operatorDefaults = []string{
 	"user:read", "user:create", "user:update",
 	"role:read", "role:assign",
@@ -197,8 +198,8 @@ var operatorDefaults = []string{
 	"group:read", "group:manage",
 	"segment:read", "segment:manage",
 	"account:read", "account:create", "account:update", "account:delete", "account:test",
-	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
-	"proxy:read", "proxy:manage", "proxy:own:read", "proxy:own:manage",
+	"account:credential:view:own",
+	"proxy:read", "proxy:manage",
 	"price:read",
 	"balance:self:read", "balance:all:read",
 	"usage:self:read", "usage:all:read",
@@ -235,9 +236,9 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 		t.Fatalf("super_admin: %+v", byKey[RoleSuperAdmin])
 	}
 	// The admin holds every core permission but the five reserved for the
-	// super admin (decision D2).
+	// super admin (decision D2) and the former own-level aliases.
 	superOnly := superOnlyKeys()
-	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
+	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly)-len(legacyOwnKeys()) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
 		t.Fatalf("admin perms = %d of %d: %v", len(got), n, got)
 	}
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
@@ -247,8 +248,8 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	// no group binding (decision 7), and nothing to assign.
 	sup := byKey[RoleSupplier]
 	wantSup := []string{
-		"account:own:create", "account:own:credential:view", "account:own:delete", "account:own:read", "account:own:test", "account:own:update",
-		"proxy:own:manage", "proxy:own:read",
+		"account:create:own", "account:credential:view:own", "account:delete:own", "account:read:own", "account:test:own", "account:update:own",
+		"proxy:manage:own", "proxy:read:own",
 	}
 	if sup == nil || !sup.Builtin || sup.Superuser || !slices.Equal(slices.Sorted(slices.Values(sup.PermissionKeys)), wantSup) ||
 		len(sup.AssignableRoleKeys) != 0 || sup.AssignCustom {
@@ -1269,12 +1270,11 @@ func TestOwnershipCatalog(t *testing.T) {
 			menuKeys[it.id] = join(it.anyOf)
 		}
 	}
-	if menuKeys["accounts"] != "account:read,account:own:read" ||
-		menuKeys["proxies"] != "proxy:read,proxy:own:read" {
+	if menuKeys["accounts"] != "account:read" || menuKeys["proxies"] != "proxy:read" {
 		t.Fatalf("menus: %v", menuKeys)
 	}
-	set := core.PermissionSet{Keys: map[string]struct{}{"proxy:own:read": {}}}
-	if !hasAny(set, []string{"proxy:read", "proxy:own:read"}) || hasAny(set, []string{"proxy:read"}) {
+	set := core.PermissionSetOf("proxy:own:read")
+	if !hasAny(set, []string{"proxy:read"}) || hasAny(set, []string{"proxy:manage"}) || set.Has("proxy:read") {
 		t.Fatal("hasAny")
 	}
 }

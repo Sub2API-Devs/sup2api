@@ -18,7 +18,7 @@ import (
 func TestRuntimeFeaturesRoutesRequirePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	auth := ccgRouteAuth{false}
+	auth := ccgRouteAuth{allowed: false}
 	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	r := httptest.NewRequest("GET", "/api/v1/system/ccgateway/accounts/25/features", nil)
 	r.Header.Set("Authorization", "Bearer test")

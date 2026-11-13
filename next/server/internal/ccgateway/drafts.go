@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -22,18 +23,18 @@ import (
 // /accounts adopts it. A draft is only visible to its creator unless the
 // caller holds settings:manage.
 
-// draftKeys are the permissions of the draft endpoints. account:own:create
-// is accepted besides the contract's settings:manage / account:create:
-// own-level users may create accounts (POST /accounts), so they must be
-// able to prepare the runtime of a Claude Code account too.
-var draftKeys = []string{"settings:manage", "account:create", "account:own:create"}
+// draftActions are the permissions of the draft endpoints: settings:manage,
+// or account:create with any scope: whoever may create some accounts (POST
+// /accounts) must be able to prepare the runtime of a Claude Code account
+// too.
+var draftActions = []perm.Key{perm.SettingsManage, perm.AccountCreate}
 
 func (s *Service) registerDraftRoutes(r *httpapi.Router) {
-	r.PermAny("POST", "/system/ccgateway/drafts", s.draftCreate, draftKeys...)
-	r.PermAny("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftKeys...)
-	r.PermAny("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftKeys...)
-	r.PermAny("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftKeys...)
-	r.PermAny("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftKeys...)
+	r.PermScoped("POST", "/system/ccgateway/drafts", s.draftCreate, draftActions...)
+	r.PermScoped("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftActions...)
+	r.PermScoped("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftActions...)
+	r.PermScoped("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftActions...)
+	r.PermScoped("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftActions...)
 }
 
 func newDraftKey() string {
@@ -47,7 +48,11 @@ func newDraftKey() string {
 // draftScope is nil for settings administrators (every draft), otherwise
 // the caller id (only drafts it created).
 func draftScope(ctx context.Context) *int64 {
-	return core.OwnerScope(ctx, "settings:manage")
+	if core.HasGranted(ctx, perm.SettingsManage) {
+		return nil
+	}
+	uid, _ := core.UserID(ctx)
+	return &uid
 }
 
 func draftNotFound(base *core.Error) *core.Error { return reasonError(base, "draft_not_found") }
@@ -82,25 +87,6 @@ func (s *Service) touchDraftOf(ctx context.Context, key string, scope *int64, ki
 	return tag.RowsAffected() == 1, nil
 }
 
-// canProxies is the proxy range of a draft caller, the account module's
-// rule for POST /accounts (proxyRangeFor "account:create", CONTRACTS
-// §21.4): account:create may use every proxy; otherwise proxy:read sees
-// every proxy, proxy:own:read / proxy:own:manage the caller's own, anything
-// else none.
-func (s *Service) canProxies(ctx context.Context) (scope *int64, none bool) {
-	if core.OwnerScope(ctx, "account:create") == nil {
-		return nil, false
-	}
-	if core.Can(ctx, s.Authorizer, "proxy:read") {
-		return nil, false
-	}
-	if core.Can(ctx, s.Authorizer, "proxy:own:read") || core.Can(ctx, s.Authorizer, "proxy:own:manage") {
-		uid, _ := core.UserID(ctx)
-		return &uid, false
-	}
-	return nil, true
-}
-
 // checkProxy validates a draft's proxy_id: none (direct egress), or visible
 // to the caller and not disabled.
 func (s *Service) checkProxy(ctx context.Context, id *int64) error {
@@ -110,10 +96,14 @@ func (s *Service) checkProxy(ctx context.Context, id *int64) error {
 	if *id <= 0 {
 		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}
-	scope, none := s.canProxies(ctx)
+	// The account module's rule for POST /accounts (CONTRACTS §21.4).
+	refs, e := core.ProxyRefScope(ctx, s.Authorizer, perm.AccountCreate)
+	if e != nil {
+		return e
+	}
 	var status string
-	e := s.DB.Pool.QueryRow(ctx, `SELECT status FROM proxies WHERE id=$1 AND NOT $2::boolean
-		AND ($3::bigint IS NULL OR created_by=$3)`, *id, none, scope).Scan(&status)
+	e = s.DB.Pool.QueryRow(ctx, `SELECT p.status FROM proxies p WHERE p.id=$1 AND `+core.ProxyRows.SQL(2),
+		append([]any{*id}, core.ProxyRows.Args(refs)...)...).Scan(&status)
 	if store.IsNoRows(e) {
 		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}

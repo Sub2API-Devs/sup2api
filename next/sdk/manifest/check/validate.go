@@ -769,12 +769,19 @@ func MigrationFiles(files map[string][]byte, dir string) []string {
 	return out
 }
 
+// validUserPermKey reports whether k is a plugin-local permission key. Its
+// last segment is never "own": the core would read it as a scope
+// (CONTRACTS §21.0); "*" and "/" are outside the pattern already.
+func validUserPermKey(k string) bool {
+	return userPermKeyRe.MatchString(k) && !strings.HasSuffix(k, ":own")
+}
+
 func (v *validator) userPermissions() {
 	seen := map[string]bool{}
 	for i, up := range v.m.UserPermissions {
 		f := fmt.Sprintf("userPermissions[%d]", i)
-		if !userPermKeyRe.MatchString(up.Key) || len(manifest.PermissionKey(v.m.Key, up.Key)) > 150 {
-			v.add(f+".key", "invalid_format", "permission key %q must match %s", up.Key, userPermKeyRe.String())
+		if !validUserPermKey(up.Key) || len(manifest.PermissionKey(v.m.Key, up.Key)) > 150 {
+			v.add(f+".key", "invalid_format", "permission key %q must match %s and not end in :own", up.Key, userPermKeyRe.String())
 		} else if seen[up.Key] {
 			v.add(f+".key", "duplicate", "permission %q declared twice", up.Key)
 		}
@@ -789,7 +796,7 @@ func (v *validator) userPermissions() {
 		}
 		// Old keys are usually no longer declared (a rename or a split).
 		for j, from := range up.InheritFrom {
-			if from == up.Key || !userPermKeyRe.MatchString(from) {
+			if from == up.Key || !validUserPermKey(from) {
 				v.add(fmt.Sprintf("%s.inheritFrom[%d]", f, j), "invalid_value", "inheritFrom %q must be a local permission key other than the permission's own", from)
 			}
 		}

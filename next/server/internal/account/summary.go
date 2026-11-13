@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -21,24 +22,23 @@ type Counts struct {
 	Disabled     int64 `json:"disabled"`
 }
 
-// CountAccounts counts the live accounts in scope (nil = all, otherwise the
-// ones the user created; core.OwnerScope), for GET /accounts/summary and the
-// usage overview.
-func CountAccounts(ctx context.Context, q store.Querier, scope *int64) (Counts, error) {
+// CountAccounts counts the live accounts in scope (core.AllScope for the
+// usage overview), for GET /accounts/summary.
+func CountAccounts(ctx context.Context, q store.Querier, scope core.DataScope) (Counts, error) {
 	var c Counts
 	err := q.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE a.status = 'active' AND a.schedulable),
 		count(*) FILTER (WHERE a.status IN ('auto_disabled', 'error') OR (a.status = 'active' AND NOT a.schedulable)),
 		count(*) FILTER (WHERE a.status = 'disabled')
-		FROM accounts a WHERE a.deleted_at IS NULL AND `+scoped("$1"), scope).
+		FROM accounts a WHERE a.deleted_at IS NULL AND `+core.AccountRows.SQL(1), core.AccountRows.Args(scope)...).
 		Scan(&c.Total, &c.Available, &c.AutoDisabled, &c.Disabled)
 	return c, err
 }
 
-// summary is GET /accounts/summary: the caller's account counts, over every
-// account with account:read, its own ones with account:own:read only.
+// summary is GET /accounts/summary: the caller's account counts, over the
+// accounts its account:read scope reaches.
 func (s *Service) summary(c *gin.Context) {
 	ctx := c.Request.Context()
-	counts, err := CountAccounts(ctx, s.d.DB.Pool, core.OwnerScope(ctx, "account:read"))
+	counts, err := CountAccounts(ctx, s.d.DB.Pool, s.scopeOf(ctx, perm.AccountRead))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

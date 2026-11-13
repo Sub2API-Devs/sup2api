@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // Built-in role keys.
@@ -24,7 +25,7 @@ type coreModule struct {
 }
 
 type corePerm struct {
-	key    string
+	key    perm.Key
 	en, zh string
 	// sensitive flags credentials, money, trust roots, code execution and
 	// identity or authorization in the role editor; display only, it has no
@@ -40,10 +41,39 @@ type corePerm struct {
 	// (httpapi.Router.StepUp, where the rule is); display only, for the
 	// access key selector. Always sensitive (TestCatalogFlagInvariants).
 	stepUp bool
+	// deprecated marks a former own-level key (legacyOwnPerms): still in the
+	// catalog and honoured as an alias, never a default, not listed for the
+	// role editor.
+	deprecated bool
 	// inherits: when the permission is first created, every role holding
 	// one of these keys gets it too (splitting a permission keeps its
 	// holders' rights; grantInherited).
 	inherits []string
+}
+
+// legacyOwnLabels are the former own-level keys' catalog rows as they were,
+// so that cores of either version write the same row during a rolling
+// upgrade.
+var legacyOwnLabels = map[perm.Key]corePerm{
+	perm.AccountRead:           {en: "Read own accounts", zh: "查看自己创建的账号"},
+	perm.AccountCreate:         {en: "Create own accounts", zh: "新建账号（归自己所有）"},
+	perm.AccountUpdate:         {en: "Edit own accounts", zh: "编辑自己创建的账号"},
+	perm.AccountDelete:         {en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
+	perm.AccountTest:           {en: "Test own accounts", zh: "测试自己创建的账号"},
+	perm.AccountCredentialView: {en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, stepUp: true},
+	perm.ProxyRead:             {en: "View own proxies", zh: "查看自己创建的代理"},
+	perm.ProxyManage:           {en: "Manage own proxies", zh: "管理自己创建的代理"},
+}
+
+// legacyOwnPerms are the deprecated catalog rows of the former own-level
+// keys of actions (R2a; the next version marks them removed).
+func legacyOwnPerms(actions ...perm.Key) []corePerm {
+	out := make([]corePerm, len(actions))
+	for i, a := range actions {
+		out[i] = legacyOwnLabels[a]
+		out[i].key, out[i].deprecated = perm.Key(perm.LegacyOwnKey(a)), true
+	}
+	return out
 }
 
 func lt(en, zh string) core.LocalizedText { return core.LocalizedText{"en": en, "zh": zh} }
@@ -52,114 +82,108 @@ func lt(en, zh string) core.LocalizedText { return core.LocalizedText{"en": en, 
 // here defines the sort order shown in the role editor.
 var coreModules = []coreModule{
 	{"user", lt("Users", "用户"), []corePerm{
-		{key: "user:read", en: "View users", zh: "查看用户"},
-		{key: "user:create", en: "Create users", zh: "新建用户"},
-		{key: "user:update", en: "Edit users", zh: "编辑用户"},
-		{key: "user:delete", en: "Delete users", zh: "删除用户", sensitive: true, stepUp: true},
-		{key: "user:password:reset", en: "Reset user passwords and two-factor", zh: "重置他人密码与两步验证", sensitive: true, stepUp: true},
+		{key: perm.UserRead, en: "View users", zh: "查看用户"},
+		{key: perm.UserCreate, en: "Create users", zh: "新建用户"},
+		{key: perm.UserUpdate, en: "Edit users", zh: "编辑用户"},
+		{key: perm.UserDelete, en: "Delete users", zh: "删除用户", sensitive: true, stepUp: true},
+		{key: perm.UserPasswordReset, en: "Reset user passwords and two-factor", zh: "重置他人密码与两步验证", sensitive: true, stepUp: true},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
-		{key: "role:read", en: "View roles and permissions", zh: "查看角色与权限"},
+		{key: perm.RoleRead, en: "View roles and permissions", zh: "查看角色与权限"},
 		// role:manage was split in two; its holders keep both halves.
-		{key: "role:define", en: "Define roles", zh: "定义角色", sensitive: true, inherits: []string{"role:manage"}},
-		{key: "role:assign", en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, inherits: []string{"role:manage"}},
+		{key: perm.RoleDefine, en: "Define roles", zh: "定义角色", sensitive: true, inherits: []string{"role:manage"}},
+		{key: perm.RoleAssign, en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, inherits: []string{"role:manage"}},
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
-		{key: "apikey:self:manage", en: "Manage own API keys", zh: "管理自己的 API Key"},
+		{key: perm.APIKeySelfManage, en: "Manage own API keys", zh: "管理自己的 API Key"},
 	}},
 	{"group", lt("Groups", "分组"), []corePerm{
-		{key: "group:read", en: "View groups", zh: "查看分组"},
-		{key: "group:manage", en: "Manage groups", zh: "管理分组", sensitive: true},
+		{key: perm.GroupRead, en: "View groups", zh: "查看分组"},
+		{key: perm.GroupManage, en: "Manage groups", zh: "管理分组", sensitive: true},
 	}},
 	// User groups (segments, CONTRACTS §97): who is in which one, the private
 	// groups it may use and what it pays there.
 	{"segment", lt("User groups", "用户组"), []corePerm{
-		{key: "segment:read", en: "View user groups", zh: "查看用户组"},
-		{key: "segment:manage", en: "Manage user groups", zh: "管理用户组"},
+		{key: perm.SegmentRead, en: "View user groups", zh: "查看用户组"},
+		{key: perm.SegmentManage, en: "Manage user groups", zh: "管理用户组"},
 	}},
-	{"account", lt("Accounts", "账号"), []corePerm{
-		{key: "account:read", en: "View accounts", zh: "查看账号"},
-		{key: "account:create", en: "Create accounts", zh: "新建账号"},
-		{key: "account:update", en: "Edit accounts", zh: "编辑账号"},
-		{key: "account:delete", en: "Delete accounts", zh: "删除账号", sensitive: true},
-		{key: "account:test", en: "Test accounts", zh: "测试账号"},
-		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true, stepUp: true},
-		// Ownership (CONTRACTS §21): "own" keys only reach accounts the caller
-		// created; a full key above overrides its own counterpart.
-		{key: "account:own:read", en: "Read own accounts", zh: "查看自己创建的账号"},
-		{key: "account:own:create", en: "Create own accounts", zh: "新建账号（归自己所有）"},
-		{key: "account:own:update", en: "Edit own accounts", zh: "编辑自己创建的账号"},
-		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
-		{key: "account:own:test", en: "Test own accounts", zh: "测试自己创建的账号"},
-		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, stepUp: true},
-		{key: "account:settings:custom", en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
-		{key: "account:group:bind", en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
-		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true},
-	}},
-	{"proxy", lt("Proxies", "代理"), []corePerm{
-		{key: "proxy:read", en: "View proxies", zh: "查看代理"},
-		{key: "proxy:manage", en: "Manage proxies", zh: "管理代理", sensitive: true, stepUp: true},
-		{key: "proxy:own:read", en: "View own proxies", zh: "查看自己创建的代理"},
-		{key: "proxy:own:manage", en: "Manage own proxies", zh: "管理自己创建的代理"},
-	}},
+	{"account", lt("Accounts", "账号"), slices.Concat([]corePerm{
+		// Scopable (perm.ScopeType): account:read reaches every account,
+		// account:read:own, :group/12, :account/125 … some (CONTRACTS §21).
+		{key: perm.AccountRead, en: "View accounts", zh: "查看账号"},
+		{key: perm.AccountCreate, en: "Create accounts", zh: "新建账号"},
+		{key: perm.AccountUpdate, en: "Edit accounts", zh: "编辑账号"},
+		{key: perm.AccountDelete, en: "Delete accounts", zh: "删除账号", sensitive: true},
+		{key: perm.AccountTest, en: "Test accounts", zh: "测试账号"},
+		{key: perm.AccountCredentialView, en: "View account credentials", zh: "查看账号凭证", sensitive: true, stepUp: true},
+		// The former own-level keys, aliases of <action>:own (CONTRACTS §21).
+	}, legacyOwnPerms(perm.AccountRead, perm.AccountCreate, perm.AccountUpdate, perm.AccountDelete, perm.AccountTest, perm.AccountCredentialView), []corePerm{
+		{key: perm.AccountSettingsCustom, en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
+		{key: perm.AccountGroupBind, en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
+		{key: perm.AccountRelay, en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true},
+	})},
+	{"proxy", lt("Proxies", "代理"), slices.Concat([]corePerm{
+		{key: perm.ProxyRead, en: "View proxies", zh: "查看代理"},
+		{key: perm.ProxyManage, en: "Manage proxies", zh: "管理代理", sensitive: true, stepUp: true},
+	}, legacyOwnPerms(perm.ProxyRead, perm.ProxyManage))},
 	{"price", lt("Model prices", "模型价格"), []corePerm{
-		{key: "price:read", en: "View model prices", zh: "查看模型价格"},
-		{key: "price:manage", en: "Manage model prices", zh: "管理模型价格", sensitive: true},
+		{key: perm.PriceRead, en: "View model prices", zh: "查看模型价格"},
+		{key: perm.PriceManage, en: "Manage model prices", zh: "管理模型价格", sensitive: true},
 	}},
 	{"balance", lt("Balance", "余额"), []corePerm{
-		{key: "balance:self:read", en: "View own balance", zh: "查看自己的余额"},
-		{key: "balance:all:read", en: "View all balances", zh: "查看全部余额"},
-		{key: "balance:adjust", en: "Adjust balances", zh: "调整余额", sensitive: true},
+		{key: perm.BalanceSelfRead, en: "View own balance", zh: "查看自己的余额"},
+		{key: perm.BalanceAllRead, en: "View all balances", zh: "查看全部余额"},
+		{key: perm.BalanceAdjust, en: "Adjust balances", zh: "调整余额", sensitive: true},
 	}},
 	{"usage", lt("Usage", "使用记录"), []corePerm{
-		{key: "usage:self:read", en: "View own usage", zh: "查看自己的用量"},
-		{key: "usage:all:read", en: "View all usage", zh: "查看全部使用记录"},
+		{key: perm.UsageSelfRead, en: "View own usage", zh: "查看自己的用量"},
+		{key: perm.UsageAllRead, en: "View all usage", zh: "查看全部使用记录"},
 		// Reconcile again, or refund, a pre-charged request the core gave up
 		// on (CONTRACTS §25.4). It moves money, so it is sensitive and is
 		// not implied by reading usage.
-		{key: "usage:settle", en: "Reconcile or refund pre-charged usage", zh: "重新核对或退款预扣费用", sensitive: true},
+		{key: perm.UsageSettle, en: "Reconcile or refund pre-charged usage", zh: "重新核对或退款预扣费用", sensitive: true},
 	}},
 	{"sticky", lt("Sticky sessions", "粘性会话"), []corePerm{
-		{key: "sticky:read", en: "View sticky sessions", zh: "查看粘性会话"},
-		{key: "sticky:manage", en: "Manage sticky sessions", zh: "管理粘性会话"},
+		{key: perm.StickyRead, en: "View sticky sessions", zh: "查看粘性会话"},
+		{key: perm.StickyManage, en: "Manage sticky sessions", zh: "管理粘性会话"},
 	}},
 	{"plugin", lt("Plugins", "插件"), []corePerm{
-		{key: "plugin:read", en: "View plugins", zh: "查看插件"},
-		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true, stepUp: true},
-		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件", sensitive: true},
-		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
-		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, stepUp: true},
-		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, superOnly: true, stepUp: true},
-		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, superOnly: true, stepUp: true},
-		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
-		{key: "plugin:market:read", en: "Browse the plugin market", zh: "浏览插件市场"},
+		{key: perm.PluginRead, en: "View plugins", zh: "查看插件"},
+		{key: perm.PluginInstall, en: "Install plugins", zh: "安装插件", sensitive: true, stepUp: true},
+		{key: perm.PluginManage, en: "Manage plugins", zh: "管理插件", sensitive: true},
+		{key: perm.PluginUninstall, en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
+		{key: perm.PluginGrantHigh, en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, stepUp: true},
+		{key: perm.PluginGrantCritical, en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, superOnly: true, stepUp: true},
+		{key: perm.PluginGrantDBSchemaUnconfined, en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, superOnly: true, stepUp: true},
+		{key: perm.PluginEgressRead, en: "View plugin egress traffic", zh: "查看插件出口流量"},
+		{key: perm.PluginMarketRead, en: "Browse the plugin market", zh: "浏览插件市场"},
 	}},
 	{"publisher", lt("Publishers", "发布者"), []corePerm{
-		{key: "publisher:read", en: "View publishers", zh: "查看发布者"},
-		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, superOnly: true, stepUp: true},
+		{key: perm.PublisherRead, en: "View publishers", zh: "查看发布者"},
+		{key: perm.PublisherManage, en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, superOnly: true, stepUp: true},
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
-		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
+		{key: perm.NodeRead, en: "View cluster nodes", zh: "查看集群节点"},
 	}},
 	{"audit", lt("Audit", "审计"), []corePerm{
-		{key: "audit:read", en: "View audit logs", zh: "查看审计日志"},
+		{key: perm.AuditRead, en: "View audit logs", zh: "查看审计日志"},
 	}},
 	{"task", lt("Scheduled tasks", "定时任务"), []corePerm{
-		{key: "task:read", en: "View scheduled tasks", zh: "查看定时任务"},
-		{key: "task:run", en: "Run scheduled tasks manually", zh: "手动运行定时任务", sensitive: true},
-		{key: "task:manage", en: "Switch plugin scheduled tasks on and off", zh: "启用或停用插件定时任务", sensitive: true},
+		{key: perm.TaskRead, en: "View scheduled tasks", zh: "查看定时任务"},
+		{key: perm.TaskRun, en: "Run scheduled tasks manually", zh: "手动运行定时任务", sensitive: true},
+		{key: perm.TaskManage, en: "Switch plugin scheduled tasks on and off", zh: "启用或停用插件定时任务", sensitive: true},
 	}},
 	{"gateway", lt("Gateway", "网关"), []corePerm{
-		{key: "gateway:use", en: "Call the gateway", zh: "调用网关"},
+		{key: perm.GatewayUse, en: "Call the gateway", zh: "调用网关"},
 	}},
 	{"settings", lt("Settings", "设置"), []corePerm{
-		{key: "settings:read", en: "View settings", zh: "查看设置"},
-		{key: "settings:manage", en: "Manage settings", zh: "管理设置", sensitive: true},
+		{key: perm.SettingsRead, en: "View settings", zh: "查看设置"},
+		{key: perm.SettingsManage, en: "Manage settings", zh: "管理设置", sensitive: true, stepUp: true},
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
-		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
-		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, superOnly: true, stepUp: true},
-		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, superOnly: true, stepUp: true},
+		{key: perm.SystemUpdateRead, en: "View core updates", zh: "查看核心升级"},
+		{key: perm.SystemUpdateExecute, en: "Execute core updates", zh: "执行核心升级", sensitive: true, superOnly: true, stepUp: true},
+		{key: perm.SystemUpdateRecover, en: "Recover core updates", zh: "恢复核心升级", sensitive: true, superOnly: true, stepUp: true},
 	}},
 }
 
@@ -170,8 +194,8 @@ var userRolePermissions = []string{"apikey:self:manage", "balance:self:read", "u
 // accounts and proxies and nothing else. account:group:bind is left out for
 // now (decision D27), so a supplier binds no groups.
 var supplierPermissions = []string{
-	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
-	"proxy:own:read", "proxy:own:manage",
+	"account:read:own", "account:create:own", "account:update:own", "account:delete:own", "account:test:own", "account:credential:view:own",
+	"proxy:read:own", "proxy:manage:own",
 }
 
 // operatorPermissions are granted to the built-in "operator" role, an
@@ -181,22 +205,20 @@ var supplierPermissions = []string{
 // Left out on purpose: role:define, balance:adjust, usage:settle,
 // user:delete, user:password:reset, account:credential:view,
 // account:settings:custom (the one account key that restricts a full-level
-// caller; group:bind and relay only bind own-level callers and mean nothing
+// caller; group:bind and relay only bind restricted callers and mean nothing
 // next to the full-level keys), price:manage, task:manage, sticky sessions,
 // settings, plugins, publishers and core updates.
 //
-// The own-level account and proxy keys are redundant next to the full-level
-// ones, and kept: the role editor stores "all" as {all, own}, and holding
-// them lets an operator assign the supplier role, whose defaults they are.
-// That is why account:own:credential:view is here while
-// account:credential:view is not: it shows the credentials of accounts the
-// operator created itself.
+// account:credential:view:own shows the credentials of the accounts the
+// operator created itself; with the full-level account and proxy keys it
+// covers the supplier defaults, so an operator may assign that role.
 var operatorPermissions = slices.Concat([]string{
 	"user:read", "user:create", "user:update",
 	"role:read", "role:assign",
 	"group:read", "group:manage",
 	"segment:read", "segment:manage",
 	"account:read", "account:create", "account:update", "account:delete", "account:test",
+	"account:credential:view:own",
 	"proxy:read", "proxy:manage",
 	"price:read",
 	"balance:all:read",
@@ -204,7 +226,7 @@ var operatorPermissions = slices.Concat([]string{
 	"node:read",
 	"audit:read",
 	"task:read", "task:run",
-}, supplierPermissions, userRolePermissions)
+}, userRolePermissions)
 
 type builtinRole struct {
 	key         string
@@ -212,10 +234,13 @@ type builtinRole struct {
 	description core.LocalizedText
 	superuser   bool
 	// grants reports whether a core permission is in the role's defaults,
-	// superOnly ones aside (accepts); nil means none. New core permissions
-	// are granted to the role when it accepts them, and a reset restores
-	// exactly this set.
+	// superOnly and deprecated ones aside (accepts); nil means none. New
+	// core permissions are granted to the role when it accepts them, and a
+	// reset restores exactly this set.
 	grants func(p corePerm) bool
+	// scoped are the role's scoped defaults (canonical keys, e.g.
+	// account:read:own), granted when the role is created and on a reset.
+	scoped []string
 	// assignable lists the built-in roles its holders may assign by
 	// default, and assignCustom adds every custom role (decision 5). A
 	// role created later is added to the lists naming it.
@@ -223,9 +248,17 @@ type builtinRole struct {
 	assignCustom bool
 }
 
-// oneOf is the grants of a role whose defaults are exactly keys.
+// oneOf is the grants of a role whose unscoped defaults are those of keys.
 func oneOf(keys []string) func(corePerm) bool {
-	return func(p corePerm) bool { return slices.Contains(keys, p.key) }
+	return func(p corePerm) bool { return slices.Contains(keys, string(p.key)) }
+}
+
+// scopedOf lists the scoped keys of keys.
+func scopedOf(keys []string) []string {
+	return slices.DeleteFunc(slices.Clone(keys), func(k string) bool {
+		p, err := perm.Parse(k)
+		return err != nil || p.Scope.All
+	})
 }
 
 var builtinRoles = []builtinRole{
@@ -234,10 +267,10 @@ var builtinRoles = []builtinRole{
 		grants:     func(corePerm) bool { return true },
 		assignable: []string{RoleOperator, RoleSupplier, RoleUser}, assignCustom: true},
 	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Day-to-day users, groups, accounts and proxies; read-only billing and monitoring", "日常管理用户、分组、账号和代理，查看余额、用量、节点、审计和定时任务"),
-		grants:     oneOf(operatorPermissions),
+		grants: oneOf(operatorPermissions), scoped: scopedOf(operatorPermissions),
 		assignable: []string{RoleSupplier, RoleUser}},
 	{key: RoleSupplier, name: lt("Supplier", "供应商"), description: lt("Add-on role: own accounts and proxies", "附加角色：管理自己创建的账号和代理"),
-		grants: oneOf(supplierPermissions)},
+		scoped: supplierPermissions},
 	{key: RoleUser, name: lt("User", "普通用户"), description: lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"),
 		grants: oneOf(userRolePermissions)},
 }
@@ -259,18 +292,25 @@ func builtinRoleByKey(key string) (builtinRole, bool) {
 	return builtinRole{}, false
 }
 
-// accepts reports whether p is in r's defaults: never a superOnly one.
+// accepts reports whether p is in r's defaults: never a superOnly or
+// deprecated one.
 func (r builtinRole) accepts(p corePerm) bool {
-	return r.grants != nil && !p.superOnly && r.grants(p)
+	return r.grants != nil && !p.superOnly && !p.deprecated && r.grants(p)
 }
 
-// defaultPermissions returns the core permissions r has by default.
+// defaultPermissions returns the core permissions r has by default, the
+// scoped ones included.
 func (r builtinRole) defaultPermissions() []string {
+	return append(r.unscopedDefaults(), r.scoped...)
+}
+
+// unscopedDefaults returns the catalog permissions r has by default.
+func (r builtinRole) unscopedDefaults() []string {
 	var out []string
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if r.accepts(p) {
-				out = append(out, p.key)
+				out = append(out, string(p.key))
 			}
 		}
 	}
@@ -285,8 +325,9 @@ func CorePermissions() []core.PermissionDef {
 		for _, p := range m.perms {
 			sort += 10
 			out = append(out, core.PermissionDef{
-				Key: p.key, Module: m.key, Label: lt(p.en, p.zh),
+				Key: string(p.key), Module: m.key, Label: lt(p.en, p.zh),
 				Description: core.LocalizedText{}, Sensitive: p.sensitive, Sort: sort,
+				ScopeType: string(perm.ScopeType(p.key)),
 			})
 		}
 	}
@@ -298,7 +339,7 @@ func stepUpFlag(key string) bool {
 	for _, mods := range [][]coreModule{coreModules, {selfModule}} {
 		for _, m := range mods {
 			for _, p := range m.perms {
-				if p.key == key {
+				if string(p.key) == key {
 					return p.stepUp
 				}
 			}

@@ -8,10 +8,14 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 	"github.com/gin-gonic/gin"
 )
 
-type ccgRouteAuth struct{ allowed bool }
+type ccgRouteAuth struct {
+	testutil.StepUpPassed
+	allowed bool
+}
 
 func (a ccgRouteAuth) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: a.allowed}, nil
@@ -31,7 +35,7 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 		for _, path := range paths {
 			for _, allowed := range []bool{false, true} {
 				engine := gin.New()
-				auth := ccgRouteAuth{allowed}
+				auth := ccgRouteAuth{allowed: allowed}
 				(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 				req := httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
 				req.Header.Set("Authorization", "Bearer test")
@@ -59,7 +63,7 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	}
 	// The shared-container endpoints are gone (§53.9).
 	engine := gin.New()
-	auth := ccgRouteAuth{true}
+	auth := ccgRouteAuth{allowed: true}
 	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	for _, route := range []string{"GET status", "GET proxy", "PUT proxy", "POST auth/start", "POST auth/complete", "POST auth/cancel", "POST auth/logout", "POST remote-action"} {
 		method, path, _ := strings.Cut(route, " ")
@@ -69,6 +73,57 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 		engine.ServeHTTP(w, req)
 		if w.Code != 404 {
 			t.Fatalf("%s still served: %d", route, w.Code)
+		}
+	}
+}
+
+// stepUpRouteAuth passes every permission and refuses every step-up proof:
+// its StepUpRefused (depth 1) shadows ccgRouteAuth's StepUpPassed (depth 2).
+type stepUpRouteAuth struct {
+	ccgRouteAuth
+	testutil.StepUpRefused
+}
+
+// Installing or reaching code on a host takes a step-up proof (CONTRACTS
+// §80.2 host.install); reads, upload chunks and cleanup do not.
+func TestHostInstallRoutesStepUp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(gin.Recovery()) // unconfigured handlers may panic; only the step-up answer matters
+	auth := stepUpRouteAuth{ccgRouteAuth: ccgRouteAuth{allowed: true}}
+	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
+	for _, tc := range []struct {
+		route  string
+		stepUp bool
+	}{
+		{"PUT remote-config", true},
+		{"POST remote-fingerprint", true},
+		{"POST remote-test", true},
+		{"POST controller/install", true},
+		{"POST runtime/install", true},
+		{"POST runtime/uploads/u1/load", true},
+		{"POST runtime/bundled", true},
+		{"POST runtime/workers", true},
+		{"POST runtimes/k1/worker", true},
+		{"POST runtime/uploads", false},
+		{"PUT runtime/uploads/u1", false},
+		{"GET runtime/uploads/u1", false},
+		{"POST runtime/cleanup", false},
+		{"GET remote-config", false},
+		{"GET runtime", false},
+		{"DELETE runtime/uploads/u1", false},
+		{"POST runtimes/k1/purge", false},
+		{"POST cli/1", false},
+		{"PUT cli/1", false},
+	} {
+		method, path, _ := strings.Cut(tc.route, " ")
+		req := httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
+		req.Header.Set("Authorization", "Bearer test")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		got := w.Code == 403 && strings.Contains(w.Body.String(), `"scope":"host.install"`)
+		if got != tc.stepUp {
+			t.Errorf("%s: %d %s, step-up wanted %v", tc.route, w.Code, w.Body, tc.stepUp)
 		}
 	}
 }

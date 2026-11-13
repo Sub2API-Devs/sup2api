@@ -263,7 +263,7 @@ func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Locatio
 			}
 		}
 		if accounts {
-			counts, err := account.CountAccounts(ctx, tx, nil)
+			counts, err := account.CountAccounts(ctx, tx, core.AllScope)
 			if err != nil {
 				return err
 			}

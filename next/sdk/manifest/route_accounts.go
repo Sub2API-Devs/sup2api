@@ -6,9 +6,10 @@ import (
 )
 
 // RouteAccounts declares the accounts a plugin route acts on. The core passes
-// a request when the caller holds account:<Action>, or account:own:<Action>
-// and every account the request names is one they created. With no From, or
-// when the request names none, only account:<Action> passes.
+// a request when the caller holds account:<Action> for every account, or a
+// narrower scope of it (own, groups, ids; CONTRACTS §21.0) reaching every
+// account the request names. With no From, or when the request names none,
+// only account:<Action> for every account passes.
 type RouteAccounts struct {
 	Action string   `json:"action"`         // read | update | test
 	From   []string `json:"from,omitempty"` // "path:<param>", "query:<name>", "body:<field>"

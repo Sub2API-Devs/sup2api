@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -132,7 +133,7 @@ func (s *Service) refreshCredentials(c *gin.Context) {
 	if !ok {
 		return
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:update"), false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountUpdate), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -171,7 +172,7 @@ func (s *Service) refreshAccount(ctx context.Context, id int64, force bool) (*Re
 
 	// Re-read under the lock: another node may have just renewed it, and the
 	// refresh token in hand may already be spent.
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, nil, false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.AllScope, false)
 	if err != nil {
 		return nil, err
 	}

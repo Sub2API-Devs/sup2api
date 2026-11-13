@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // ModelsResult is returned by the "fetch models" endpoints (CONTRACTS §19).
@@ -54,7 +55,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
-	if err := s.checkCustomUpstream(ctx, core.OwnerScope(ctx, "account:create"), bt); err != nil {
+	if err := s.checkCustomUpstream(ctx, s.scopeOf(ctx, perm.AccountCreate), bt); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -84,7 +85,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	default:
 		if in.ProxyID != nil {
 			// Same visibility rule as POST /accounts (§21.2).
-			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create")); err != nil {
+			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 				httpapi.Fail(c, err)
 				return
 			}
@@ -127,7 +128,7 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			return
 		}
 	}
-	scope := core.OwnerScope(ctx, "account:test")
+	scope := s.scopeOf(ctx, perm.AccountTest)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)

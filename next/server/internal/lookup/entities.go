@@ -51,8 +51,8 @@ var entities = []*Entity{
 		// plugin are found too: the usage log still has their requests.
 		Kind: "accounts", From: "accounts a", ID: "a.id", Name: "a.name", Hint: "a.plugin_key", Status: "a.status",
 		Live: "a.deleted_at IS NULL",
-		Read: "account:read", OwnRead: "account:own:read",
-		Mine:   &Mine{Perms: []string{"account:read", "account:own:read"}, Scope: callerIs("a.created_by = ?")},
+		Read: "account:read", Table: &core.AccountRows,
+		Mine:   &Mine{Scope: callerIs("a.created_by = ?")},
 		Prefer: []Ref{{Param: "prefer_group_id", Cond: "EXISTS (SELECT 1 FROM account_groups ag WHERE ag.account_id = a.id AND ag.group_id = ?)"}},
 	},
 	{
@@ -66,8 +66,8 @@ var entities = []*Entity{
 		// GET /proxies.
 		Kind: "proxies", From: "proxies p", ID: "p.id", Name: "p.name",
 		Hint: "p.protocol || '://' || p.host || ':' || p.port", Status: "p.status",
-		Read: "proxy:read", OwnRead: "proxy:own:read",
-		Mine: &Mine{Perms: []string{"proxy:read", "proxy:own:read"}, Scope: callerIs("p.created_by = ?")},
+		Read: "proxy:read", Table: &core.ProxyRows,
+		Mine: &Mine{Scope: callerIs("p.created_by = ?")},
 	},
 }
 

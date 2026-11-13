@@ -130,7 +130,7 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	if claim == nil {
 		return s.d.DB.AccountQuota(ctx, a.ID)
 	}
-	a, err = s.loadRow(ctx, s.d.DB.Pool, a.ID, nil, false)
+	a, err = s.loadRow(ctx, s.d.DB.Pool, a.ID, core.AllScope, false)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +337,7 @@ func (s *Service) queryDueQuotas(ctx context.Context, ids []int64) error {
 			defer wg.Done()
 			defer func() { <-sem }()
 			_, err, _ := s.quotaFlight.Do(itoa(id), func() (any, error) {
-				a, err := s.loadRow(ctx, s.d.DB.Pool, id, nil, false)
+				a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.AllScope, false)
 				if err != nil {
 					return nil, err
 				}

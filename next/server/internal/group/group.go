@@ -468,8 +468,11 @@ func (s *Service) delete(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM groups WHERE id = $1`, id)
-		return err
+		if _, err = tx.Exec(ctx, `DELETE FROM groups WHERE id = $1`, id); err != nil {
+			return err
+		}
+		uid, _ := core.UserID(ctx)
+		return core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefGroup, []int64{id})
 	})
 	if err != nil {
 		httpapi.Fail(c, err)

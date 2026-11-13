@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // Per-account runtime endpoints follow the account itself (CONTRACTS §49.5):
@@ -21,10 +20,6 @@ func accountAction(method string) string {
 	}
 	return "update"
 }
-
-// RuntimeScope is the key range of the per-account runtime endpoints for
-// method; their routes are registered with its keys.
-func RuntimeScope(method string) perm.Scoped { return core.AccountScope(accountAction(method)) }
 
 // authorizeAccount checks that the caller may act on account id with method:
 // the "all" key reaches every account, the "own" key the ones the caller

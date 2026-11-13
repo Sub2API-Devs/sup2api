@@ -15,6 +15,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // ============================================================ identity & authz (owner: A core-data)
@@ -28,20 +29,102 @@ type TokenVerifier interface {
 // In the grant view (what roles carry, authz.RolesPermissions) it also holds
 // the roles the holder may assign: Assignable never holds a superuser role,
 // and AssignCustom ("and every custom role") is already expanded into it.
+//
+// Keys holds the unscoped keys, a scope of everything included (canonical,
+// perm.Canonical); Scoped the narrower scopes per action (CONTRACTS §21).
+// Build sets with Add or PermissionSetOf, which canonicalize.
 type PermissionSet struct {
 	Superuser    bool
 	Keys         map[string]struct{}
+	Scoped       map[perm.Key][]perm.Scope
 	Assignable   map[string]struct{}
 	AssignCustom bool
 	Version      int64
 }
 
-func (s PermissionSet) Has(key string) bool {
+// Add grants k (any spelling: aliases, trailing wildcards). A key that does
+// not parse grants nothing.
+func (s *PermissionSet) Add(k string) {
+	p, err := perm.Parse(k)
+	if err != nil {
+		return
+	}
+	s.add(p)
+}
+
+func (s *PermissionSet) add(p perm.Pattern) {
+	if p.Scope.All {
+		if s.Keys == nil {
+			s.Keys = map[string]struct{}{}
+		}
+		s.Keys[string(p.Action)] = struct{}{}
+		return
+	}
+	if s.Scoped == nil {
+		s.Scoped = map[perm.Key][]perm.Scope{}
+	}
+	if !slices.Contains(s.Scoped[p.Action], p.Scope) {
+		s.Scoped[p.Action] = append(s.Scoped[p.Action], p.Scope)
+	}
+}
+
+// Has reports whether the set implies k: a superuser, k held unscoped, or a
+// held scope implying k's. An unscoped k asks for every row, so
+// Has("account:read") is false for a holder of account:read:own only.
+func (s PermissionSet) Has(k string) bool {
 	if s.Superuser {
 		return true
 	}
-	_, ok := s.Keys[key]
-	return ok
+	if _, ok := s.Keys[k]; ok {
+		return true
+	}
+	p, err := perm.Parse(k)
+	if err != nil {
+		return false
+	}
+	if _, ok := s.Keys[string(p.Action)]; ok || p.Scope.All {
+		return ok
+	}
+	for _, sc := range s.Scoped[p.Action] {
+		if perm.Implies(perm.Pattern{Action: p.Action, Scope: sc}, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAction reports whether the set holds action with any scope: what a
+// route of rows the caller may reach some of asks (Router.PermScoped).
+func (s PermissionSet) HasAction(action perm.Key) bool {
+	_, ok := s.Keys[string(action)]
+	return s.Superuser || ok || len(s.Scoped[action]) > 0
+}
+
+// DataScope is the rows uid, the holder, reaches with action.
+func (s PermissionSet) DataScope(uid int64, action perm.Key) DataScope {
+	if _, ok := s.Keys[string(action)]; ok || s.Superuser {
+		return AllScope
+	}
+	return Compile(uid, s.Scoped[action])
+}
+
+// KeyList lists the canonical keys of the set, sorted (not the superuser
+// flag), without the scopes of an action it holds for every row.
+func (s PermissionSet) KeyList() []string {
+	out := make([]string, 0, len(s.Keys))
+	for k := range s.Keys {
+		out = append(out, k)
+	}
+	for a, scopes := range s.Scoped {
+		if _, all := s.Keys[string(a)]; all {
+			continue
+		}
+		for _, sc := range scopes {
+			out = append(out, string(perm.Pattern{Action: a, Scope: sc}.Key()))
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // CanAssign reports whether the holder may assign or revoke role roleKey. A
@@ -102,7 +185,7 @@ func AuthenticateBearer(ctx context.Context, tokens TokenVerifier, token, ip str
 func PermissionSetOf(keys ...string) PermissionSet {
 	set := PermissionSet{Keys: make(map[string]struct{}, len(keys))}
 	for _, k := range keys {
-		set.Keys[k] = struct{}{}
+		set.Add(k)
 	}
 	return set
 }
@@ -133,15 +216,20 @@ func (m Missing) Details() map[string]any {
 	}
 }
 
-// Missing returns what want holds that s does not. A superuser misses
-// nothing; anyone else misses the superuser flag when want has it.
+// Missing returns what want holds that s does not: each key of want that s
+// does not imply. A superuser misses nothing; anyone else misses the
+// superuser flag when want has it.
 func (s PermissionSet) Missing(want PermissionSet) Missing {
 	if s.Superuser {
 		return Missing{}
 	}
+	keys := slices.DeleteFunc(want.KeyList(), s.Has)
+	if len(keys) == 0 {
+		keys = nil
+	}
 	return Missing{
 		Superuser:    want.Superuser,
-		Keys:         missingKeys(s.Keys, want.Keys),
+		Keys:         keys,
 		Assign:       missingKeys(s.Assignable, want.Assignable),
 		AssignCustom: want.AssignCustom && !s.AssignCustom,
 	}
@@ -159,16 +247,30 @@ func missingKeys(have, want map[string]struct{}) []string {
 	return out
 }
 
-// Restrict returns the part of the set that keys allow: never more than the
-// set itself, and no longer a superuser, whose Has is true for anything. The
-// loss of the flag is deliberate: an access key never acts as a superuser,
-// so it cannot grant or act on what only a superuser may (Missing). Only
-// keys are copied, also deliberately: an access key never assigns roles.
+// Restrict returns the part of the set that keys allow, pattern by pattern:
+// a key the set implies is kept as is; a key wider than the set keeps the
+// set's narrower scopes of that action it implies (a key of account:read
+// on a holder of account:read:own gives account:read:own); scopes neither
+// implies, such as group/12 and own, are dropped rather than intersected.
+// Never more than the set itself, and no longer a superuser, whose Has is
+// true for anything. The loss of the flag is deliberate: an access key never
+// acts as a superuser, so it cannot grant or act on what only a superuser
+// may (Missing). Assignable roles are not copied, also deliberately: an
+// access key never assigns roles.
 func (s PermissionSet) Restrict(keys []string) PermissionSet {
 	out := PermissionSet{Keys: make(map[string]struct{}, len(keys)), Version: s.Version}
 	for _, k := range keys {
-		if s.Has(k) {
-			out.Keys[k] = struct{}{}
+		p, err := perm.Parse(k)
+		switch {
+		case err != nil:
+		case s.Has(k):
+			out.add(p)
+		default:
+			for _, sc := range s.Scoped[p.Action] {
+				if held := (perm.Pattern{Action: p.Action, Scope: sc}); perm.Implies(p, held) {
+					out.add(held)
+				}
+			}
 		}
 	}
 	return out
@@ -237,8 +339,11 @@ func (denyAllUsers) CanActOnUsers(context.Context, int64, UserAction, ...int64) 
 
 // PermissionDef describes one permission in the catalog.
 type PermissionDef struct {
-	Key         string
-	Module      string
+	Key    string
+	Module string
+	// ScopeType is the resource the action's scope ranges over
+	// (perm.ScopeType), "" for an action that takes none.
+	ScopeType   string
 	Label       LocalizedText
 	Description LocalizedText
 	Sensitive   bool
@@ -381,13 +486,13 @@ type APIKeyAuthenticator interface {
 // ============================================================ accounts & proxies (owner: A)
 
 // AccountAccess answers which accounts a console user may act on
-// (CONTRACTS §21.1); account implements it. action is "read", "update" or
-// "test": account:<action> reaches every account, account:own:<action> the
-// ones the user created. ctx may carry an access key, which narrows as usual.
+// (CONTRACTS §21.0); account implements it. action is "read", "update" or
+// "test": the user's scope of account:<action> (every account, own, groups,
+// ids). ctx may carry an access key, which narrows as usual.
 type AccountAccess interface {
-	// AccountsInScope returns all=true under the "all" key; under the "own"
-	// key the ids that are live accounts the user created (order kept,
-	// deduplicated); ErrPermissionDenied with neither key.
+	// AccountsInScope returns all=true for a scope of every account;
+	// otherwise the ids that are live accounts in the scope (order kept,
+	// deduplicated); ErrPermissionDenied without any scope.
 	AccountsInScope(ctx context.Context, userID int64, action string, ids []int64) (all bool, allowed []int64, err error)
 }
 
@@ -747,10 +852,10 @@ type ProxySpec struct {
 // proxy.Service, injected into account.Deps.
 type ProxyResolver interface {
 	// FindOrCreate returns the id of the enabled proxy equal to spec in
-	// protocol, host, port, username and password, restricted to rows the
-	// caller may see (scope nil = all, otherwise created_by = *scope; NULL
-	// created_by rows only match under nil), or inserts a new one owned by
-	// ownerID (name "<protocol>://<host>:<port>", status active). It must
+	// protocol, host, port, username and password among the rows of scope
+	// (the caller's proxy:manage, CONTRACTS §21.0), or, when scope may
+	// create (every row or own), inserts a new one owned by ownerID (name
+	// "<protocol>://<host>:<port>", status active). It must
 	// run inside the caller's transaction (tx) together with the account
 	// write; it takes pg_advisory_xact_lock on the match key first so two
 	// concurrent saves of the same URL never create duplicates.
@@ -759,7 +864,7 @@ type ProxyResolver interface {
 	// audit detail needs does not exist yet when the account is being
 	// created. After the account row is written, callers pass created ==
 	// true rows to AuditAutoCreate in the same transaction.
-	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope *int64) (id int64, created bool, err error)
+	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope DataScope) (id int64, created bool, err error)
 	// AuditAutoCreate records the audit row proxy.create {auto:true,
 	// account_id} (actor = ownerID, ip from audit.WithClientIP on ctx) for a
 	// proxy FindOrCreate just inserted, and announces the new proxy on

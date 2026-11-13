@@ -24,6 +24,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
@@ -97,7 +98,7 @@ func (s *Service) test(c *gin.Context) {
 			return
 		}
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:test"), false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountTest), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

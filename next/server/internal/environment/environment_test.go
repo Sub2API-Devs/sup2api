@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,11 +34,14 @@ type fakeAuthz struct {
 	perms map[int64][]string
 }
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
-	return uid == a.admin || slices.Contains(a.perms[uid], key), nil
+func (a fakeAuthz) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
 }
-func (a fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
+	set := core.PermissionSetOf(a.perms[uid]...)
+	set.Superuser = uid == a.admin
+	return set, nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 

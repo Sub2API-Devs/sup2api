@@ -98,6 +98,9 @@ func (s *Service) PurgePluginAccounts(ctx context.Context, pluginKey string) (in
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = ANY($1)`, ids); err != nil {
 			return err
 		}
+		if err := core.ClearScopeGrants(ctx, tx, 0, core.ScopeRefAccount, ids); err != nil {
+			return err
+		}
 		if deletion := s.deletionResource(pluginKey); deletion != nil {
 			for _, id := range ids {
 				if _, err := deletion.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{}); err != nil {

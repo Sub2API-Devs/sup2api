@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 type Location struct {
@@ -27,7 +28,7 @@ func (s *Service) location(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	if _, err := s.load(ctx, id, core.OwnerScope(ctx, "proxy:read")); err != nil {
+	if _, err := s.load(ctx, id, s.scopeOf(ctx, perm.ProxyRead)); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // APIPrefix is the path of the console API group, the core route
@@ -60,11 +61,11 @@ func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
 // Self registers a route of the caller's own account, under one of the self
 // permissions (authz.SelfPermissionKeys) every signed-in user holds: a login
 // session always passes, an access key only when it was given perm.
-func (r *Router) Self(method, path, perm string, h ...gin.HandlerFunc) {
-	if !strings.HasPrefix(perm, "self:") {
-		panic("httpapi: Self with a permission outside the self module: " + perm)
+func (r *Router) Self(method, path string, key perm.Key, h ...gin.HandlerFunc) {
+	if !strings.HasPrefix(string(key), "self:") {
+		panic("httpapi: Self with a permission outside the self module: " + string(key))
 	}
-	r.Perm(method, path, perm, h...)
+	r.Perm(method, path, key, h...)
 }
 
 // SessionOnly returns a view of r whose routes refuse access keys; r itself
@@ -90,20 +91,61 @@ func (r *Router) StepUp(scope string) *Router {
 }
 
 // Perm registers a route requiring permission.
-func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
-	r.handle(method, path, r.require(permission), h)
+func (r *Router) Perm(method, path string, permission perm.Key, h ...gin.HandlerFunc) {
+	r.handle(method, path, r.require(string(permission)), h)
 }
 
-// PermAny registers a route the caller may use with any one of keys, e.g.
-// the "all" key and its "own" counterpart (CONTRACTS §21.1). Every key the
-// caller holds is recorded in the request context (Granted /
-// core.OwnerScope). Without a match the response is permission_denied with
-// details.permission = keys[0].
-func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...string) {
+// PermAny registers a route the caller may use with any one of keys, each
+// unscoped (scoped actions use PermScoped). Every key the caller holds is
+// recorded in the request context (Granted). Without a match the response
+// is permission_denied with details.permission = keys[0].
+func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...perm.Key) {
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")
 	}
-	r.handle(method, path, r.requireAny(keys), []gin.HandlerFunc{handler})
+	r.handle(method, path, r.requireAny(perm.Strings(keys)), []gin.HandlerFunc{handler})
+}
+
+// PermScoped registers a route of rows: the caller needs one of actions
+// with any scope (PermissionSet.HasAction), all rows or some (CONTRACTS
+// §21); the handler narrows to the rows it reaches with core.Scope, which
+// the middleware fills for each action held. An action held for every row
+// is also recorded in Granted. Without any, the response is
+// permission_denied with details.permission = actions[0].
+func (r *Router) PermScoped(method, path string, handler gin.HandlerFunc, actions ...perm.Key) {
+	if len(actions) == 0 {
+		panic("httpapi: PermScoped without an action")
+	}
+	r.handle(method, path, r.requireScoped(actions), []gin.HandlerFunc{handler})
+}
+
+func (r *Router) requireScoped(actions []perm.Key) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		uid, _ := core.UserID(ctx)
+		set, err := r.authz.PermissionSet(ctx, uid)
+		if err != nil {
+			Fail(c, err)
+			return
+		}
+		var granted []string
+		held := false
+		for _, a := range actions {
+			// Every action gets its scope, empty when not held.
+			scope := set.DataScope(uid, a)
+			ctx = core.WithScope(ctx, a, scope)
+			held = held || !scope.Empty()
+			if scope.All {
+				granted = append(granted, string(a))
+			}
+		}
+		if !held {
+			Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": string(actions[0])}))
+			return
+		}
+		c.Request = c.Request.WithContext(core.WithGranted(ctx, granted))
+		c.Next()
+	}
 }
 
 // handle registers a route: authentication, then check (the permission,

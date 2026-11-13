@@ -316,12 +316,10 @@ func (s *Service) loadPermissionSet(ctx context.Context, userID int64) (core.Per
 		// One row at least for an active user, roles or not: a signed-in
 		// user holds the self permissions (withSelf).
 		rows, err := tx.Query(ctx, `
-SELECT COALESCE(r.superuser, false), p.key
+SELECT COALESCE(r.superuser, false), g.key
 FROM users u
 LEFT JOIN user_roles ur ON ur.user_id = u.id
-LEFT JOIN roles r ON r.id = ur.role_id
-LEFT JOIN role_permissions rp ON rp.role_id = r.id
-LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status = 'active'
+LEFT JOIN roles r ON r.id = ur.role_id`+roleGrantsJoin(`p.status = 'active'`)+`
 WHERE u.id = $1 AND u.deleted_at IS NULL AND u.status = 'active'`, userID)
 		if err != nil {
 			return err
@@ -339,7 +337,7 @@ WHERE u.id = $1 AND u.deleted_at IS NULL AND u.status = 'active'`, userID)
 				set.Superuser = true
 			}
 			if key != nil {
-				set.Keys[*key] = struct{}{}
+				set.Add(*key)
 			}
 		}
 		if active {
@@ -370,10 +368,8 @@ func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKey
 		return set, nil
 	}
 	rows, err := q.Query(ctx, `
-SELECT r.superuser, r.assign_custom, p.key
-FROM roles r
-LEFT JOIN role_permissions rp ON rp.role_id = r.id
-LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status <> 'removed'
+SELECT r.superuser, r.assign_custom, g.key
+FROM roles r`+roleGrantsJoin(`p.status <> 'removed'`)+`
 WHERE r.key = ANY($1)`, roleKeys)
 	if err != nil {
 		return core.PermissionSet{}, err
@@ -388,7 +384,7 @@ WHERE r.key = ANY($1)`, roleKeys)
 		set.Superuser = set.Superuser || su
 		set.AssignCustom = set.AssignCustom || custom
 		if key != nil {
-			set.Keys[*key] = struct{}{}
+			set.Add(*key)
 		}
 	}
 	if err := rows.Err(); err != nil {

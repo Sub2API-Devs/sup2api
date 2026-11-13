@@ -25,8 +25,8 @@ import (
 var (
 	adminKeys = []string{"account:read", "account:create", "account:update", "account:delete", "account:test",
 		"account:credential:view", "account:settings:custom", "proxy:read", "proxy:manage"}
-	supplierKeys = []string{"account:own:read", "account:own:create", "account:own:update", "account:own:delete",
-		"account:own:test", "account:own:credential:view", "proxy:own:read", "proxy:own:manage"}
+	supplierKeys = []string{"account:read:own", "account:create:own", "account:update:own", "account:delete:own",
+		"account:test:own", "account:credential:view:own", "proxy:read:own", "proxy:manage:own"}
 	readerKeys = []string{"account:read", "proxy:read"}
 )
 
@@ -153,8 +153,12 @@ func TestOwnership(t *testing.T) {
 	if code, out := e.doAs(admin, "GET", "/accounts?created_by=abc", nil); code != 400 || fmt.Sprint(fieldsOf(out)) != "[created_by:invalid]" {
 		t.Fatalf("bad created_by: %d %v", code, out)
 	}
-	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", bob), nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(aliceID, 10) {
-		t.Fatalf("alice created_by ignored: %v", out)
+	// created_by filters within the caller's range (CONTRACTS §21.0).
+	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", bob), nil); total(out) != 0 {
+		t.Fatalf("alice created_by bob: %v", out)
+	}
+	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", alice), nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(aliceID, 10) {
+		t.Fatalf("alice created_by alice: %v", out)
 	}
 	if _, out = e.doAs(alice, "GET", "/accounts?mine=true", nil); total(out) != 1 {
 		t.Fatalf("alice mine: %v", out)
@@ -454,7 +458,7 @@ func TestProxyURL(t *testing.T) {
 	// visible proxy under the own range.
 	code, out = e.doAs(carol, "POST", "/accounts", map[string]any{"name": "c", "plugin_key": "anthropic", "type": "apikey",
 		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": url1})
-	if code != 403 || permission(out) != "proxy:own:manage" {
+	if code != 403 || permission(out) != "proxy:manage:own" {
 		t.Fatalf("carol proxy_url: %d %v", code, out)
 	}
 	byID := func(uid, pid int64) (int, []string) {
@@ -490,7 +494,7 @@ func TestProxyURL(t *testing.T) {
 	before := proxies()
 	fetch := map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": fmt.Sprintf("http://%s:%d", host, port)}
 	code, out = e.doAs(carol, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)
-	if code != 403 || permission(out) != "proxy:own:manage" || hits.Load() != 0 {
+	if code != 403 || permission(out) != "proxy:manage:own" || hits.Load() != 0 {
 		t.Fatalf("fetch through proxy_url without a proxy key: %d %v hits=%d", code, out, hits.Load())
 	}
 	code, out = e.doAs(alice, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)
@@ -990,7 +994,7 @@ func TestBuiltinSupplierRole(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return slices.Sorted(maps.Keys(set.Keys))
+		return set.KeyList()
 	}
 	if got := keysOf(authz.RoleSupplier); !slices.Equal(got, slices.Sorted(slices.Values(supplierKeys))) {
 		t.Fatalf("supplier role grants %v, want %v", got, supplierKeys)

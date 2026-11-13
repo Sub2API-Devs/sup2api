@@ -41,20 +41,16 @@ func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.Access
 // fakeAuthz grants each user a fixed key set; a nil map allows everything.
 type fakeAuthz struct{ keys map[int64][]string }
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
-	if a.keys == nil {
-		return true, nil
-	}
-	for _, k := range a.keys[uid] {
-		if k == key {
-			return true, nil
-		}
-	}
-	return false, nil
+func (a fakeAuthz) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
 }
 
-func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
+	if a.keys == nil {
+		return core.PermissionSet{Superuser: true}, nil
+	}
+	return core.RestrictToAccessKey(ctx, uid, core.PermissionSetOf(a.keys[uid]...)), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 
@@ -438,13 +434,6 @@ func TestOwnership(t *testing.T) {
 
 	// Lists: own range sees own rows only; all range sees everything and can
 	// filter by created_by or mine.
-	ids := func(out map[string]any) string {
-		var s []string
-		for _, it := range out["data"].([]any) {
-			s = append(s, strconv.Itoa(int(it.(map[string]any)["id"].(float64))))
-		}
-		return strings.Join(s, ",")
-	}
 	_, out := do(t, engine, alice, "GET", "/proxies", nil)
 	if total(out) != 1 || ids(out) != strconv.FormatInt(pAlice, 10) {
 		t.Fatalf("alice list: %v", out)
@@ -464,10 +453,14 @@ func TestOwnership(t *testing.T) {
 	if code, _ := do(t, engine, admin, "GET", "/proxies?created_by=abc", nil); code != 400 {
 		t.Fatalf("bad created_by: %d", code)
 	}
-	// created_by is ignored under the own range.
+	// created_by filters within the caller's range (CONTRACTS §21.0).
 	_, out = do(t, engine, alice, "GET", fmt.Sprintf("/proxies?created_by=%d", bob), nil)
+	if total(out) != 0 {
+		t.Fatalf("alice created_by bob: %v", out)
+	}
+	_, out = do(t, engine, alice, "GET", fmt.Sprintf("/proxies?created_by=%d&mine=true", alice), nil)
 	if total(out) != 1 || ids(out) != strconv.FormatInt(pAlice, 10) {
-		t.Fatalf("alice created_by ignored: %v", out)
+		t.Fatalf("alice created_by alice: %v", out)
 	}
 
 	// Detail, update, delete and test of somebody else's proxy (or a legacy
@@ -558,8 +551,12 @@ func TestFindOrCreate(t *testing.T) {
 	alice := addUser(t, db, "alice@x.com")
 	bob := addUser(t, db, "bob@x.com")
 
-	resolve := func(spec Spec, owner int64, scope *int64) (int64, bool) {
+	resolve := func(spec Spec, owner int64, creator *int64) (int64, bool) {
 		t.Helper()
+		scope := core.AllScope
+		if creator != nil {
+			scope = core.DataScope{Owner: *creator}
+		}
 		var id int64
 		var created bool
 		err := db.Tx(ctx, func(tx pgx.Tx) error {
@@ -643,7 +640,7 @@ func TestFindOrCreate(t *testing.T) {
 	}
 	// Invalid specs are refused before touching the database.
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		_, _, err := svc.FindOrCreate(ctx, tx, Spec{Protocol: "ftp", Host: "h", Port: 1}, alice, nil)
+		_, _, err := svc.FindOrCreate(ctx, tx, Spec{Protocol: "ftp", Host: "h", Port: 1}, alice, core.AllScope)
 		return err
 	}); core.AsError(err).Code != "invalid_argument" {
 		t.Fatalf("bad spec: %v", err)
@@ -681,7 +678,7 @@ func TestFindOrCreate(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			_ = db.Tx(ctx, func(tx pgx.Tx) error {
-				id, created, err := svc.FindOrCreate(ctx, tx, fresh, alice, &alice)
+				id, created, err := svc.FindOrCreate(ctx, tx, fresh, alice, core.DataScope{Owner: alice})
 				if err != nil {
 					return err
 				}

@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -103,31 +104,28 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 
 // ---------------------------------------------------------------- re-authorization (CONTRACTS §49.17)
 
-// ccgReauthScope is the key range of the re-authorization endpoints: that of
-// the other per-account runtime writes (the §49.5 rule), account:update for
-// every account, account:own:update for the accounts the caller created.
-var ccgReauthScope = core.AccountScope("update")
-
 // ccgReauthAccount loads the CCGateway account of a re-authorization
 // request; ok=false after the failure was written.
-func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int64, scope *int64, ok bool) {
+// Its range is that of the other per-account runtime writes (the §49.5
+// rule): the caller's account:update scope.
+func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int64, scope core.DataScope, ok bool) {
 	if id, ok = httpapi.PathID(c, "id"); !ok {
-		return 0, nil, false
+		return 0, scope, false
 	}
-	scope = core.OwnerScopeOf(ctx, ccgReauthScope)
+	scope = s.scopeOf(ctx, perm.AccountUpdate)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
-		return 0, nil, false
+		return 0, scope, false
 	}
 	if a.PluginKey != "ccgateway" {
 		httpapi.Fail(c, notFound(ctx))
-		return 0, nil, false
+		return 0, scope, false
 	}
 	if s.d.CCGateway == nil {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Account runtimes are not configured.").
 			WithDetails(map[string]any{"reason": "not_configured"}))
-		return 0, nil, false
+		return 0, scope, false
 	}
 	return id, scope, true
 }

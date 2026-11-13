@@ -188,7 +188,7 @@ func TestLifecycleEventsUseCurrentOwnedAccount(t *testing.T) {
 			t.Fatalf("event delivery: %v %v", response, err)
 		}
 	}
-	row, err := e.svc.loadRow(t.Context(), e.db.Pool, id, nil, false)
+	row, err := e.svc.loadRow(t.Context(), e.db.Pool, id, core.AllScope, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestLifecycleSynchronizationCannotOverwriteNewerGeneration(t *testing.T) {
 	e, _, _ := preparationFixture(t)
 	ctx := t.Context()
 	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('sync','fixture','managed',''::bytea) RETURNING id`)
-	row, err := e.svc.loadRow(ctx, e.db.Pool, id, nil, false)
+	row, err := e.svc.loadRow(ctx, e.db.Pool, id, core.AllScope, false)
 	if err != nil {
 		t.Fatal(err)
 	}

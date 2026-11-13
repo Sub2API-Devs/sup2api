@@ -141,52 +141,52 @@ func New(d Deps) *Service {
 }
 
 // RegisterRoutes mounts the account and account type endpoints. Every route
-// accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
-// narrow their SQL with core.OwnerScope.
+// accepts any scope of its action (CONTRACTS §21.0); handlers narrow their
+// SQL with the caller's scope (scopeOf).
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPreparationRoutes(r)
 	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
 	r.Perm("PUT", "/settings/account-stats", "settings:manage", s.putStatsSettings)
-	r.PermAny("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, "account:create", "account:own:create", "account:update", "account:own:update")
-	r.PermAny("POST", "/accounts/param-override/preview", s.previewParamOverride, "account:create", "account:own:create", "account:update", "account:own:update")
-	r.PermAny("GET", "/accounts/stats", s.getAccountStats, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/summary", s.summary, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
+	r.PermScoped("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, perm.AccountCreate, perm.AccountUpdate)
+	r.PermScoped("POST", "/accounts/param-override/preview", s.previewParamOverride, perm.AccountCreate, perm.AccountUpdate)
+	r.PermScoped("GET", "/accounts/stats", s.getAccountStats, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/summary", s.summary, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/:id/stats", s.getAccountStats, perm.AccountRead)
 	// Re-authorizing a Claude Code account (CONTRACTS §49.17), next to the
 	// ccgateway module's /system/ccgateway/accounts/:id/:action.
-	reauth := perm.Strings(ccgReauthScope.Keys())
-	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize", s.reauthorizeCCGateway, reauth...)
-	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, reauth...)
-	browse := []string{"account:read", "account:own:read", "account:own:create"}
-	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
+	r.PermScoped("POST", "/system/ccgateway/accounts/:id/reauthorize", s.reauthorizeCCGateway, perm.AccountUpdate)
+	r.PermScoped("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, perm.AccountUpdate)
+	// Browsing platforms and types: whoever reads or creates some accounts.
+	browse := []perm.Key{perm.AccountRead, perm.AccountCreate}
+	r.PermScoped("GET", "/platforms", s.listPlatforms, browse...)
 	r.AuthedRead("/me/platforms", s.listMyPlatforms)
-	r.PermAny("GET", "/account-types", s.listTypes, browse...)
-	r.PermAny("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
-	r.PermAny("GET", "/accounts", s.list, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts", s.create, "account:create", "account:own:create")
-	r.PermAny("GET", "/accounts/:id", s.get, "account:read", "account:own:read")
-	r.PermAny("PATCH", "/accounts/:id", s.update, "account:update", "account:own:update")
-	r.PermAny("DELETE", "/accounts/:id", s.delete, "account:delete", "account:own:delete")
-	r.PermAny("POST", "/accounts/:id/test", s.test, "account:test", "account:own:test")
-	r.PermAny("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, "account:test", "account:own:test")
-	r.PermAny("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, "account:create", "account:own:create")
+	r.PermScoped("GET", "/account-types", s.listTypes, browse...)
+	r.PermScoped("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
+	r.PermScoped("GET", "/accounts", s.list, perm.AccountRead)
+	r.PermScoped("POST", "/accounts", s.create, perm.AccountCreate)
+	r.PermScoped("GET", "/accounts/:id", s.get, perm.AccountRead)
+	r.PermScoped("PATCH", "/accounts/:id", s.update, perm.AccountUpdate)
+	r.PermScoped("DELETE", "/accounts/:id", s.delete, perm.AccountDelete)
+	r.PermScoped("POST", "/accounts/:id/test", s.test, perm.AccountTest)
+	r.PermScoped("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, perm.AccountTest)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, perm.AccountCreate)
 	// Plain-text credentials: a step-up proof each time (CONTRACTS §80.2).
-	r.StepUp(core.StepUpCredentialReveal).PermAny("POST", "/accounts/:id/credentials/reveal", s.reveal, "account:credential:view", "account:own:credential:view")
+	r.StepUp(core.StepUpCredentialReveal).PermScoped("POST", "/accounts/:id/credentials/reveal", s.reveal, perm.AccountCredentialView)
 	// Subscription quota and balance (CONTRACTS §44, §51).
-	r.PermAny("GET", "/accounts/:id/quota", s.getQuota, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/:id/balance", s.getBalance, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts/:id/reset-status", s.resetStatus, "account:update", "account:own:update")
+	r.PermScoped("GET", "/accounts/:id/quota", s.getQuota, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/:id/balance", s.getBalance, perm.AccountRead)
+	r.PermScoped("POST", "/accounts/:id/reset-status", s.resetStatus, perm.AccountUpdate)
 	// Usage and usage limits (CONTRACTS §73).
-	r.PermAny("GET", "/accounts/:id/usage", s.getUsage, "account:read", "account:own:read")
+	r.PermScoped("GET", "/accounts/:id/usage", s.getUsage, perm.AccountRead)
 	// Requests in flight and rates by client model (CONTRACTS §68.7).
-	r.PermAny("GET", "/accounts/:id/rate-models", s.getRateModels, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/:id/usage-limit", s.getUsageLimit, "account:read", "account:own:read")
-	r.PermAny("PUT", "/accounts/:id/usage-limit", s.putUsageLimit, "account:update", "account:own:update")
+	r.PermScoped("GET", "/accounts/:id/rate-models", s.getRateModels, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/:id/usage-limit", s.getUsageLimit, perm.AccountRead)
+	r.PermScoped("PUT", "/accounts/:id/usage-limit", s.putUsageLimit, perm.AccountUpdate)
 	// Credential refresh (CONTRACTS §48).
-	r.PermAny("POST", "/accounts/:id/refresh-credentials", s.refreshCredentials, "account:update", "account:own:update")
+	r.PermScoped("POST", "/accounts/:id/refresh-credentials", s.refreshCredentials, perm.AccountUpdate)
 	// Account actions (CONTRACTS §52).
-	r.PermAny("GET", "/accounts/:id/actions", s.getAccountActions, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts/:id/actions/:plugin_key/:action_id", s.executeAccountAction, "account:update", "account:own:update")
+	r.PermScoped("GET", "/accounts/:id/actions", s.getAccountActions, perm.AccountRead)
+	r.PermScoped("POST", "/accounts/:id/actions/:plugin_key/:action_id", s.executeAccountAction, perm.AccountUpdate)
 }
 
 // Run subscribes to account:changed, flushes last_used_at every 10 s, writes
@@ -347,23 +347,26 @@ var _ core.AccountAccess = (*Service)(nil)
 // accessActions are the actions AccountsInScope answers.
 var accessActions = []string{"read", "update", "test"}
 
-// AccountsInScope implements core.AccountAccess with the ownership condition
-// loadRow uses; the "own" result follows the order of ids, deduplicated.
+// AccountsInScope implements core.AccountAccess with the caller's data scope
+// of the action (CONTRACTS §21), as loadRow reads it; the narrowed result
+// follows the order of ids, deduplicated.
 func (s *Service) AccountsInScope(ctx context.Context, userID int64, action string, ids []int64) (bool, []int64, error) {
 	if !slices.Contains(accessActions, action) {
 		return false, nil, core.InvalidFields(core.FieldError{Field: "action", Code: "invalid",
 			Message: t(ctx, "Unknown account action", "未知的账号操作")})
 	}
-	scope, ok := core.ScopeOf(core.WithUserID(ctx, userID), s.d.Authorizer, core.AccountScope(action))
-	if !ok {
+	scope, err := core.Scope(core.WithUserID(ctx, userID), s.d.Authorizer, perm.AccountAction(action))
+	switch {
+	case err != nil:
+		return false, nil, err
+	case scope.Empty():
 		return false, nil, core.AccountsDenied(action)
-	}
-	if scope == nil {
+	case scope.All:
 		return true, nil, nil
 	}
 	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id FROM accounts a
-		WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+scoped("$2")+`
-		ORDER BY array_position($1, a.id)`, ids, scope)
+		WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+core.AccountRows.SQL(2)+`
+		ORDER BY array_position($1, a.id)`, append([]any{ids}, core.AccountRows.Args(scope)...)...)
 	if err != nil {
 		return false, nil, err
 	}
@@ -371,40 +374,14 @@ func (s *Service) AccountsInScope(ctx context.Context, userID int64, action stri
 	return false, allowed, err
 }
 
-// proxyRange is the set of proxies a caller may reference (by proxy_id) or
-// match (proxy_url): scope nil means every proxy, otherwise the rows created
-// by *scope; none means the caller holds no proxy key and sees nothing.
-type proxyRange struct {
-	scope *int64
-	none  bool
-}
-
-// allProxies is the range of callers holding the "all" account key: proxy_id
-// only has to exist.
-var allProxies = proxyRange{}
-
-// proxyRangeOf computes the caller's proxy visibility (CONTRACTS §21.4):
-// proxy:read sees every proxy; proxy:own:read or proxy:own:manage see the
-// caller's own; anything else sees none.
-func (s *Service) proxyRangeOf(ctx context.Context) proxyRange {
-	if core.Can(ctx, s.d.Authorizer, "proxy:read") {
-		return allProxies
+// proxyRefs is the proxies a caller writing an account under action may
+// reference (core.ProxyRefScope); an error reaches none (logged).
+func (s *Service) proxyRefs(ctx context.Context, action perm.Key) core.DataScope {
+	scope, err := core.ProxyRefScope(ctx, s.d.Authorizer, action)
+	if err != nil {
+		slog.WarnContext(ctx, "proxy reference scope", "action", action, "err", err)
 	}
-	if core.Can(ctx, s.d.Authorizer, "proxy:own:read") || core.Can(ctx, s.d.Authorizer, "proxy:own:manage") {
-		uid, _ := core.UserID(ctx)
-		return proxyRange{scope: &uid}
-	}
-	return proxyRange{none: true}
-}
-
-// proxyRangeFor returns the proxies a caller of a route registered with
-// allKey may reference: everything under the "all" key, the visible range
-// under the "own" key.
-func (s *Service) proxyRangeFor(ctx context.Context, allKey string) proxyRange {
-	if core.OwnerScope(ctx, allKey) == nil {
-		return allProxies
-	}
-	return s.proxyRangeOf(ctx)
+	return scope
 }
 
 func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }

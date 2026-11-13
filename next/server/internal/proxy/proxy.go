@@ -103,21 +103,20 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 	}
 }
 
-// RegisterRoutes mounts the proxy endpoints. Every route accepts the "all"
-// key or its "own" counterpart (CONTRACTS §21.2); handlers narrow their SQL
-// with core.OwnerScope.
+// RegisterRoutes mounts the proxy endpoints. Every route accepts any scope of
+// its action (CONTRACTS §21.0); handlers narrow their SQL with the caller's
+// scope (scopeOf).
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	write := perm.Strings(writeScope.Keys())
-	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
-	r.PermAny("POST", "/proxies", s.create, write...)
-	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")
-	r.PermAny("GET", "/proxies/:id/location", s.location, "proxy:read", "proxy:own:read")
-	r.PermAny("PATCH", "/proxies/:id", s.update, write...)
-	r.PermAny("DELETE", "/proxies/:id", s.delete, write...)
-	r.PermAny("POST", "/proxies/:id/test", s.test, write...)
+	r.PermScoped("GET", "/proxies", s.list, perm.ProxyRead)
+	r.PermScoped("POST", "/proxies", s.create, perm.ProxyManage)
+	r.PermScoped("GET", "/proxies/:id", s.get, perm.ProxyRead)
+	r.PermScoped("GET", "/proxies/:id/location", s.location, perm.ProxyRead)
+	r.PermScoped("PATCH", "/proxies/:id", s.update, perm.ProxyManage)
+	r.PermScoped("DELETE", "/proxies/:id", s.delete, perm.ProxyManage)
+	r.PermScoped("POST", "/proxies/:id/test", s.test, perm.ProxyManage)
 	// The URL carries the plain-text password: a step-up proof each time (CONTRACTS §80.2).
-	r.StepUp(core.StepUpProxyReveal).PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, write...)
-	r.PermAny("POST", "/proxies/probe", s.probeURL, write...)
+	r.StepUp(core.StepUpProxyReveal).PermScoped("POST", "/proxies/:id/reveal-url", s.revealURL, perm.ProxyManage)
+	r.PermScoped("POST", "/proxies/probe", s.probeURL, perm.ProxyManage)
 }
 
 // changeMsg is published on config:changed when a proxy changes.
@@ -241,27 +240,42 @@ func (s *Service) buildClient(r *row) (*http.Client, error) {
 	return &http.Client{Transport: newTransport(u, allowPrivate)}, nil
 }
 
-// writeScope is the write range of proxies; every write route is registered
-// with its keys.
-var writeScope = perm.Pair("proxy:manage", "proxy:own:manage")
+// scopeOf is the proxies the caller reaches with action, as the route
+// (Router.PermScoped) computed it; outside such a route it reaches none.
+func (s *Service) scopeOf(ctx context.Context, action perm.Key) core.DataScope {
+	scope, _ := core.Scope(ctx, nil, action)
+	return scope
+}
 
-// checkPrivate decides whether a proxy at host may be written in scope (nil =
-// proxy:manage): only the full key may save a private address, and only rows
-// it writes are stored with allow_private (CONTRACTS §43.3).
-func (s *Service) checkPrivate(ctx context.Context, scope *int64, host string) (allowPrivate bool, err error) {
-	if scope != nil && !s.opts.AllowPrivate && netguard.LiteralPrivate(host) {
+// canCreate fails unless scope may create proxies: every row, or own (a new
+// proxy is the caller's). proxy:manage:proxy/X reaches those proxies only.
+func canCreate(ctx context.Context, scope core.DataScope) error {
+	if scope.All || scope.Owner != 0 {
+		return nil
+	}
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"creating a proxy requires proxy:manage for every proxy or your own",
+		"新建代理需要全部或自己创建范围的 proxy:manage 权限")).
+		WithDetails(map[string]any{"permission": "proxy:manage:own"})
+}
+
+// checkPrivate decides whether a proxy at host may be written in scope: only
+// every-row proxy:manage may save a private address, and only rows it writes
+// are stored with allow_private (CONTRACTS §43.3).
+func (s *Service) checkPrivate(ctx context.Context, scope core.DataScope, host string) (allowPrivate bool, err error) {
+	if scope.Restricted() && !s.opts.AllowPrivate && netguard.LiteralPrivate(host) {
 		return false, core.ErrPermissionDenied.WithMessage(t(ctx,
 			"saving a proxy at a private address requires proxy:manage",
 			"保存私网地址代理需要 proxy:manage 权限")).
 			WithDetails(map[string]any{"permission": "proxy:manage"})
 	}
-	return scope == nil, nil
+	return !scope.Restricted(), nil
 }
 
-// privateScope is the write range of a route registered with writeScope,
-// together with checkPrivate's answer for host.
-func (s *Service) privateScope(ctx context.Context, host string) (scope *int64, allowPrivate bool, err error) {
-	scope = core.OwnerScopeOf(ctx, writeScope)
+// privateScope is the caller's proxy:manage scope, together with
+// checkPrivate's answer for host.
+func (s *Service) privateScope(ctx context.Context, host string) (scope core.DataScope, allowPrivate bool, err error) {
+	scope = s.scopeOf(ctx, perm.ProxyManage)
 	allowPrivate, err = s.checkPrivate(ctx, scope, host)
 	return scope, allowPrivate, err
 }
@@ -375,17 +389,10 @@ func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "proxy not found", "代理不存在"))
 }
 
-// scoped is the ownership condition every scoped statement carries on the
-// bigint parameter param (e.g. "$2"): nil for the "all" permission (every
-// row), otherwise the caller id (rows the caller created; created_by NULL
-// never matches).
-func scoped(param string) string {
-	return "(" + param + "::bigint IS NULL OR p.created_by = " + param + ")"
-}
-
-// load returns one proxy visible in scope (nil = all); others are 404.
-func (s *Service) load(ctx context.Context, id int64, scope *int64) (*Proxy, error) {
-	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy("$3")+` WHERE p.id = $1 AND `+scoped("$2"), id, scope, core.ActivePluginKeys(s.opts.Registry)))
+// load returns one proxy in scope; others are 404.
+func (s *Service) load(ctx context.Context, id int64, scope core.DataScope) (*Proxy, error) {
+	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy("$2")+` WHERE p.id = $1 AND `+core.ProxyRows.SQL(3),
+		append([]any{id, core.ActivePluginKeys(s.opts.Registry)}, core.ProxyRows.Args(scope)...)...))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -397,31 +404,36 @@ func (s *Service) list(c *gin.Context) {
 	page, size := httpapi.Pagination(c)
 	q := strings.TrimSpace(c.Query("q"))
 	status := c.Query("status")
-	// Visible range: the caller's own rows unless proxy:read was granted;
-	// mine=true narrows to own rows either way; created_by=<id> filters
-	// within the "all" range and is ignored under the own range.
-	scope := core.OwnerScope(ctx, "proxy:read")
+	// Visible range: the caller's proxy:read scope (CONTRACTS §21.0);
+	// mine=true narrows to own rows and created_by=<id> to that creator's,
+	// both within it.
+	var creator *int64
 	if mine, _ := strconv.ParseBool(c.Query("mine")); mine {
 		uid, _ := core.UserID(ctx)
-		scope = &uid
+		creator = &uid
 	}
-	if v := c.Query("created_by"); v != "" && scope == nil {
+	if v := c.Query("created_by"); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
 			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "created_by", Code: "invalid",
 				Message: t(ctx, "created_by must be a user id", "created_by 必须是用户 ID")}))
 			return
 		}
-		scope = &id
+		if creator != nil && *creator != id {
+			id = 0 // mine and someone else: nothing
+		}
+		creator = &id
 	}
 	where := ` WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%' OR p.host ILIKE '%' || $1 || '%') AND ($2 = '' OR p.status = $2)
-		AND ` + scoped("$3")
+		AND ($3::bigint IS NULL OR p.created_by = $3) AND ` + core.ProxyRows.SQL(4)
+	args := append([]any{q, status, creator}, core.ProxyRows.Args(s.scopeOf(ctx, perm.ProxyRead))...)
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies p`+where, q, status, scope).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies p`+where, args...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, selectProxy("$6")+where+` ORDER BY p.id LIMIT $4 OFFSET $5`, q, status, scope, size, (page-1)*size, core.ActivePluginKeys(s.opts.Registry))
+	rows, err := s.db.Pool.Query(ctx, selectProxy("$9")+where+` ORDER BY p.id LIMIT $7 OFFSET $8`,
+		append(args, size, (page-1)*size, core.ActivePluginKeys(s.opts.Registry))...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -449,7 +461,7 @@ func (s *Service) get(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	p, err := s.load(ctx, id, core.OwnerScope(ctx, "proxy:read"))
+	p, err := s.load(ctx, id, s.scopeOf(ctx, perm.ProxyRead))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -612,7 +624,10 @@ func (s *Service) create(c *gin.Context) {
 	if in.Status != nil {
 		status = *in.Status
 	}
-	_, allowPriv, err := s.privateScope(ctx, *in.Host)
+	scope, allowPriv, err := s.privateScope(ctx, *in.Host)
+	if err == nil {
+		err = canCreate(ctx, scope)
+	}
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -633,7 +648,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	p, err := s.load(ctx, id, nil)
+	p, err := s.load(ctx, id, core.AllScope)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -660,14 +675,14 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	scope := core.OwnerScopeOf(ctx, writeScope)
+	scope := s.scopeOf(ctx, perm.ProxyManage)
 	uid, _ := core.UserID(ctx)
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// Visibility first (404 outside the caller's range); the lock keeps
 		// what the checks below read true until the commit.
 		var cur row
 		err := tx.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
-			WHERE p.id = $1 AND `+scoped("$2")+` FOR UPDATE`, id, scope).
+			WHERE p.id = $1 AND `+core.ProxyRows.SQL(2)+` FOR UPDATE`, append([]any{id}, core.ProxyRows.Args(scope)...)...).
 			Scan(&cur.Protocol, &cur.Host, &cur.Port, &cur.Username, &cur.PasswordEnc)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
@@ -695,14 +710,14 @@ func (s *Service) update(c *gin.Context) {
 			if err != nil {
 				return err
 			}
-			if in.Host != nil || scope != nil {
+			if in.Host != nil || scope.Restricted() {
 				allowPriv = &allow
 			}
 		}
 		// Accounts of other users go through this proxy too: where they
 		// connect is not the owner's to change (the full key may).
-		if scope != nil && s.connectionChanged(&in, &cur) {
-			n, err := inUseByOthers(ctx, tx, id, *scope)
+		if scope.Restricted() && s.connectionChanged(&in, &cur) {
+			n, err := inUseByOthers(ctx, tx, id, uid)
 			if err != nil {
 				return err
 			}
@@ -752,13 +767,14 @@ func (s *Service) delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	scope := core.OwnerScopeOf(ctx, writeScope)
+	scope := s.scopeOf(ctx, perm.ProxyManage)
 	uid, _ := core.UserID(ctx)
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// Visibility first: a proxy outside the caller's range is 404 even
 		// when it is in use.
 		var name string
-		err := tx.QueryRow(ctx, `SELECT p.name FROM proxies p WHERE p.id = $1 AND `+scoped("$2")+` FOR UPDATE`, id, scope).Scan(&name)
+		err := tx.QueryRow(ctx, `SELECT p.name FROM proxies p WHERE p.id = $1 AND `+core.ProxyRows.SQL(2)+` FOR UPDATE`,
+			append([]any{id}, core.ProxyRows.Args(scope)...)...).Scan(&name)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -777,6 +793,9 @@ func (s *Service) delete(c *gin.Context) {
 				"该代理仍被账号使用，请先修改这些账号的代理")).WithDetails(map[string]any{"account_count": n})
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM proxies WHERE id = $1`, id); err != nil {
+			return err
+		}
+		if err := core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefProxy, []int64{id}); err != nil {
 			return err
 		}
 		return audit.Audit(ctx, tx, uid, "proxy.delete", "proxy", strconv.FormatInt(id, 10), map[string]any{"name": name})
@@ -801,7 +820,7 @@ func (s *Service) revealURL(c *gin.Context) {
 	}
 	var r row
 	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
-		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScopeOf(ctx, writeScope)).
+		WHERE p.id = $1 AND `+core.ProxyRows.SQL(2), append([]any{id}, core.ProxyRows.Args(s.scopeOf(ctx, perm.ProxyManage))...)...).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))
@@ -841,7 +860,7 @@ func (s *Service) test(c *gin.Context) {
 	}
 	var r row
 	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc, p.allow_private FROM proxies p
-		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScopeOf(ctx, writeScope)).
+		WHERE p.id = $1 AND `+core.ProxyRows.SQL(2), append([]any{id}, core.ProxyRows.Args(s.scopeOf(ctx, perm.ProxyManage))...)...).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc, &r.AllowPrivate)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))

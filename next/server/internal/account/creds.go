@@ -293,8 +293,8 @@ type credBase struct {
 	reveal bool
 }
 
-// credBase decrypts a's credentials; reveal is account:credential:view over
-// a (the own key only for its creator).
+// credBase decrypts a's credentials; reveal is whether a is in the caller's
+// account:credential:view scope.
 func (s *Service) credBase(ctx context.Context, a *row) (*credBase, error) {
 	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
@@ -304,8 +304,11 @@ func (s *Service) credBase(ctx context.Context, a *row) (*credBase, error) {
 	if err != nil {
 		return nil, err
 	}
-	scope, ok := core.ScopeOf(ctx, s.d.Authorizer, perm.Pair("account:credential:view", "account:own:credential:view"))
-	return &credBase{secret: plain, old: mustJSON(all), reveal: ok && core.Allows(scope, a.CreatedBy)}, nil
+	reveal, err := inScope(ctx, s.d.DB.Pool, a.ID, s.scopeOf(ctx, perm.AccountCredentialView))
+	if err != nil {
+		return nil, err
+	}
+	return &credBase{secret: plain, old: mustJSON(all), reveal: reveal}, nil
 }
 
 // prepare validates credentials (schema, then plugin, then the guarded

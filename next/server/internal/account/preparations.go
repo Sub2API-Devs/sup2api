@@ -15,18 +15,18 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
-	permissions := []string{"account:create", "account:own:create"}
-	r.PermAny("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, permissions...)
-	r.PermAny("GET", "/account-preparations/:key/:action", s.preparationAction, permissions...)
-	r.PermAny("POST", "/account-preparations/:key/:action", s.preparationAction, permissions...)
-	r.PermAny("DELETE", "/account-preparations/:key", s.cancelPreparation, permissions...)
-	r.PermAny("PUT", "/account-preparations/:key", s.updatePreparation, permissions...)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, perm.AccountCreate)
+	r.PermScoped("GET", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
+	r.PermScoped("POST", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
+	r.PermScoped("DELETE", "/account-preparations/:key", s.cancelPreparation, perm.AccountCreate)
+	r.PermScoped("PUT", "/account-preparations/:key", s.updatePreparation, perm.AccountCreate)
 }
 
 func (s *Service) preparationResource(p core.AccountPreparation) (core.AccountLifecycleResource, error) {
@@ -63,7 +63,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnsupported)
 		return
 	}
-	if err := s.checkCustomUpstream(ctx, core.OwnerScope(ctx, "account:create"), binding); err != nil {
+	if err := s.checkCustomUpstream(ctx, s.scopeOf(ctx, perm.AccountCreate), binding); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -76,7 +76,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create")); err != nil {
+	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -104,7 +104,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 	// A preparation takes its resource (a runtime container) until it is
 	// adopted, cancelled or expires; the full account:create is not limited.
 	limit := core.MaxOpenDrafts
-	if core.OwnerScope(ctx, "account:create") == nil {
+	if s.scopeOf(ctx, perm.AccountCreate).All {
 		limit = 0 // no limit
 	}
 	var fresh bool // this request inserted the row
@@ -258,7 +258,7 @@ func (s *Service) updatePreparation(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create")); err != nil {
+	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

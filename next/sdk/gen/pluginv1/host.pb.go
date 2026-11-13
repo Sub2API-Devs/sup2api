@@ -3815,11 +3815,12 @@ type AccountScopeCheckResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// The user holds account:<action>: every account is in scope and
-	// allowed_ids is empty.
+	// The user holds account:<action> for every account: every account is in
+	// scope and allowed_ids is empty.
 	All bool `protobuf:"varint,1,opt,name=all,proto3" json:"all,omitempty"`
-	// Otherwise (account:own:<action>): the ids among account_ids that are
-	// live accounts the user created, in request order, once each.
+	// Otherwise (a narrower scope: own, groups, ids): the ids among
+	// account_ids that are live accounts in the user's scope, in request
+	// order, once each.
 	AllowedIds []int64 `protobuf:"varint,2,rep,packed,name=allowed_ids,json=allowedIds,proto3" json:"allowed_ids,omitempty"`
 }
 

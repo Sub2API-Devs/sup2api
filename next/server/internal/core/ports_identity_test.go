@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"reflect"
 	"slices"
 	"testing"
@@ -135,4 +136,79 @@ func codeOf(err error) string {
 		return ""
 	}
 	return AsError(err).Code
+}
+
+// Has asks whether the set implies a key (CONTRACTS §21): an unscoped key
+// asks for every row, so a holder of account:read:own does not have
+// account:read; the former own-level spelling reads as its scope.
+func TestPermissionSetScoped(t *testing.T) {
+	t.Parallel()
+	own := PermissionSetOf("account:own:read", "account:update:group/12", "proxy:read")
+	for k, want := range map[string]bool{
+		"account:read":                      false,
+		"account:read:own":                  true,
+		"account:own:read":                  true,
+		"account:read:*":                    false,
+		"account:update:group/12":           true,
+		"account:update:group/12/account/5": true,
+		"account:update:account/5":          false,
+		"account:update:group/13":           false,
+		"proxy:read:proxy/3":                true,
+		"proxy:read":                        true,
+		"account:update:group/x":            false,
+		"account:delete:own":                false,
+	} {
+		if got := own.Has(k); got != want {
+			t.Errorf("Has(%s) = %v", k, got)
+		}
+	}
+	for a, want := range map[perm.Key]bool{perm.AccountRead: true, perm.AccountUpdate: true, perm.ProxyRead: true, perm.AccountDelete: false} {
+		if own.HasAction(a) != want {
+			t.Errorf("HasAction(%s) != %v", a, want)
+		}
+	}
+	if got := own.KeyList(); !slices.Equal(got, []string{"account:read:own", "account:update:group/12", "proxy:read"}) {
+		t.Fatalf("KeyList = %v", got)
+	}
+	if s := own.DataScope(7, perm.AccountUpdate); s.All || !slices.Equal(s.Groups, []int64{12}) {
+		t.Fatalf("DataScope = %+v", s)
+	}
+	if s := own.DataScope(7, perm.ProxyRead); !s.All {
+		t.Fatalf("proxy scope = %+v", s)
+	}
+	if m := own.Missing(PermissionSetOf("account:update:group/12/account/9", "account:update:account/9", "account:read")); !slices.Equal(m.Keys, []string{"account:read", "account:update:account/9"}) {
+		t.Fatalf("Missing = %v", m.Keys)
+	}
+}
+
+// An access key keeps, per action, the narrower of its key and the user's
+// scopes; scopes neither implies are dropped (no intersection).
+func TestRestrictScoped(t *testing.T) {
+	t.Parallel()
+	user := PermissionSetOf("account:read:own", "account:update:group/12", "account:delete", "proxy:read:own")
+	for _, tc := range []struct {
+		key  []string
+		want []string
+	}{
+		{[]string{"account:read"}, []string{"account:read:own"}},
+		{[]string{"account:own:read"}, []string{"account:read:own"}},
+		{[]string{"account:update"}, []string{"account:update:group/12"}},
+		{[]string{"account:update:group/12/account/5"}, []string{"account:update:group/12/account/5"}},
+		{[]string{"account:update:own"}, nil},
+		{[]string{"account:update:group/*"}, []string{"account:update:group/12"}},
+		{[]string{"account:delete:group/3", "proxy:read"}, []string{"account:delete:group/3", "proxy:read:own"}},
+		{[]string{"account:test", "bogus:key:own"}, nil},
+	} {
+		got := user.Restrict(tc.key).KeyList()
+		if len(got) == 0 {
+			got = nil
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("Restrict(%v) = %v, want %v", tc.key, got, tc.want)
+		}
+	}
+	super := PermissionSet{Superuser: true}
+	if got := super.Restrict([]string{"account:update:group/3"}); got.Superuser || !slices.Equal(got.KeyList(), []string{"account:update:group/3"}) {
+		t.Fatalf("superuser restrict = %+v", got)
+	}
 }
