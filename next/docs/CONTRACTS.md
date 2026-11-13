@@ -1074,6 +1074,14 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
   - 新建：范围不含 own、只有分组时，`group_ids` 必须含其中一个分组，否则 400 `fields[{group_ids, not_in_scope}]`。
   - 改分组：绑定或解绑自己范围内的分组（`group/G`、`group/*`）不需要 `account:group:bind`；写入后账号必须仍在调用者的 update 范围内，否则 403 `would_leave_scope`（整笔回滚）。
   - 删除账号、删除分组时，清除点名它们的带范围授予（`core.ClearScopeGrants`，按角色审计 `authz.scope.clear`，推进 authz 版本）。
+- **代理与引用（期 4 R4）**：
+  - 代理的列表、详情、位置、改、删、测试、回显都按 `proxy:read` / `proxy:manage` 的范围过滤，`mine`、`created_by` 在范围内收窄。
+  - 新建代理（POST `/proxies`、`/proxies/probe`、保存账号时经 `proxy_url` 自动建）要求 `proxy:manage` 的范围是全部或 own；只有 `proxy/X` 时 403，`details.permission = proxy:manage:own`。
+  - 受限档不能保存私网地址；连接设置被他人账号使用时 409 `proxy_in_use`。
+  - 删除代理时清除 `proxy/X` 授予。
+  - 账号表单（POST/PATCH `/accounts`、预备容器、类型 models/fetch、ccgateway 草稿）可引用的代理统一为 `core.ProxyRefScope`：账号动作是全部时为全部代理，否则为 `proxy:read` 与 `proxy:manage` 范围的并集。
+  - 不持有任何 `proxy:manage` 时 `proxy_url` 返回 403，`details.permission` 为 `proxy:manage:own`（此前为 `proxy:own:manage`）。
+  - ccgateway 账号运行时路由改为 `PermScoped(account:read|update)`；PUT（请求日志）仍只对全量 `account:update` 开放。
 
 ### 21.1 权限（§4 表同步更新）
 

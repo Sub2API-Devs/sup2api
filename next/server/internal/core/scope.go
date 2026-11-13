@@ -65,6 +65,22 @@ func Scope(ctx context.Context, az Authorizer, action perm.Key) (DataScope, erro
 	return set.DataScope(uid, action), nil
 }
 
+// ProxyRefScope is the proxies the caller may reference from an account
+// written under accountAction (proxy_id, proxy_url; CONTRACTS §21.4): every
+// proxy when it holds accountAction for every account, otherwise those of
+// its proxy:read and proxy:manage scopes.
+func ProxyRefScope(ctx context.Context, az Authorizer, accountAction perm.Key) (DataScope, error) {
+	if s, err := Scope(ctx, az, accountAction); err != nil || s.All {
+		return s, err
+	}
+	read, err := Scope(ctx, az, perm.ProxyRead)
+	if err != nil {
+		return DataScope{}, err
+	}
+	manage, err := Scope(ctx, az, perm.ProxyManage)
+	return read.Union(manage), err
+}
+
 // HasGranted reports whether the route middleware matched k for the caller
 // (Granted).
 func HasGranted(ctx context.Context, k perm.Key) bool {

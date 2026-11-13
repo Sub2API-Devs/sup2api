@@ -458,7 +458,7 @@ func TestProxyURL(t *testing.T) {
 	// visible proxy under the own range.
 	code, out = e.doAs(carol, "POST", "/accounts", map[string]any{"name": "c", "plugin_key": "anthropic", "type": "apikey",
 		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": url1})
-	if code != 403 || permission(out) != "proxy:own:manage" {
+	if code != 403 || permission(out) != "proxy:manage:own" {
 		t.Fatalf("carol proxy_url: %d %v", code, out)
 	}
 	byID := func(uid, pid int64) (int, []string) {
@@ -494,7 +494,7 @@ func TestProxyURL(t *testing.T) {
 	before := proxies()
 	fetch := map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": fmt.Sprintf("http://%s:%d", host, port)}
 	code, out = e.doAs(carol, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)
-	if code != 403 || permission(out) != "proxy:own:manage" || hits.Load() != 0 {
+	if code != 403 || permission(out) != "proxy:manage:own" || hits.Load() != 0 {
 		t.Fatalf("fetch through proxy_url without a proxy key: %d %v hits=%d", code, out, hits.Load())
 	}
 	code, out = e.doAs(alice, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)

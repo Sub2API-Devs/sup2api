@@ -24,11 +24,11 @@ var _ core.ProxyResolver = (*Service)(nil)
 // then each stored password is decrypted and compared in constant time.
 // Several matches (possible for rows created before this resolver existed)
 // resolve to the smallest id.
-func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerID int64, scope *int64) (int64, bool, error) {
+func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerID int64, scope core.DataScope) (int64, bool, error) {
 	if err := checkSpec(spec); err != nil {
 		return 0, false, err
 	}
-	// Under proxy:own:manage (scope != nil) a private proxy address is refused
+	// A restricted scope may not use a private proxy address, and is refused
 	// before creating anything (CONTRACTS §43.3).
 	allowPriv, err := s.checkPrivate(ctx, scope, spec.Host)
 	if err != nil {
@@ -41,11 +41,11 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, lockKey); err != nil {
 		return 0, false, err
 	}
-	rows, err := tx.Query(ctx, `SELECT id, password_enc FROM proxies
-		WHERE protocol = $1 AND lower(host) = $2 AND port = $3 AND username = $4
-		  AND (password_enc IS NULL) = $5 AND status <> 'disabled'
-		  AND ($6::bigint IS NULL OR created_by = $6)
-		ORDER BY id`, spec.Protocol, spec.Host, spec.Port, spec.Username, spec.Password == "", scope)
+	rows, err := tx.Query(ctx, `SELECT p.id, p.password_enc FROM proxies p
+		WHERE p.protocol = $1 AND lower(p.host) = $2 AND p.port = $3 AND p.username = $4
+		  AND (p.password_enc IS NULL) = $5 AND p.status <> 'disabled'
+		  AND `+core.ProxyRows.SQL(6)+`
+		ORDER BY p.id`, append([]any{spec.Protocol, spec.Host, spec.Port, spec.Username, spec.Password == ""}, core.ProxyRows.Args(scope)...)...)
 	if err != nil {
 		return 0, false, err
 	}
@@ -74,6 +74,9 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	}
 	rows.Close()
 
+	if err := canCreate(ctx, scope); err != nil {
+		return 0, false, err
+	}
 	enc, err := s.encryptPassword(&spec.Password)
 	if err != nil {
 		return 0, false, err

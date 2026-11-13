@@ -122,7 +122,11 @@ func (s *Service) probeURL(c *gin.Context) {
 		return
 	}
 	// A private address needs proxy:manage, as when saving one (§43.3).
+	// Probing is how a new proxy is found: the scopes that may create one.
 	scope, allowPrivate, err := s.privateScope(ctx, candidates[0].Host)
+	if err == nil {
+		err = canCreate(ctx, scope)
+	}
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

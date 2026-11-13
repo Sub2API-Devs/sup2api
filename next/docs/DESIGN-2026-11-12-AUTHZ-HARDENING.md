@@ -893,3 +893,28 @@
   - core 谓词快照更新。
 - 影响对象：own 级用户的 `created_by=<他人>` 现在返回空列表（此前忽略该参数）。其余对 own 与全部范围的行为不变。
 - 回滚：revert（无迁移）。
+
+## 期 4 R4：proxy 与 ccgateway 收敛
+
+- 改动：
+  - `proxy`：
+    - `scopeOf` 取路由写入的范围。`load`、列表、改、删、测试、回显、`FindOrCreate` 一律使用 `core.ProxyRows`。`writeScope` 与 `scoped()` 已删除。
+    - `checkPrivate` 与 `inUseByOthers` 改按 `Restricted()` 判断，后者使用调用者 id。
+    - `canCreate`：只有全部或 own 范围才能新建代理（POST `/proxies`、`/proxies/probe`、`FindOrCreate` 新建时）。
+    - 删除代理时调用 `ClearScopeGrants(proxy)`。
+    - `core.ProxyResolver.FindOrCreate` 的 scope 参数改为 `core.DataScope`。
+  - `core`：新增 `ProxyRefScope(ctx, az, accountAction)` 与 `DataScope.Union`。
+  - `account`：`proxyRange`、`proxyRangeOf`、`proxyRangeFor` 已删除，`checkRefs` 与 `resolveWriteRefs` 改用 `ProxyRefScope`；`parseProxyURL` 改用 `proxy:manage` 的范围。
+  - `ccgateway`：
+    - 删除手抄的 `canProxies`，`checkProxy` 改用 `ProxyRefScope(account:create)`。
+    - 删除 `RuntimeScope`，PUT 运行时（请求日志）路由改为 `Perm(account:update)`。
+    - 预备容器上限判断改用 `Scope(account:create).All`。
+- 测试：
+  - proxy `TestProxyIDScope`：只持有 `proxy/X` 时只能管理 X，其他代理 404；不能新建，不能 probe；受限档不能改为私网地址；删除后授予被清除。
+  - core `TestProxyRefScope`。
+  - `TestOwnership`（created_by 在范围内收窄）、`TestFindOrCreate`、account `TestProxyURL`（权限名变化）。
+- 影响对象：
+  - own 级用户的代理列表 `created_by=<他人>` 现在返回空。
+  - `proxy_url` 被拒时 `details.permission` 变为 `proxy:manage:own`。
+  - 其余对 own 与全部范围的行为不变。
+- 回滚：revert。

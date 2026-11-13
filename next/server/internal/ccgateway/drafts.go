@@ -87,25 +87,6 @@ func (s *Service) touchDraftOf(ctx context.Context, key string, scope *int64, ki
 	return tag.RowsAffected() == 1, nil
 }
 
-// canProxies is the proxy range of a draft caller, the account module's
-// rule for POST /accounts (proxyRangeFor "account:create", CONTRACTS
-// §21.4): account:create may use every proxy; otherwise proxy:read sees
-// every proxy, proxy:own:read / proxy:own:manage the caller's own, anything
-// else none.
-func (s *Service) canProxies(ctx context.Context) (scope *int64, none bool) {
-	if core.OwnerScope(ctx, "account:create") == nil {
-		return nil, false
-	}
-	if core.Can(ctx, s.Authorizer, "proxy:read") {
-		return nil, false
-	}
-	if core.Can(ctx, s.Authorizer, "proxy:own:read") || core.Can(ctx, s.Authorizer, "proxy:own:manage") {
-		uid, _ := core.UserID(ctx)
-		return &uid, false
-	}
-	return nil, true
-}
-
 // checkProxy validates a draft's proxy_id: none (direct egress), or visible
 // to the caller and not disabled.
 func (s *Service) checkProxy(ctx context.Context, id *int64) error {
@@ -115,10 +96,14 @@ func (s *Service) checkProxy(ctx context.Context, id *int64) error {
 	if *id <= 0 {
 		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}
-	scope, none := s.canProxies(ctx)
+	// The account module's rule for POST /accounts (CONTRACTS §21.4).
+	refs, e := core.ProxyRefScope(ctx, s.Authorizer, perm.AccountCreate)
+	if e != nil {
+		return e
+	}
 	var status string
-	e := s.DB.Pool.QueryRow(ctx, `SELECT status FROM proxies WHERE id=$1 AND NOT $2::boolean
-		AND ($3::bigint IS NULL OR created_by=$3)`, *id, none, scope).Scan(&status)
+	e = s.DB.Pool.QueryRow(ctx, `SELECT p.status FROM proxies p WHERE p.id=$1 AND `+core.ProxyRows.SQL(2),
+		append([]any{*id}, core.ProxyRows.Args(refs)...)...).Scan(&status)
 	if store.IsNoRows(e) {
 		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}

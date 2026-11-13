@@ -852,10 +852,10 @@ type ProxySpec struct {
 // proxy.Service, injected into account.Deps.
 type ProxyResolver interface {
 	// FindOrCreate returns the id of the enabled proxy equal to spec in
-	// protocol, host, port, username and password, restricted to rows the
-	// caller may see (scope nil = all, otherwise created_by = *scope; NULL
-	// created_by rows only match under nil), or inserts a new one owned by
-	// ownerID (name "<protocol>://<host>:<port>", status active). It must
+	// protocol, host, port, username and password among the rows of scope
+	// (the caller's proxy:manage, CONTRACTS §21.0), or, when scope may
+	// create (every row or own), inserts a new one owned by ownerID (name
+	// "<protocol>://<host>:<port>", status active). It must
 	// run inside the caller's transaction (tx) together with the account
 	// write; it takes pg_advisory_xact_lock on the match key first so two
 	// concurrent saves of the same URL never create duplicates.
@@ -864,7 +864,7 @@ type ProxyResolver interface {
 	// audit detail needs does not exist yet when the account is being
 	// created. After the account row is written, callers pass created ==
 	// true rows to AuditAutoCreate in the same transaction.
-	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope *int64) (id int64, created bool, err error)
+	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope DataScope) (id int64, created bool, err error)
 	// AuditAutoCreate records the audit row proxy.create {auto:true,
 	// account_id} (actor = ownerID, ip from audit.WithClientIP on ctx) for a
 	// proxy FindOrCreate just inserted, and announces the new proxy on

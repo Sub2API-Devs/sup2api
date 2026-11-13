@@ -986,13 +986,13 @@ func normalizeMapping(ctx context.Context, in map[string]string) (map[string]str
 
 // checkRefs verifies that the proxy exists within the caller's proxy range.
 // A proxy outside the range is reported as not found, like a missing one.
-func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, pr proxyRange) error {
+func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, refs core.DataScope) error {
 	if proxyID == nil {
 		return nil
 	}
 	var ok bool
-	err := q.QueryRow(ctx, `SELECT true FROM proxies p WHERE p.id = $1 AND NOT $2::boolean
-		AND ($3::bigint IS NULL OR p.created_by = $3)`, *proxyID, pr.none, pr.scope).Scan(&ok)
+	err := q.QueryRow(ctx, `SELECT true FROM proxies p WHERE p.id = $1 AND `+core.ProxyRows.SQL(2),
+		append([]any{*proxyID}, core.ProxyRows.Args(refs)...)...).Scan(&ok)
 	if store.IsNoRows(err) {
 		return core.InvalidFields(core.FieldError{Field: "proxy_id", Code: "not_found",
 			Message: t(ctx, "proxy not found", "代理不存在")})
@@ -1032,7 +1032,7 @@ func createInScope(ctx context.Context, scope core.DataScope, groupIDs []int64) 
 
 // errWouldLeaveScope: a restricted caller's update would move the account
 // out of its own account:update scope.
-var errWouldLeaveScope = core.NewError(403, "would_leave_scope", "the change would move the account out of your range")
+var errWouldLeaveScope = core.NewError(403, "would_leave_scope", "")
 
 // stillInScope fails, inside the update's transaction, when the account
 // left the caller's scope.
@@ -1228,17 +1228,18 @@ func statusPayload(id int64, pluginKey, typ, name, status, reason string, until 
 // decides allow_private of a row it creates (CONTRACTS §21.4).
 type proxyByURL struct {
 	spec  core.ProxySpec
-	scope *int64
+	scope core.DataScope
 }
 
-// parseProxyURL checks that the caller may link proxies by address
-// (proxy:manage or proxy:own:manage) and parses raw. Errors are 403
-// permission_denied (details.permission = proxy:own:manage) or the
+// parseProxyURL checks that the caller may link proxies by address (any
+// proxy:manage scope; a new proxy needs every row or own, FindOrCreate) and
+// parses raw. Errors are 403 permission_denied (details.permission =
+// proxy:manage:own) or the
 // invalid_argument of core.ParseProxyURL (never echoing the address).
 func (s *Service) parseProxyURL(ctx context.Context, raw string) (*proxyByURL, error) {
-	scope, ok := core.ScopeOf(ctx, s.d.Authorizer, perm.Pair("proxy:manage", "proxy:own:manage"))
-	if !ok {
-		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:own:manage"})
+	scope := s.scopeOf(ctx, perm.ProxyManage)
+	if scope.Empty() {
+		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:manage:own"})
 	}
 	spec, err := core.ParseProxyURL(raw)
 	if err != nil {
@@ -1268,15 +1269,15 @@ func (s *Service) auditProxy(ctx context.Context, tx pgx.Tx, created bool, proxy
 // create and update: deduplicate groups (checked by loadGroupDiff), check the
 // caller may reference the proxy, and resolve a proxy_url to a spec (created
 // later inside the transaction).
-func (s *Service) resolveWriteRefs(ctx context.Context, in *input, perm string) (groupIDs []int64, proxyID *int64, byURL *proxyByURL, err error) {
+func (s *Service) resolveWriteRefs(ctx context.Context, in *input, action perm.Key) (groupIDs []int64, proxyID *int64, byURL *proxyByURL, err error) {
 	if in.GroupIDs != nil {
 		groupIDs = uniqueIDs(*in.GroupIDs)
 	}
 	if in.ProxyID.Valid {
 		proxyID = &in.ProxyID.V
 	}
-	// Under the own key proxy_id must be a proxy the caller can see (§21.2).
-	if err = checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, perm)); err != nil {
+	// A restricted caller references only proxies it can see (§21.2).
+	if err = checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRefs(ctx, action)); err != nil {
 		return nil, nil, nil, err
 	}
 	if in.ProxyURL != nil {
@@ -1316,7 +1317,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fields...))
 		return
 	}
-	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, "account:create")
+	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, perm.AccountCreate)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1502,7 +1503,7 @@ func (s *Service) update(c *gin.Context) {
 		return
 	}
 	featureOnly := in.CCFeaturePolicy != nil && len(in.changedFields()) == 1
-	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, "account:update")
+	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, perm.AccountUpdate)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

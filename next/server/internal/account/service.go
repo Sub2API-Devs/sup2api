@@ -141,8 +141,8 @@ func New(d Deps) *Service {
 }
 
 // RegisterRoutes mounts the account and account type endpoints. Every route
-// accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
-// narrow their SQL with core.OwnerScope.
+// accepts any scope of its action (CONTRACTS §21.0); handlers narrow their
+// SQL with the caller's scope (scopeOf).
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPreparationRoutes(r)
 	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
@@ -374,40 +374,14 @@ func (s *Service) AccountsInScope(ctx context.Context, userID int64, action stri
 	return false, allowed, err
 }
 
-// proxyRange is the set of proxies a caller may reference (by proxy_id) or
-// match (proxy_url): scope nil means every proxy, otherwise the rows created
-// by *scope; none means the caller holds no proxy key and sees nothing.
-type proxyRange struct {
-	scope *int64
-	none  bool
-}
-
-// allProxies is the range of callers holding the "all" account key: proxy_id
-// only has to exist.
-var allProxies = proxyRange{}
-
-// proxyRangeOf computes the caller's proxy visibility (CONTRACTS §21.4):
-// proxy:read sees every proxy; proxy:own:read or proxy:own:manage see the
-// caller's own; anything else sees none.
-func (s *Service) proxyRangeOf(ctx context.Context) proxyRange {
-	if core.Can(ctx, s.d.Authorizer, "proxy:read") {
-		return allProxies
+// proxyRefs is the proxies a caller writing an account under action may
+// reference (core.ProxyRefScope); an error reaches none (logged).
+func (s *Service) proxyRefs(ctx context.Context, action perm.Key) core.DataScope {
+	scope, err := core.ProxyRefScope(ctx, s.d.Authorizer, action)
+	if err != nil {
+		slog.WarnContext(ctx, "proxy reference scope", "action", action, "err", err)
 	}
-	if core.Can(ctx, s.d.Authorizer, "proxy:own:read") || core.Can(ctx, s.d.Authorizer, "proxy:own:manage") {
-		uid, _ := core.UserID(ctx)
-		return proxyRange{scope: &uid}
-	}
-	return proxyRange{none: true}
-}
-
-// proxyRangeFor returns the proxies a caller of a route registered with
-// allKey may reference: everything under the "all" key, the visible range
-// under the "own" key.
-func (s *Service) proxyRangeFor(ctx context.Context, allKey string) proxyRange {
-	if core.OwnerScope(ctx, allKey) == nil {
-		return allProxies
-	}
-	return s.proxyRangeOf(ctx)
+	return scope
 }
 
 func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }

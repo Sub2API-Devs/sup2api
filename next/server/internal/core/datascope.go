@@ -63,6 +63,27 @@ func sortedSet(ids []int64) []int64 {
 	return slices.Compact(ids)
 }
 
+// Union is what s and o reach together (both of the same caller).
+func (s DataScope) Union(o DataScope) DataScope {
+	if s.All || o.All {
+		return AllScope
+	}
+	type pair struct{ g, x int64 }
+	u := DataScope{Owner: max(s.Owner, o.Owner), Groups: sortedSet(slices.Concat(s.Groups, o.Groups)), IDs: sortedSet(slices.Concat(s.IDs, o.IDs))}
+	var pairs []pair
+	for i := range s.PairID {
+		pairs = append(pairs, pair{s.PairG[i], s.PairID[i]})
+	}
+	for i := range o.PairID {
+		pairs = append(pairs, pair{o.PairG[i], o.PairID[i]})
+	}
+	slices.SortFunc(pairs, func(a, b pair) int { return cmp.Or(cmp.Compare(a.g, b.g), cmp.Compare(a.x, b.x)) })
+	for _, p := range slices.Compact(pairs) {
+		u.PairG, u.PairID = append(u.PairG, p.g), append(u.PairID, p.x)
+	}
+	return u
+}
+
 // Empty reports whether s reaches no row.
 func (s DataScope) Empty() bool {
 	return !s.All && s.Owner == 0 && len(s.Groups) == 0 && len(s.IDs) == 0 && len(s.PairID) == 0

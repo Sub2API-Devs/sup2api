@@ -33,13 +33,13 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermScoped("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, perm.AccountAction(accountAction(http.MethodGet)))
 	r.PermScoped("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, perm.AccountAction(accountAction(http.MethodPost)))
 	// PUT only sets the request logs, which is not an own-level action.
-	r.PermAny("PUT", "/system/ccgateway/accounts/:id/:action", func(c *gin.Context) {
+	r.Perm("PUT", "/system/ccgateway/accounts/:id/:action", perm.AccountUpdate, func(c *gin.Context) {
 		if c.Param("action") != "request-logs" {
 			httpapi.Fail(c, core.ErrNotFound)
 			return
 		}
 		s.accountManage(c)
-	}, RuntimeScope(http.MethodPut).All...)
+	})
 	// Reading the request logs (REQUEST-LOG-VIEWER-DESIGN.md §6).
 	s.registerRequestLogViewer(r)
 	// Draft runtimes of accounts being created (CONTRACTS §49.9).

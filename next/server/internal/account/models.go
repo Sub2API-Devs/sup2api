@@ -85,7 +85,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	default:
 		if in.ProxyID != nil {
 			// Same visibility rule as POST /accounts (§21.2).
-			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create")); err != nil {
+			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 				httpapi.Fail(c, err)
 				return
 			}

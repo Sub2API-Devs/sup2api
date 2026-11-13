@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
@@ -118,3 +119,33 @@ func TestAllows(t *testing.T) {
 func samePtr(a, b *int64) bool { return (a == nil) == (b == nil) && (a == nil || *a == *b) }
 
 func i64(v int64) *int64 { return &v }
+
+// setAuthorizer answers from a fixed PermissionSet.
+type setAuthorizer struct{ set PermissionSet }
+
+func (a setAuthorizer) Can(_ context.Context, _ int64, k string) (bool, error) { return a.set.Has(k), nil }
+func (a setAuthorizer) PermissionSet(context.Context, int64) (PermissionSet, error) {
+	return a.set, nil
+}
+func (setAuthorizer) CanGrant(context.Context, int64, []string) error { return nil }
+
+// An account writer references every proxy with the account action for
+// every row, otherwise the proxies of its proxy:read and proxy:manage
+// scopes together (CONTRACTS §21.4).
+func TestProxyRefScope(t *testing.T) {
+	ctx := WithUserID(context.Background(), 7)
+	for _, tc := range []struct {
+		keys []string
+		want DataScope
+	}{
+		{[]string{"account:create"}, AllScope},
+		{[]string{"account:create:own", "proxy:read"}, AllScope},
+		{[]string{"account:create:own", "proxy:read:own", "proxy:manage:proxy/5", "proxy:read:proxy/3"}, DataScope{Owner: 7, IDs: []int64{3, 5}}},
+		{[]string{"account:create:group/2"}, DataScope{}},
+	} {
+		got, err := ProxyRefScope(ctx, setAuthorizer{PermissionSetOf(tc.keys...)}, perm.AccountCreate)
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%v: %+v %v, want %+v", tc.keys, got, err, tc.want)
+		}
+	}
+}
