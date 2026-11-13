@@ -113,7 +113,7 @@ onMounted(load)
         <span class="line-clamp-2 max-w-md text-xs" :title="row.last_run?.message">{{ row.last_run?.message || '—' }}</span>
       </template>
       <template #cell-actions="{ row }">
-        <SButton v-if="auth.has('plugin:manage')" size="sm" :loading="running === row.id" icon="play" @click="runNow(row)">
+        <SButton v-if="auth.has('task:run')" size="sm" :loading="running === row.id" icon="play" @click="runNow(row)">
           {{ t('plugins.jobs.runNow') }}
         </SButton>
       </template>

@@ -373,3 +373,10 @@
 - 改动：`authz.SyncPlugin` 新登记的插件权限不再一律 `active`：插件此刻在运行（`plugins.status` 为 `enabled` 或 `upgrading`，与 `plugin/install` 的常量一致，`TestSyncPluginNewPermissionFollowsPluginStatus` 防漂移）时为 `active`，否则为 `disabled`；已存在的行不动。启用时的 `SetPluginActive(true)`、禁用时的 `SetPluginActive(false)` 不变。W4-P9 不改行为：`rollout.finishFailed` 的升级分支加注释说明“同意新版本时登记的新 key 保留到下次激活”，`TestPermissionCatalogFollowsRollouts` 用真实的目录与 `DefaultsApplier` 锁定整个生命周期。无迁移。CONTRACTS §4 同步。
 - 影响对象：首次安装（尚未启用）和禁用期间同意新版本时登记的权限，此前立即 `active`（持有它的角色在插件没运行时就“有”这个权限，`/me` 的权限列表、可分配判断会把它算进去），现在到启用那一刻才生效；角色授予照常写入，启用后无需重新勾选。运行中升级登记的新权限仍立即 `active`。存量行不追溯：已经是 `active` 的未运行插件的权限保持原状，直到该插件下一次禁用或启用。升级失败后残留的新 key 在运行中的插件上是 `active` 的（没有任何路由检查它），下次激活时按实际运行版本的 manifest 清理。
 - 回滚：revert 这个提交即可，无迁移；回滚后已登记为 `disabled` 的权限在插件下次启用时变为 `active`。
+
+## T62 W4-A4：插件任务手动运行统一要求 task:run（产品性收紧）
+
+- 改动：`POST /plugins/:key/jobs/:job_id/run` 的权限由 `plugin:manage` 改为 `task:run`（`plugin/api/api.go`，用 `task.PermRun`），与 `POST /system/tasks/:name/run` 同口径：同一个任务不再有两个权限不同的手动运行入口。审计动作仍是 `plugin.job.run`。插件详情“任务”页的“立即运行”按钮改按 `task:run` 显示（`JobsTab.vue`）。无迁移。CONTRACTS §5.7 路由表同步。
+- 影响对象：只有 `plugin:manage`、没有 `task:run` 的角色：调用由 204 变为 403 `details.permission = task:run`，按钮不再显示；内置 `admin` 两个权限都有，不受影响（`operator` 本来就没有 `plugin:manage`）。反过来，只有 `task:run` 的人现在可以从这个接口运行插件任务，他此前已经能在定时任务页运行同一个任务（看任务列表仍需 `plugin:read`）。`task:run` 是敏感权限，访问密钥是否可用按该权限自己的规则。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+

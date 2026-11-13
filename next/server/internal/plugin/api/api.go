@@ -16,6 +16,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 )
 
 // Deps are the API collaborators. Nodes, Registry, Bus, Jobs and HookStats may be nil.
@@ -86,7 +87,9 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPut, "/plugins/:key/egress-policy", PermManage, a.putEgressPolicy)
 	r.Perm(http.MethodGet, "/plugins/:key/egress", PermEgressRead, a.egress)
 	r.Perm(http.MethodGet, "/plugins/:key/jobs", PermRead, a.jobs)
-	r.Perm(http.MethodPost, "/plugins/:key/jobs/:job_id/run", PermManage, a.runJob)
+	// A manual run is a task run, whoever declared the task: the same key as
+	// POST /system/tasks/:name/run.
+	r.Perm(http.MethodPost, "/plugins/:key/jobs/:job_id/run", task.PermRun, a.runJob)
 	r.Perm(http.MethodGet, "/plugins/:key/events", PermRead, a.events)
 
 	r.Authed(http.MethodGet, "/ui/plugins", a.uiPlugins)
