@@ -1297,6 +1297,13 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 		t.Fatal(err)
 	}
 	k.grantRole(t, k.userID, "demo_reader", "plugin.demo:read")
+	mods, err = k.s.AccessKeyPermissions(ctx, k.userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(mods, func(m *authz.PermissionModule) bool { return m.Module == "plugin.demo" && m.Source == "plugin" }) {
+		t.Fatalf("the selector does not offer the held plugin permission: %+v", mods)
+	}
 	key, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read", "user:read"}}, testIP)
 	if err != nil {
 		t.Fatalf("a plugin permission: %v", err)
@@ -1311,6 +1318,13 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 	k.bump(t)
 	if list, err := k.s.AccessKeys(ctx, k.userID); err != nil || len(list) != 1 || !slices.Equal(list[0].Lost, []string{"plugin.demo:read"}) {
 		t.Fatalf("lost = %+v, %v", list, err)
+	}
+	mods, err = k.s.AccessKeyPermissions(ctx, k.userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(mods, func(m *authz.PermissionModule) bool { return m.Module == "plugin.demo" }) {
+		t.Fatal("the selector offers a disabled plugin permission")
 	}
 }
 

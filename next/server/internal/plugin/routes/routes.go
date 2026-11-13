@@ -169,14 +169,15 @@ func (h *Handler) serveAPI(c *gin.Context) {
 
 	switch chosen.Route.Scope {
 	case "admin", "user":
-		// Access keys never reach plugins (their keys cannot hold plugin.*);
-		// a route without a permission matches nothing and is denied.
+		// A JWT or an access key; the route's permission is checked as the
+		// key narrows it (CONTRACTS §80). A route without a permission
+		// matches nothing and is denied. The plugin is not told the call
+		// came through a key: core audits it.
 		if !httpapi.Authenticate(c, h.tokens) {
 			return
 		}
 		httpapi.StampAuthzVersion(c, h.authz)
-		if !httpapi.RejectAccessKey(c) ||
-			!httpapi.CanAny(c, h.authz, manifest.PermissionKey(key, chosen.Route.Permission)) {
+		if !httpapi.CanAny(c, h.authz, manifest.PermissionKey(key, chosen.Route.Permission)) {
 			return
 		}
 	case "public", "webhook":
