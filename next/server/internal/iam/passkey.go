@@ -247,6 +247,9 @@ func (s *Service) FinishPasskeyRegistration(ctx context.Context, r *http.Request
 // DeletePasskey removes one of the user's passkeys.
 func (s *Service) DeletePasskey(ctx context.Context, userID, id int64) error {
 	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := s.keepLastFactor(ctx, tx, userID, core.StepUpSelfPasskeyDelete); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `DELETE FROM user_passkeys WHERE id = $1 AND user_id = $2`, id, userID)
 		if err != nil {
 			return err

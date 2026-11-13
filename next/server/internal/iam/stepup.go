@@ -388,7 +388,7 @@ func (s *Service) ConsumeStepUp(ctx context.Context, scope string) error {
 				return err
 			}
 			if enough {
-				core.MarkStepUpSpent(ctx, scope)
+				core.MarkStepUpSpent(ctx, scope, passwordChecked(p))
 				return nil
 			}
 		}
@@ -402,7 +402,7 @@ func (s *Service) ConsumeStepUp(ctx context.Context, scope string) error {
 // deleted), and a proof given without the password the operation now asks
 // for (lastSuperFactor) is not enough.
 func (s *Service) proofStillEnough(ctx context.Context, userID int64, p proofPayload) (bool, error) {
-	if p.Password {
+	if passwordChecked(p) {
 		return true, nil
 	}
 	methods, err := s.StepUpMethods(ctx, userID, p.Scope, p.Operation)
@@ -410,6 +410,40 @@ func (s *Service) proofStillEnough(ctx context.Context, userID int64, p proofPay
 		return false, err
 	}
 	return !methods.PasswordRequired, nil
+}
+
+// passwordChecked reports whether p was issued with the password: recorded
+// since the last-factor rule, and always so for the password-too scopes
+// (proofs issued before the record was kept).
+func passwordChecked(p proofPayload) bool {
+	return p.Password || stepUpScopes[p.Scope]
+}
+
+// keepLastFactor applies lastSuperFactor once more inside the transaction
+// removing a factor of userID (scope self.2fa.disable or
+// self.passkey.delete), locking the user's row first: two removals spent at
+// once, each leaving the other's factor, cannot both pass the check made
+// when their proofs were spent. A request whose proof was issued with the
+// password passes; so do calls outside a console request.
+func (s *Service) keepLastFactor(ctx context.Context, tx pgx.Tx, userID int64, scope string) error {
+	_, operation, ok := core.StepUpRequest(ctx)
+	if !ok || core.StepUpPassword(ctx) {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, userID); err != nil {
+		return err
+	}
+	var totp bool
+	var passkeys int
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1),
+		(SELECT count(*) FROM user_passkeys WHERE user_id = $1)`, userID).Scan(&totp, &passkeys); err != nil {
+		return err
+	}
+	last, err := s.lastSuperFactor(ctx, userID, scope, operation, totp, passkeys)
+	if err != nil || !last {
+		return err
+	}
+	return s.verificationRequired(ctx, userID, scope, operation)
 }
 
 // verificationRequired is the 403 that tells the console what to verify:

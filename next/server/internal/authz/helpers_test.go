@@ -215,7 +215,7 @@ func TestCanActOnUsers(t *testing.T) {
 	// refused for want of a proof; one the request already spent passes.
 	const needsProof = "verify it's you to continue"
 	spent := core.WithStepUp(keyed, "p", "op")
-	core.MarkStepUpSpent(spent, core.StepUpUserSecurityReset)
+	core.MarkStepUpSpent(spent, core.StepUpUserSecurityReset, false)
 	data, identity := core.ActOnData, core.ActOnIdentity
 	// Without a database there are no role keys: these cases judge only what
 	// the roles grant and the access key rule (FU6), so a non-superuser on

@@ -72,6 +72,8 @@ type stepUpState struct {
 	proof     string
 	operation string
 	spent     string
+	// password: the spent proof was issued with the password checked.
+	password bool
 }
 
 // WithStepUp records the proof a request carries (may be empty) and its
@@ -99,11 +101,19 @@ func StepUpSpent(ctx context.Context) string {
 	return ""
 }
 
-// MarkStepUpSpent records that the request spent its proof on scope.
-func MarkStepUpSpent(ctx context.Context, scope string) {
+// MarkStepUpSpent records that the request spent its proof on scope, and
+// whether that proof was issued with the password checked.
+func MarkStepUpSpent(ctx context.Context, scope string, password bool) {
 	if st, ok := ctx.Value(stepUpCtxKey{}).(*stepUpState); ok {
-		st.spent = scope
+		st.spent, st.password = scope, password
 	}
+}
+
+// StepUpPassword reports whether the proof the request spent was issued
+// with the password checked.
+func StepUpPassword(ctx context.Context) bool {
+	st, ok := ctx.Value(stepUpCtxKey{}).(*stepUpState)
+	return ok && st.password
 }
 
 type sessionCtxKey struct{}

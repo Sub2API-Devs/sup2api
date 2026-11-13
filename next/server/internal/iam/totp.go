@@ -333,6 +333,9 @@ func (s *Service) DisableTwoFactor(ctx context.Context, userID int64) error {
 		if err := lockRefreshUser(ctx, tx, userID); err != nil {
 			return err
 		}
+		if err := s.keepLastFactor(ctx, tx, userID, core.StepUpSelf2FADisable); err != nil {
+			return err
+		}
 		if err := requireTwoFactor(ctx, tx, userID); err != nil {
 			return err
 		}

@@ -468,3 +468,51 @@ func TestSuperAdminLastFactorTakesThePassword(t *testing.T) {
 	// The console asks with the operation (GET /me/verify/methods?context=).
 	check(root, core.StepUpUserSecurityReset, "", false)
 }
+
+// Two removals spent at once, each leaving the other's factor when its proof
+// was spent, cannot both go through: the removal checks the rule again with
+// the user's row locked, unless its proof was issued with the password.
+func TestSuperAdminConcurrentFactorRemovals(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	spent := func(scope, operation string, password bool) context.Context {
+		c := core.WithStepUp(core.WithUserID(ctx, root), "spent", operation)
+		core.MarkStepUpSpent(c, scope, password)
+		return c
+	}
+	disable := "POST /api/v1/me/two-factor/disable"
+	enableTwoFactor(t, s, root)
+	// The passkey the proof counted on went meanwhile.
+	if err := s.DisableTwoFactor(spent(core.StepUpSelf2FADisable, disable, false), root); !isVerificationRequired(err) {
+		t.Fatalf("two-factor-only proof, no passkey left: %v", err)
+	}
+	if err := s.DisableTwoFactor(spent(core.StepUpSelf2FADisable, disable, true), root); err != nil {
+		t.Fatalf("proof with the password: %v", err)
+	}
+	pk := addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
+	del := fmt.Sprintf("DELETE /api/v1/me/passkeys/%d", pk.ID)
+	if err := s.DeletePasskey(spent(core.StepUpSelfPasskeyDelete, del, false), root, pk.ID); !isVerificationRequired(err) {
+		t.Fatalf("passkey-only proof for the last passkey: %v", err)
+	}
+	if err := s.DeletePasskey(spent(core.StepUpSelfPasskeyDelete, del, true), root, pk.ID); err != nil {
+		t.Fatalf("proof with the password: %v", err)
+	}
+
+	// A proof issued with the password (asked for: two-factor is the last
+	// factor) is spent without a second look.
+	secret, _ := enableTwoFactor(t, s, root)
+	clearLastStep(t, s, root)
+	p, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, VerifyInput{Scope: core.StepUpSelf2FADisable, Context: disable, Method: methodTOTP, Code: codeAt(t, secret, time.Now()), Password: adminPassword}, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spentCtx := core.WithStepUp(core.WithUserID(ctx, root), p.Proof, disable)
+	if err := s.ConsumeStepUp(spentCtx, core.StepUpSelf2FADisable); err != nil || !core.StepUpPassword(spentCtx) {
+		t.Fatalf("proof given with the password: %v", err)
+	}
+	if err := s.DisableTwoFactor(spentCtx, root); err != nil {
+		t.Fatalf("disable with that proof: %v", err)
+	}
+}
