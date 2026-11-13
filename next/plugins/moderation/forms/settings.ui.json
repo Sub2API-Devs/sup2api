@@ -1,25 +1,25 @@
 {
   "ui:order": [
     "mode",
-    "allowlist_user_ids",
-    "blocklist_user_ids",
-    "block_status",
-    "block_message",
+    "fail_policy",
+    "verdict_cache_days",
+    "hit_replay",
+    "cache_entries",
+    "min_chars",
+    "input_max_chars",
+    "input_max_chunks",
+    "input_overflow",
+    "input_max_images",
     "auto_watch",
     "watch_days",
+    "escalate_violations",
+    "escalate_window_seconds",
     "ban_threshold",
-    "ban_window_hours",
+    "ban_window_seconds",
     "ban_duration_hours",
-    "analysis_channel_id",
-    "analysis_every_violations",
-    "analysis_allow_upgrade",
-    "analysis_allow_downgrade",
-    "analysis_allow_remove",
-    "analysis_timeout_ms",
-    "analysis_concurrency",
-    "analysis_context_kb",
-    "analysis_keep_per_user",
-    "analysis_guidelines",
+    "jev_default_set",
+    "block_status",
+    "block_message",
     "record_pass",
     "record_overturned",
     "record_errors",
@@ -35,46 +35,12 @@
     "queue_size",
     "max_inflight_mb",
     "ttft_timeout_ms",
-    "verdict_cache_days",
-    "cache_entries",
-    "min_chars",
-    "input_max_chars",
-    "input_max_chunks",
-    "input_overflow",
-    "input_max_images",
     "error_rate_alert_percent",
     "notify_webhook_url",
     "notify_webhook_secret",
-    "jev_default_set",
-    "base_url",
-    "api_key",
-    "model",
-    "system_prompt",
-    "categories",
-    "tool_choice",
-    "max_turns",
-    "temperature",
-    "max_tokens",
-    "timeout_ms",
-    "on_error",
-    "sample_rate",
-    "group_ids",
-    "model_patterns",
-    "retention_days",
-    "exempt_user_ids",
-    "cache_ttl_seconds"
+    "api_key"
   ],
   "mode": {
-    "ui:section": {
-      "title": {
-        "en": "Mode and user lists",
-        "zh": "运行模式与用户名单"
-      },
-      "description": {
-        "en": "Channels, auditors and flows are configured on their tabs of this page; a flow bound to a group (or the default group 0) decides what is moderated.",
-        "zh": "渠道、审核器和流程在本页对应的标签里配置；绑定到分组（或默认分组 0）的流程决定审核哪些请求。"
-      }
-    },
     "ui:widget": "segmented",
     "ui:enumNames": [
       {
@@ -82,70 +48,56 @@
         "zh": "关闭"
       },
       {
-        "en": "On · observe by default",
-        "zh": "开启 · 默认观察"
+        "en": "On · background by default (record only)",
+        "zh": "开启 · 默认后台审核（只记录）"
       },
       {
-        "en": "On · enforce by default",
-        "zh": "开启 · 默认拦截"
+        "en": "On · check first by default (refuse hits)",
+        "zh": "开启 · 默认先审后发（命中拒绝）"
       }
     ],
     "ui:title": {
-      "en": "Moderation and default level",
-      "zh": "审核与默认级别"
+      "en": "Moderation and default handling",
+      "zh": "审核开关与默认处理"
     },
     "ui:help": {
-      "en": "Observe by default: requests pass at once and are moderated in the background; only users on the watch list at the enforce level and blocklisted users are moderated first. Enforce by default: users without a watch entry are moderated first too; a watch entry's own level wins, so users at the observe level are only moderated in the background.",
-      "zh": "默认观察：请求直接放行、后台审核；只有观察名单里拦截级的用户和黑名单用户先审后发。默认拦截：没有名单条目的用户也先审后发；名单条目自己的级别优先，观察级的用户只后台审核。"
+      "zh": "没有名单条目的用户按这里处理。决定顺序：锁定为“总是先审”的用户 → 锁定为“只后台审核”的用户 → 观察名单级别 → 这里的默认处理。",
+      "en": "How users without a list entry are handled. Order: users locked as always-check-first → users locked as background-only → watch level → this default."
     },
-    "ui:details": {
-      "en": "A hit refuses the request only when it was moderated before the upstream call. A stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes. Users added to the watch list automatically join at the default level.",
-      "zh": "只有先审后发的请求命中时才会被拒绝。某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。自动加入观察名单的用户以默认级别加入。"
+    "ui:section": {
+      "title": {
+        "en": "How requests are moderated",
+        "zh": "执行方式"
+      },
+      "page": "policy",
+      "description": {
+        "en": "Whether a request is checked before it is sent on or in the background, and what happens when moderation fails. What is moderated and by which auditors is set on the flows.",
+        "zh": "决定请求先审后发还是后台审核，以及审核失败时怎么办。审什么、用哪些审核器在“审核流程”里配置。"
+      }
     }
   },
-  "allowlist_user_ids": {
-    "ui:widget": "entity-select",
-    "ui:options": {
-      "kind": "user"
-    },
+  "fail_policy": {
+    "ui:widget": "segmented",
     "ui:title": {
-      "en": "Allowlist (observe only)",
-      "zh": "白名单（只观察）"
+      "en": "When moderation fails",
+      "zh": "审核失败时"
     },
+    "ui:enumNames": [
+      {
+        "en": "Let through, record an error",
+        "zh": "放行并记为出错"
+      },
+      {
+        "en": "Refuse checked-first requests (503)",
+        "zh": "先审的请求拒绝（503）"
+      }
+    ],
     "ui:help": {
-      "en": "These users are only moderated after their requests were sent on and are never refused; they still get records and may enter the watch list. They cannot be set to the enforce level by hand and the AI never upgrades them. A user who is also on the blocklist is treated as blocklisted.",
-      "zh": "这些用户只在请求放行后审核，永不被拦截；仍会留下记录、可能进入观察名单。不能手动设为拦截级，AI 也不会把他们升级。同时在黑名单里的用户按黑名单处理。"
-    },
-    "ui:details": {
-      "en": "Allowlisted users are never banned either. Moderators (users with moderation:read) are recognised automatically and are never put on the watch list.",
-      "zh": "白名单用户也不会被封禁。持有 moderation:read 的版主会被自动识别，不会进观察名单。"
-    }
-  },
-  "blocklist_user_ids": {
-    "ui:widget": "entity-select",
-    "ui:options": {
-      "kind": "user"
-    },
-    "ui:title": {
-      "en": "Blocklist (always moderated first)",
-      "zh": "黑名单（总是先审）"
-    },
-    "ui:help": {
-      "en": "Every request of these users is moderated before it is sent on and refused on a hit. The AI never downgrades them or takes them off the watch list. This is not a ban: bans are on the Bans tab.",
-      "zh": "这些用户的每个请求都先审后发，命中即拒绝。AI 不会把他们降级或移出名单。这不是封禁：封禁在“封禁”页。"
+      "en": "Covers auditor errors, the total timeout and overload (too much in progress). Background moderation always lets requests through.",
+      "zh": "覆盖审核器出错、总超时和繁忙（处理中的请求超限）。后台审核总是放行。"
     }
   },
   "block_status": {
-    "ui:section": {
-      "title": {
-        "en": "Block response",
-        "zh": "拦截响应"
-      },
-      "description": {
-        "en": "What a refused request gets back, in the error format of its API.",
-        "zh": "请求被拒绝时返回的内容，按请求所用 API 的错误格式返回。"
-      }
-    },
     "ui:title": {
       "en": "Block HTTP status",
       "zh": "拦截状态码"
@@ -153,6 +105,13 @@
     "ui:help": {
       "en": "403 by default; 400 or 451 are common alternatives.",
       "zh": "默认 403，也常用 400 或 451。"
+    },
+    "ui:section": {
+      "title": {
+        "en": "Block response",
+        "zh": "拦截响应"
+      },
+      "page": "response"
     }
   },
   "block_message": {
@@ -166,12 +125,6 @@
     }
   },
   "auto_watch": {
-    "ui:section": {
-      "title": {
-        "en": "Watch list and bans",
-        "zh": "观察名单与封禁"
-      }
-    },
     "ui:widget": "switch",
     "ui:title": {
       "en": "Add suspicious users automatically",
@@ -180,6 +133,13 @@
     "ui:help": {
       "en": "The first suspicious record adds the user at the default level.",
       "zh": "首次出现可疑记录时，以默认级别加入名单。"
+    },
+    "ui:section": {
+      "title": {
+        "en": "Automatic watch and bans",
+        "zh": "自动观察与封禁"
+      },
+      "page": "lists"
     }
   },
   "watch_days": {
@@ -198,20 +158,24 @@
       }
     }
   },
-  "analysis_every_violations": {
+  "escalate_violations": {
     "ui:title": {
-      "en": "Analyse every",
-      "zh": "每多少次违规自动分析一次"
+      "en": "Escalate to enforce",
+      "zh": "自动升为拦截级"
     },
     "ui:help": {
-      "en": "Violations of an observe-level user (one per request) that queue an AI analysis; the count then restarts. With enforce as the default level, enforce-level users count too. 0 = only manual analyses.",
-      "zh": "观察级用户每累计这么多次违规（同一请求只计一次）就自动排队分析一次，然后重新计数。默认级别为拦截时，拦截级用户也计数。0 表示只手动分析。"
+      "en": "Violations within the window that put a user at the enforce level (counted like the ban threshold, from the last manual change of the user's entry; background-only and always-check-first users and moderation staff excluded; a ban reached by the same violations wins). A user not on the list is added at the enforce level. 0 disables it.",
+      "zh": "窗口内违规达到该次数，用户自动升为拦截级（计数口径同封禁阈值，从该用户最近一次人工调整名单之后算；“只后台审核”“总是先审”名单用户和审核管理员除外；同时达到封禁阈值时只封禁）。不在名单上的用户直接以拦截级加入。0 表示关闭。"
+    }
+  },
+  "escalate_window_seconds": {
+    "ui:title": {
+      "en": "Escalation window",
+      "zh": "升级计数窗口"
     },
+    "ui:widget": "duration",
     "ui:options": {
-      "unit": {
-        "en": "violations",
-        "zh": "次"
-      }
+      "stacked": false
     }
   },
   "ban_threshold": {
@@ -224,16 +188,14 @@
       "zh": "窗口内达到该次数的可疑请求即自动封禁用户（不含误报）。0 表示不自动封禁。"
     }
   },
-  "ban_window_hours": {
+  "ban_window_seconds": {
     "ui:title": {
       "en": "Ban window",
       "zh": "计数窗口"
     },
+    "ui:widget": "duration",
     "ui:options": {
-      "unit": {
-        "en": "hours",
-        "zh": "小时"
-      }
+      "stacked": false
     }
   },
   "ban_duration_hours": {
@@ -252,29 +214,7 @@
       }
     }
   },
-  "analysis_channel_id": {
-    "ui:section": {
-      "title": {
-        "en": "AI analysis",
-        "zh": "AI 分析"
-      }
-    },
-    "ui:title": {
-      "en": "AI analysis channel",
-      "zh": "AI 分析渠道"
-    },
-    "ui:help": {
-      "en": "An llm channel (any protocol) of the Channels tab; none = no AI analysis.",
-      "zh": "只能选「渠道」页的大模型渠道（三种协议都可以）；不使用则不做 AI 分析。"
-    }
-  },
   "record_pass": {
-    "ui:section": {
-      "title": {
-        "en": "Records and retention",
-        "zh": "记录与保留"
-      }
-    },
     "ui:widget": "switch",
     "ui:title": {
       "en": "Record passed checks",
@@ -283,6 +223,13 @@
     "ui:help": {
       "en": "Hits are always recorded.",
       "zh": "命中始终记录。"
+    },
+    "ui:section": {
+      "title": {
+        "en": "What is recorded",
+        "zh": "记录内容"
+      },
+      "page": "records"
     }
   },
   "record_overturned": {
@@ -310,8 +257,8 @@
       "zh": "保存被审核的文本，以及有级命中时判定那一块的原始消息，可能包含用户数据；出错记录只保存开头（见“出错记录保存字数”）。"
     },
     "ui:details": {
-      "en": "Whatever is moderated is also sent to the moderation channels (and the AI analysis channel reads the stored text): choose channels whose data handling you accept.",
-      "zh": "被审核的内容会发送给审核渠道（AI 分析渠道还会读取保存的原文），请选择数据处理方式可以接受的渠道。"
+      "en": "Whatever is moderated is also sent to the moderation channels: choose channels whose data handling you accept.",
+      "zh": "被审核的内容会发送给审核渠道，请选择数据处理方式可以接受的渠道。"
     }
   },
   "record_pass_input_message": {
@@ -335,6 +282,13 @@
         "en": "days",
         "zh": "天"
       }
+    },
+    "ui:section": {
+      "title": {
+        "en": "Retention",
+        "zh": "保留期"
+      },
+      "page": "records"
     }
   },
   "overturned_retention_days": {
@@ -379,19 +333,19 @@
       "zh": "最大并发"
     },
     "ui:help": {
-      "en": "Concurrent auditor calls on each node; also the number of background workers.",
-      "zh": "每个节点同时进行的审核调用数，也是后台审核的工作协程数。"
+      "en": "Concurrent background auditor calls per node (and background workers). Checking first has its own max(64, 4× this) slots.",
+      "zh": "后台审核在每个节点同时进行的调用数，也是后台工作协程数。先审另有 max(64, 4×此值) 个名额，不受此值限制。"
     },
     "ui:section": {
       "title": {
-        "en": "Performance and cache",
-        "zh": "性能与缓存"
+        "en": "Performance",
+        "zh": "性能"
       },
+      "page": "advanced",
       "description": {
         "en": "Per node. The defaults suit most deployments.",
         "zh": "按节点计算，默认值适合大多数部署。"
-      },
-      "collapsed": true
+      }
     }
   },
   "queue_size": {
@@ -418,8 +372,8 @@
       "zh": "上游调用在这段时间内没有响应（收到响应头，流式调用为第一个模型输出）就按 ttft_timeout 失败。非流式的 LLM 调用一次性收到全部回答，只受渠道超时限制。"
     },
     "ui:details": {
-      "en": "Applies to the OpenAI moderation and Jev auditor calls and to every AI analysis step (streamed), together with the channel's total timeout; whichever fires first ends the call. LLM verdict auditors are not streamed and only have the channel timeout.",
-      "zh": "对 OpenAI 审核和 Jev 审核器的调用以及 AI 分析的每一步（流式）生效，与渠道的总超时同时计时，先到者结束调用。LLM 判定审核器不走流式，只受渠道超时限制。"
+      "en": "Applies to the OpenAI moderation and Jev auditor calls, together with the channel's total timeout; whichever fires first ends the call. LLM verdict auditors are not streamed and only have the channel timeout.",
+      "zh": "对 OpenAI 审核和 Jev 审核器的调用生效，与渠道的总超时同时计时，先到者结束调用。LLM 判定审核器不走流式，只受渠道超时限制。"
     }
   },
   "verdict_cache_days": {
@@ -428,8 +382,8 @@
       "zh": "判定缓存天数"
     },
     "ui:help": {
-      "en": "Verdicts on content already moderated under the same flow are kept this many days: content that passed is not sent again, and a hit is applied again as it was (a request moderated first is refused) without calling the moderation channels.",
-      "zh": "同一流程下已经审过的内容，结论保留这么多天：放行的不再送审，命中的直接按原结论处理（先审的请求被拒绝），不再调用审核渠道。"
+      "zh": "同一流程下已经审过的内容，结论保留这么多天：放行的不再送审，命中的直接按原结论处理（先审的请求被拒绝），不再调用审核渠道。0 = 关闭判定缓存。",
+      "en": "Verdicts on content already moderated under the same flow are kept this many days: content that passed is not sent again, and a hit is applied again as it was (a request moderated first is refused) without calling the moderation channels. 0 turns the verdict cache off."
     },
     "ui:details": {
       "en": "Runs with errors, passes with a skipped stage and URL images are not cached. Changing a flow's stages, auditors, question sets, thresholds or channel models invalidates that flow's cache. A replayed cached hit is recorded as usual but is not a new violation.",
@@ -440,6 +394,34 @@
         "en": "days",
         "zh": "天"
       }
+    },
+    "ui:section": {
+      "title": {
+        "en": "Verdict cache and replay",
+        "zh": "判定缓存与重放"
+      },
+      "page": "cache"
+    }
+  },
+  "hit_replay": {
+    "ui:widget": "segmented",
+    "ui:title": {
+      "en": "Replaying a cached hit",
+      "zh": "缓存命中的重放"
+    },
+    "ui:enumNames": [
+      {
+        "en": "Replay the hit, moderate new content",
+        "zh": "只重放命中部分，新内容照常审核"
+      },
+      {
+        "en": "Treat the whole request as a hit",
+        "zh": "整个请求按命中处理"
+      }
+    ],
+    "ui:help": {
+      "en": "When a request still holds content that hit, such as the history of a conversation: the recommended choice replays only that part and moderates what is new in the background; the old behaviour treats the whole request as a hit and moderates nothing new. A request checked first is refused either way; with the recommended choice the message asks the user to clear the conversation.",
+      "zh": "请求里仍含有已命中的内容（例如对话历史）时：推荐只把那部分按原结论处理，其余新内容在后台照常送审；旧行为是整个请求直接按命中处理，新内容不再送审。先审的请求两种方式都会被拒绝，推荐方式的提示会请用户清理上下文。"
     }
   },
   "cache_entries": {
@@ -542,17 +524,6 @@
     }
   },
   "min_chars": {
-    "ui:section": {
-      "title": {
-        "en": "Input scope",
-        "zh": "输入范围"
-      },
-      "description": {
-        "en": "How much of each request is moderated.",
-        "zh": "每个请求审核多少内容。"
-      },
-      "collapsed": true
-    },
     "ui:title": {
       "en": "Min length",
       "zh": "最少字数"
@@ -566,15 +537,20 @@
         "en": "chars",
         "zh": "字"
       }
+    },
+    "ui:section": {
+      "title": {
+        "en": "Input limits",
+        "zh": "送审输入上限"
+      },
+      "page": "cache",
+      "description": {
+        "en": "How much of a request is sent to the auditors.",
+        "zh": "每个请求送审的字数、块数和图片数上限。"
+      }
     }
   },
   "jev_default_set": {
-    "ui:section": {
-      "title": {
-        "en": "Jev default question set",
-        "zh": "Jev 默认题集"
-      }
-    },
     "ui:widget": "json",
     "ui:title": {
       "en": "Default question set",
@@ -583,36 +559,17 @@
     "ui:help": {
       "en": "Used by Jev auditors without their own table. Empty = the built-in Chinese set.",
       "zh": "没有自己题集的 Jev 审核器使用它。留空使用内置中文题集。"
-    }
-  },
-  "base_url": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Base URL",
-      "zh": "接口地址"
-    },
-    "ui:placeholder": "https://api.openai.com",
-    "ui:help": {
-      "en": "OpenAI-compatible endpoint.",
-      "zh": "OpenAI 兼容接口地址。"
-    },
-    "ui:details": {
-      "en": "Ending in /v1, /chat/completions is appended; otherwise /v1/chat/completions.",
-      "zh": "以 /v1 结尾时拼接 /chat/completions，否则拼接 /v1/chat/completions。"
-    },
-    "ui:options": {
-      "mono": true
     },
     "ui:section": {
       "title": {
-        "en": "0.1 settings (converted, not shown)",
-        "zh": "0.1 旧版配置（已转换，不显示）"
+        "en": "Jev default question set",
+        "zh": "Jev 默认题集"
       },
+      "page": "jev",
       "description": {
-        "en": "On the first start of 0.2 they were turned into a channel, an LLM auditor and a flow. They stay in the stored settings as they are; the settings page sends them back unchanged and only offers to clear a stored 0.1 API key.",
-        "zh": "0.2 首次启动时已转换成渠道、LLM 审核器和流程。它们原样留在已保存的设置里；设置页保存时原样回传，只提供清除仍保存着的 0.1 API Key。"
-      },
-      "collapsed": true
+        "en": "Used by the Jev and question auditors that have no questions of their own.",
+        "zh": "没有自定义题目的 Jev 和问答型审核器使用这里的题集。"
+      }
     }
   },
   "api_key": {
@@ -622,310 +579,11 @@
       "zh": "API Key"
     },
     "ui:help": {
-      "en": "The 0.1 key, only used by the one-time conversion on the first 0.2 start (it is now the channel's key). Clear it: while it is stored, users who only hold moderation:manage must re-enter it to change any setting.",
-      "zh": "0.1 的密钥，只在 0.2 首次启动的一次性转换中使用（已成为渠道的密钥）。请清空：仍保存着它时，只持有 moderation:manage 的用户修改任何设置都必须重填它。"
-    }
-  },
-  "model": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Model",
-      "zh": "模型"
-    },
-    "ui:placeholder": "gpt-4o-mini",
-    "ui:help": {
-      "en": "Must support tool calling (function calling).",
-      "zh": "需要支持工具调用（function calling）。"
-    },
-    "ui:options": {
-      "mono": true
-    }
-  },
-  "system_prompt": {
-    "ui:widget": "hidden",
-    "ui:options": {
-      "rows": 8
-    },
-    "ui:title": {
-      "en": "System prompt",
-      "zh": "系统提示词"
-    },
-    "ui:help": {
-      "en": "Leave empty to use the built-in prompt.",
-      "zh": "留空使用内置提示词。"
-    },
-    "ui:details": {
-      "en": "{{categories}} in the prompt is replaced by the category list, one \"- id: description\" per line.",
-      "zh": "提示词中的 {{categories}} 会替换为分类列表（每行一个“- id：说明”）。"
-    }
-  },
-  "categories": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Categories",
-      "zh": "审核分类"
-    },
-    "ui:help": {
-      "en": "Leave empty to use the 12 built-in categories. The model can only choose from these ids.",
-      "zh": "留空使用内置的 12 个分类。模型只能从这些分类 id 中选择。"
-    },
-    "ui:options": {
-      "itemTitle": {
-        "en": "Category {n}",
-        "zh": "分类 {n}"
-      }
-    },
-    "items": {
-      "ui:order": [
-        "id",
-        "description"
-      ],
-      "id": {
-        "ui:title": {
-          "en": "Category ID",
-          "zh": "分类 ID"
-        },
-        "ui:placeholder": "illegal",
-        "ui:help": {
-          "en": "Lowercase letters, digits and _ (at most 32).",
-          "zh": "小写字母、数字和下划线，最多 32 个字符。"
-        },
-        "ui:options": {
-          "mono": true
-        }
-      },
-      "description": {
-        "ui:title": {
-          "en": "Description",
-          "zh": "说明"
-        },
-        "ui:placeholder": {
-          "en": "Illegal activity: drugs, weapons, fraud…",
-          "zh": "违法犯罪：毒品、武器、诈骗等"
-        }
-      }
-    }
-  },
-  "tool_choice": {
-    "ui:widget": "hidden",
-    "ui:enumNames": [
-      {
-        "en": "required (must call the tool)",
-        "zh": "required（必须调用工具）"
-      },
-      {
-        "en": "function (name the tool)",
-        "zh": "function（指定工具）"
-      },
-      {
-        "en": "auto (model decides)",
-        "zh": "auto（由模型决定）"
-      }
-    ],
-    "ui:title": {
-      "en": "Tool choice",
-      "zh": "工具调用方式"
-    }
-  },
-  "max_turns": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Max turns",
-      "zh": "最大轮数"
-    }
-  },
-  "temperature": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Temperature",
-      "zh": "温度"
-    }
-  },
-  "max_tokens": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Max output tokens",
-      "zh": "最大输出 Token"
-    }
-  },
-  "timeout_ms": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Timeout",
-      "zh": "超时"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "ms",
-        "zh": "毫秒"
-      }
-    }
-  },
-  "on_error": {
-    "ui:widget": "hidden",
-    "ui:enumNames": [
-      {
-        "en": "Allow",
-        "zh": "放行"
-      },
-      {
-        "en": "Refuse",
-        "zh": "拒绝"
-      }
-    ],
-    "ui:title": {
-      "en": "On error",
-      "zh": "审核失败时"
-    },
-    "ui:help": {
-      "en": "No longer used: a stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes.",
-      "zh": "已不再生效：某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。"
-    }
-  },
-  "sample_rate": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Sample rate",
-      "zh": "抽样比例"
-    },
-    "ui:help": {
-      "en": "Share of requests moderated, chosen deterministically by text.",
-      "zh": "按文本确定性抽样的审核比例。"
-    },
-    "ui:options": {
-      "unit": "%"
-    }
-  },
-  "group_ids": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Groups",
-      "zh": "分组"
-    },
-    "ui:help": {
-      "en": "Only moderate requests of these groups; empty means all groups.",
-      "zh": "只审核这些分组的请求，留空表示全部分组。"
-    }
-  },
-  "model_patterns": {
-    "ui:widget": "hidden",
-    "ui:placeholder": "claude-*",
-    "ui:title": {
-      "en": "Model patterns",
-      "zh": "模型匹配"
-    },
-    "ui:help": {
-      "en": "Only moderate requests for matching client models (* and ? wildcards); empty means all.",
-      "zh": "只审核匹配的客户端模型（支持 * 和 ? 通配），留空表示全部。"
-    }
-  },
-  "retention_days": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Retention",
-      "zh": "记录保留"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "days",
-        "zh": "天"
-      }
-    }
-  },
-  "analysis_allow_upgrade": {
-    "ui:widget": "switch",
-    "ui:title": {
-      "en": "Let the AI upgrade to enforce",
-      "zh": "允许 AI 升为拦截级"
-    },
-    "ui:help": {
-      "en": "Block + persistent / escalating trend + at least one violation. Off: only written to the history.",
-      "zh": "建议拦截、趋势为持续或越来越重、且至少 1 条复核为违规时。关闭后只记入名单历史，级别不变。"
-    }
-  },
-  "analysis_allow_downgrade": {
-    "ui:widget": "switch",
-    "ui:title": {
-      "en": "Let the AI downgrade to observe",
-      "zh": "允许 AI 降为观察级"
-    }
-  },
-  "analysis_allow_remove": {
-    "ui:widget": "switch",
-    "ui:title": {
-      "en": "Let the AI remove users",
-      "zh": "允许 AI 移出名单"
-    },
-    "ui:help": {
-      "en": "Off by default: the analysed records are user text and can try to talk the AI into a release. Even when on, a release only removes observe-level users without high-severity records in the watch window; enforce-level users are only downgraded.",
-      "zh": "默认关闭：被分析的记录是用户原文，可能诱导 AI 给出解除建议。即使打开，也只移出观察窗口内没有高危记录的观察级用户；拦截级用户只会降为观察级。"
-    }
-  },
-  "analysis_timeout_ms": {
-    "ui:title": {
-      "en": "Analysis timeout",
-      "zh": "单次分析超时"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "ms",
-        "zh": "毫秒"
-      }
-    }
-  },
-  "analysis_concurrency": {
-    "ui:title": {
-      "en": "Concurrent analyses per node",
-      "zh": "每个节点同时分析数"
-    }
-  },
-  "analysis_context_kb": {
-    "ui:title": {
-      "en": "Context budget",
-      "zh": "上下文预算"
-    },
-    "ui:help": {
-      "en": "Earlier tool results are dropped above it.",
-      "zh": "超出时丢掉较早的工具结果。"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "KB",
-        "zh": "KB"
-      }
-    }
-  },
-  "analysis_keep_per_user": {
-    "ui:title": {
-      "en": "Analyses kept per user",
-      "zh": "每个用户保留的分析数"
-    }
-  },
-  "analysis_guidelines": {
-    "ui:widget": "textarea",
-    "ui:options": {
-      "rows": 8
-    },
-    "ui:title": {
-      "en": "Analysis guidelines",
-      "zh": "分析准则"
-    },
-    "ui:help": {
-      "en": "Empty uses the built-in guidelines (preview on the Watch list tab).",
-      "zh": "留空使用内置准则（可在「观察名单」页预览完整提示词）。"
+      "en": "A key of the 0.1 single-model setup that is still stored. Nothing reads it any more; it is declared only so that it stays masked. Saving the settings drops it.",
+      "zh": "0.1 单模型设置里仍保存着的密钥。已不再读取，声明它只是为了继续遮蔽显示。保存一次设置即会删除它。"
     }
   },
   "error_rate_alert_percent": {
-    "ui:section": {
-      "title": {
-        "en": "Alerts and notifications",
-        "zh": "告警与通知"
-      },
-      "description": {
-        "en": "Notices go to the webhook as JSON (POST). They never include the moderated text.",
-        "zh": "通知以 JSON（POST）发到 webhook，不含被审核的原文。"
-      }
-    },
     "ui:title": {
       "en": "Error rate alert (%)",
       "zh": "异常率告警阈值（%）"
@@ -933,6 +591,13 @@
     "ui:help": {
       "en": "A flow, auditor or channel whose last-hour error rate is above this (with at least 20 samples) is flagged in the overview, and a flow crossing it sends one notice. A stage that fails is passed over: a hit of an earlier stage stands, and the request passes only when no stage judged at all.",
       "zh": "近 1 小时异常率超过该值（且样本不少于 20）的流程、审核器、渠道在概览中标红；流程越过阈值时发一次通知。出错的级会被跳过：前面级的命中仍然有效，只有没有任何一级给出判定时请求才放行。"
+    },
+    "ui:section": {
+      "title": {
+        "en": "Alerts and notifications",
+        "zh": "告警与通知"
+      },
+      "page": "advanced"
     }
   },
   "notify_webhook_url": {
@@ -941,8 +606,8 @@
       "zh": "通知 webhook 地址"
     },
     "ui:help": {
-      "en": "Receives flow error-rate alerts and automatic watch list changes made by the AI analysis. Empty: no notices.",
-      "zh": "接收流程异常率告警，以及 AI 分析自动调整观察名单的通知。留空则不发送。"
+      "en": "Receives flow error-rate alerts. Empty: no notices.",
+      "zh": "接收流程异常率告警。留空则不发送。"
     }
   },
   "notify_webhook_secret": {
@@ -964,34 +629,6 @@
     "ui:help": {
       "en": "Hourly statistics, per-user daily counts and moderation costs older than this are deleted by the daily cleanup.",
       "zh": "每日清理时删除超过该天数的小时统计、用户每日计数和审核费用。"
-    }
-  },
-  "exempt_user_ids": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Exempt user IDs (retired)",
-      "zh": "免审用户 ID（已停用）"
-    },
-    "ui:help": {
-      "en": "Retired in 0.8.0: read as the allowlist until Allowlist is saved. These users are no longer left unmoderated.",
-      "zh": "0.8.0 起停用：在保存“白名单”之前按白名单读取。这些用户不再是完全不审核。"
-    }
-  },
-  "cache_ttl_seconds": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Pass cache (retired)",
-      "zh": "通过缓存时长（已停用）"
-    },
-    "ui:help": {
-      "en": "Retired in 0.8.0: only read until Verdict cache is saved (0 keeps the cache off, anything else is rounded up to whole days).",
-      "zh": "0.8.0 起停用：在保存“判定缓存天数”之前读取（0 表示不缓存，其余向上取整为天）。"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "s",
-        "zh": "秒"
-      }
     }
   }
 }

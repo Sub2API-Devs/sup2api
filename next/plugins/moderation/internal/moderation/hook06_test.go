@@ -31,7 +31,7 @@ func rawReq(uid int64, id, protocol, body string) *pluginv1.GatewayRequestHookRe
 // new content on the next turn of a conversation.
 func TestHookModeratesWholeRequestWithSegmentCache(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 
 	if r := mustHook(t, h, rawReq(3, "", "anthropic.messages", `{"system":"you help","messages":[{"role":"user","content":"hello there"}]}`)); denied(r) {
@@ -108,7 +108,7 @@ func TestHookSendsCachedTextWithANewImage(t *testing.T) {
 // auditor alone, or (mixed) beside a Jev auditor that takes no images.
 func hookSendsANewImage(t *testing.T, mixed bool) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if mixed {
 		setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI, AuditorTypeSafe})
 		jevWithoutImages(t, h)
@@ -175,7 +175,7 @@ func hookSendsANewImage(t *testing.T, mixed bool) {
 // refused before the upstream call.
 func TestHookChunksLongContent(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "input_max_chars": 256, "input_max_chunks": 8})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "input_max_chars": 256, "input_max_chunks": 8})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	pad := strings.Repeat("harmless words ", 60) // ~900 chars: 4 chunks
 	r := mustHook(t, h, rawReq(3, "", "openai.chat", `{"messages":[{"role":"user","content":"`+pad+`MOD-HIT-sexual tail"}]}`))
@@ -201,7 +201,7 @@ func TestHookChunksLongContent(t *testing.T) {
 
 // The ban hook runs on every protocol and only refuses banned users.
 func TestBanHookAllProtocols(t *testing.T) {
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	decodeData[map[string]any](t, h.Do("POST", "/blocks", nil, map[string]any{"user_id": 5, "reason": "test"}))
 	waitFor(t, "ban", func() bool { return p.isBlocked(5) })
 	for _, protocol := range []string{"openai.embeddings", "anthropic.count_tokens", "gemini.count_tokens", "volcengine.video_query", "someplugin.custom"} {
@@ -216,12 +216,14 @@ func TestBanHookAllProtocols(t *testing.T) {
 	}
 }
 
-// Too many request bytes in progress: the hook answers at once (pass, 503
-// for enforce-level users) instead of growing towards the memory limit; a
-// single request is admitted whatever its size.
+// Too many request bytes in progress: the hook answers at once instead of
+// growing towards the memory limit - a pass, and under fail_policy =
+// close_pre 503 for enforce-level users; a single request is admitted
+// whatever its size.
 func TestHookBusyAnswersAtOnce(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "max_inflight_mb": 16})
+	settings := map[string]any{"mode": ModeObserve, "max_inflight_mb": 16, "fail_policy": FailClosePre}
+	p, h, _ := startDB(t, settings)
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	c := p.cfg.Load()
 	if !p.admitBytes(c, 64<<20) || p.admitBytes(c, 1) {
@@ -235,6 +237,14 @@ func TestHookBusyAnswersAtOnce(t *testing.T) {
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 4, "level": LevelEnforce}))
 	if r := mustHook(t, h, hookReqAs(4, "", "anything")); !denied(r) || r.GetDenyCode() != DenyBusy || r.GetDenyStatus() != http.StatusServiceUnavailable {
 		t.Fatalf("busy enforce = %+v", r)
+	}
+	// fail_policy = open (the default, 0.10.0): busy passes everyone.
+	settings["fail_policy"] = FailOpen
+	if errs := h.Configure(settings, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if r := mustHook(t, h, hookReqAs(4, "", "anything")); denied(r) || r.GetNote() != notePrefix+"busy" {
+		t.Fatalf("busy enforce, fail open = %+v", r)
 	}
 	// Banned users are refused before the admission.
 	decodeData[map[string]any](t, h.Do("POST", "/blocks", nil, map[string]any{"user_id": 7}))
@@ -261,7 +271,7 @@ func TestPreDenyDoesNotWaitForDatabase(t *testing.T) {
 	defer func(n int, d time.Duration) { suspiciousAttempts, suspiciousPause = n, d }(suspiciousAttempts, suspiciousPause)
 	suspiciousAttempts, suspiciousPause = 30, 100*time.Millisecond
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	ctx := context.Background()
 	full := batch.New(ctx, 1, func(context.Context, []eventRec) error { return nil }, nil)
@@ -307,7 +317,7 @@ func TestShutdownDrainsPostQueue(t *testing.T) {
 			defer func(d time.Duration) { shutdownDrain = d }(shutdownDrain)
 			shutdownDrain = tc.drain
 			mod := newFakeMod(t)
-			p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true, "max_concurrency": 1, "cache_ttl_seconds": 0})
+			p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "record_pass": true, "max_concurrency": 1, "verdict_cache_days": 0})
 			setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 			mod.delay.Store(int64(tc.delay))
 			for i := range 4 {
@@ -330,7 +340,7 @@ func TestShutdownDrainsPostQueue(t *testing.T) {
 // Error records keep only the start of the text (error_text_max_chars).
 func TestErrorRecordsKeepShortText(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "error_text_max_chars": 100})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "error_text_max_chars": 100})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	mustHook(t, h, hookReqAs(3, "err", "MOD-500 "+strings.Repeat("private ", 200)))
 	waitEvents(t, h, map[string]string{"request_id": "err", "result": "error"}, 1)
@@ -346,7 +356,7 @@ func TestErrorRecordsKeepShortText(t *testing.T) {
 // record, and never with store_text off (CONTRACTS §72.9).
 func TestInputMessageKeptPerSetting(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	// Group 9: one stage. Group 10: two stages. Group 11: one stage and a
 	// fallback stage. hate is an OpenAI category only, custom/jailbreak a Jev
 	// one only.
@@ -384,7 +394,7 @@ func TestInputMessageKeptPerSetting(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if errs := h.Configure(map[string]any{"mode": ModeEnforce, "record_pass": true, "store_text": tc.storeText,
-				"record_pass_input_message": tc.passToo, "error_text_max_chars": 50, "cache_ttl_seconds": 0}, nil); len(errs) > 0 {
+				"record_pass_input_message": tc.passToo, "error_text_max_chars": 50, "verdict_cache_days": 0}, nil); len(errs) > 0 {
 				t.Fatal(errs)
 			}
 			rid := fmt.Sprintf("keep-%d", i)
@@ -429,7 +439,7 @@ func TestInputMessageKeptPerSetting(t *testing.T) {
 // gets the rest of the job time minus a reserve: a long purge no longer
 // skips them.
 func TestCleanupExpiresBeforePurge(t *testing.T) {
-	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, _, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	ctx := context.Background()
 	db, _ := p.db(ctx)
 	defer func(b int, d time.Duration) { purgeBatch, purgePause = b, d }(purgeBatch, purgePause)

@@ -24,13 +24,19 @@ const (
 // flow_id 0 = not moderated. Inactive: the flow is disabled, unpublished,
 // gone or published with a spec this node cannot read, so the binding does
 // not apply and a wider one decides. It is what the node does: the flow is
-// not among the flows it runs (snapshot.flows).
+// not among the flows it runs (snapshot.flows). FallbackReason says which
+// (FallbackDisabled ..., "" when the binding applies) and EffectiveFlowID is
+// the flow a request the binding covers runs, 0 = none (0.10.0): its own
+// flow, or the flow of the wider binding that decides - for an account in
+// any group, that of a group without a binding of its own.
 type Binding struct {
-	Kind      string `json:"kind"`
-	GroupID   int64  `json:"group_id"`
-	AccountID int64  `json:"account_id"`
-	FlowID    int64  `json:"flow_id"`
-	Inactive  bool   `json:"inactive,omitempty"`
+	Kind            string `json:"kind"`
+	GroupID         int64  `json:"group_id"`
+	AccountID       int64  `json:"account_id"`
+	FlowID          int64  `json:"flow_id"`
+	Inactive        bool   `json:"inactive,omitempty"`
+	EffectiveFlowID int64  `json:"effective_flow_id"`
+	FallbackReason  string `json:"fallback_reason"`
 }
 
 func bindingKind(group, account int64) string {
@@ -73,8 +79,9 @@ func (p *Plugin) listBindings(ctx context.Context, _ *pluginv1.HTTPRequest) (*pl
 // loadBindings reads both tables, account bindings first (by account, then
 // group), then the group bindings. A binding is inactive when its flow is
 // not one snap runs: the same test that makes the request fall back to a
-// wider binding (bindGroup, bindAccount), so a published and enabled flow
-// whose spec was dropped from the snapshot is not reported as applying.
+// wider binding (bindGroup, bindAccount: staleReason), so a published and
+// enabled flow whose spec was dropped from the snapshot is not reported as
+// applying.
 func loadBindings(ctx context.Context, q querier, snap *snapshot) ([]Binding, error) {
 	rows, err := q.Query(ctx, `SELECT b.group_id, b.account_id, b.flow_id
 		FROM (
@@ -88,7 +95,9 @@ func loadBindings(ctx context.Context, q querier, snap *snapshot) ([]Binding, er
 		var b Binding
 		err := r.Scan(&b.GroupID, &b.AccountID, &b.FlowID)
 		b.Kind = bindingKind(b.GroupID, b.AccountID)
-		b.Inactive = b.FlowID != 0 && (snap == nil || snap.flows[b.FlowID] == nil)
+		b.FallbackReason = snap.staleReason(b.FlowID)
+		b.Inactive = b.FallbackReason != ""
+		b.EffectiveFlowID = snap.effectiveFlow(b.GroupID, b.AccountID)
 		return b, err
 	})
 	if list == nil {

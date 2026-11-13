@@ -439,23 +439,42 @@ func TestSpecValidate(t *testing.T) {
 }
 
 func TestDecodeSettings(t *testing.T) {
-	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"exempt_user_ids":["7",8,"x"],"watch_days":0}`))
+	// retention_days (0.1, retired) keeps the hits at least as long while
+	// hit_retention_days is absent (retiredKeys).
+	for raw, want := range map[string]int{`{"retention_days":30}`: 180, `{"retention_days":9999}`: 3650, `{"retention_days":"x"}`: 180,
+		`{"retention_days":400,"hit_retention_days":20}`: 20} {
+		if s, _ := DecodeSettings([]byte(raw)); s.HitRetentionDays != want {
+			t.Errorf("%s: hit_retention_days = %d, want %d", raw, s.HitRetentionDays, want)
+		}
+	}
+	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"watch_days":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
-		strings.Join(s.ExemptUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
+		s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch || s.setup01 {
 		t.Fatalf("settings = %+v", s)
 	}
-	// exempt_user_ids is the retired name of the allowlist; a missing
-	// record_pass_input_message is on.
+	// A missing record_pass_input_message is on.
 	c := compile(s)
-	if !c.enabled || !c.allowlisted(7) || !c.allowlisted(8) || c.allowlisted(9) || c.blocklisted(7) || c.defaultLevel != LevelObserve ||
-		c.retention[ResultPass] != 3*24*time.Hour || c.legacyReady || !s.RecordPassInputMessage {
+	if !c.enabled || c.defaultLevel != LevelObserve || c.retention[ResultPass] != 3*24*time.Hour || !s.RecordPassInputMessage {
 		t.Fatalf("config = %+v", c)
+	}
+	if s, _ := DecodeSettings([]byte(`{"base_url":"https://x","model":"m","api_key":"k"}`)); !s.setup01 {
+		t.Fatal("a 0.1 setup is not noticed")
 	}
 	if s, _ := DecodeSettings([]byte(`{"record_pass_input_message":false}`)); s.RecordPassInputMessage {
 		t.Fatal("record_pass_input_message false ignored")
+	}
+	// hit_replay and fail_policy (0.10.0): defaults, a value, an unknown one.
+	if s.HitReplay != HitReplayNewContent || s.FailPolicy != FailOpen {
+		t.Fatalf("defaults %q %q", s.HitReplay, s.FailPolicy)
+	}
+	if s, _ := DecodeSettings([]byte(`{"hit_replay":"whole","fail_policy":"close_pre"}`)); s.HitReplay != HitReplayWhole || s.FailPolicy != FailClosePre {
+		t.Fatalf("set %q %q", s.HitReplay, s.FailPolicy)
+	}
+	if s, _ := DecodeSettings([]byte(`{"hit_replay":"x","fail_policy":"close_all"}`)); s.HitReplay != HitReplayNewContent || s.FailPolicy != FailOpen {
+		t.Fatalf("unknown %q %q", s.HitReplay, s.FailPolicy)
 	}
 	for mode, want := range map[string]string{ModeOff: LevelObserve, ModeObserve: LevelObserve, ModeEnforce: LevelEnforce} {
 		s := DefaultSettings()
@@ -473,8 +492,9 @@ func TestDecodeSettings(t *testing.T) {
 	}
 }
 
-// verdict_cache_days is the cache TTL; settings saved before 0.8.0 only have
-// cache_ttl_seconds, which is read until the new key is saved.
+// verdict_cache_days is the cache TTL, 0 = off (P11); settings saved before
+// 0.8.0 only have cache_ttl_seconds, which is read (retiredKeys) until the
+// new key is saved.
 func TestVerdictCacheTTLSettings(t *testing.T) {
 	day := 24 * time.Hour
 	for _, tc := range []struct {
@@ -488,14 +508,18 @@ func TestVerdictCacheTTLSettings(t *testing.T) {
 		{`{"cache_ttl_seconds":604800}`, 7},
 		{`{}`, 7},
 		{`{"verdict_cache_days":40}`, 30},
-		{`{"verdict_cache_days":0}`, 1},
+		{`{"verdict_cache_days":0}`, 0}, // the cache is off
+		{`{"verdict_cache_days":-2}`, 0},
 		{`{"verdict_cache_days":3}`, 3},
-		// The new key wins over the retired one, also over its 0.
+		// The new key wins over the retired one, also with its 0.
 		{`{"verdict_cache_days":5,"cache_ttl_seconds":0}`, 5},
 		{`{"verdict_cache_days":5,"cache_ttl_seconds":86400}`, 5},
-		// Values of the wrong type are ignored like everywhere else.
-		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 2},
+		{`{"verdict_cache_days":0,"cache_ttl_seconds":86400}`, 0},
+		// Values of the wrong type are ignored like everywhere else; the new
+		// key, once there, wins whatever it holds.
+		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 7},
 		{`{"cache_ttl_seconds":"x"}`, 7},
+		{`{"cache_ttl_seconds":9999999}`, 7},
 	} {
 		s, err := DecodeSettings([]byte(tc.raw))
 		if err != nil {
@@ -503,6 +527,38 @@ func TestVerdictCacheTTLSettings(t *testing.T) {
 		}
 		if c := compile(s); s.VerdictCacheDays != tc.days || c.cacheTTL != time.Duration(tc.days)*day {
 			t.Errorf("%s: days = %d, ttl = %s, want %d days", tc.raw, s.VerdictCacheDays, c.cacheTTL, tc.days)
+		}
+	}
+}
+
+// ban_window_seconds (0.11.0) replaces ban_window_hours, which is read
+// (retiredKeys) until the new key is saved; the ban reason names the window
+// in its largest whole unit.
+func TestBanWindowSettings(t *testing.T) {
+	for _, tc := range []struct {
+		raw string
+		sec int
+	}{
+		{`{}`, 86400},
+		{`{"ban_window_seconds":90}`, 90},
+		{`{"ban_window_seconds":0}`, 1},
+		{`{"ban_window_seconds":99999999}`, 31536000},
+		{`{"ban_window_hours":2}`, 7200},
+		{`{"ban_window_hours":"x"}`, 86400},
+		{`{"ban_window_hours":2,"ban_window_seconds":600}`, 600},
+	} {
+		s, err := DecodeSettings([]byte(tc.raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := compile(s); s.BanWindowSeconds != tc.sec || c.banWindow != time.Duration(tc.sec)*time.Second {
+			t.Errorf("%s: %d s, want %d", tc.raw, s.BanWindowSeconds, tc.sec)
+		}
+	}
+	for sec, want := range map[int]string{86400: "3 violations within 24h / 24 小时内违规 3 次", 600: "3 violations within 10m / 10 分钟内违规 3 次",
+		90: "3 violations within 90s / 90 秒内违规 3 次"} {
+		if got := violationsReason(3, sec); got != want {
+			t.Errorf("%d s: %q", sec, got)
 		}
 	}
 }
@@ -725,7 +781,7 @@ func TestSelfMarker(t *testing.T) {
 	if !s.isSelf(wrapped) {
 		t.Fatal("snapshot markers")
 	}
-	if !s.isSelf("analysis kickoff\n"+selfMarker(k)) || s.isSelf(selfMarker(markerKey("sk-x"))) {
+	if !s.isSelf("questions\n"+selfMarker(k)) || s.isSelf(selfMarker(markerKey("sk-x"))) {
 		t.Fatal("bare self marker")
 	}
 }
@@ -1101,8 +1157,8 @@ func TestFingerprint(t *testing.T) {
 		2: {ID: 2, Name: "b", Type: ChannelTypeSafe, BaseURL: "https://b.example", Model: "m", BillingModel: "bm"},
 	}
 	def := []byte(`{"preamble":"p","items":[]}`)
-	base := fingerprint(spec, auditors, channels, def)
-	if len(base) != 16 || base != fingerprint(spec, auditors, channels, def) {
+	base := fingerprint(spec, ScopeAll, auditors, channels, def)
+	if len(base) != 16 || base != fingerprint(spec, ScopeAll, auditors, channels, def) {
 		t.Fatalf("fingerprint = %q", base)
 	}
 	same := func(name string, got string) {
@@ -1119,30 +1175,37 @@ func TestFingerprint(t *testing.T) {
 	}
 	s := *spec
 	s.SampleRate, s.TotalTimeoutMs, s.ModelFilter = 10, 9000, ModelFilter{Type: FilterOnly, Models: []string{"x"}}
-	same("sample rate, timeout and model filter", fingerprint(&s, auditors, channels, def))
+	same("sample rate, timeout and model filter", fingerprint(&s, ScopeAll, auditors, channels, def))
 	ch := map[int64]*liveChannel{1: {ID: 1, Name: "renamed", Type: ChannelOpenAI, BaseURL: "https://a.example", Key: "k2", Timeout: time.Minute, BillingModel: "x"}, 2: channels[2]}
-	same("channel name, key, timeout and billing model", fingerprint(spec, auditors, ch, def))
+	same("channel name, key, timeout and billing model", fingerprint(spec, ScopeAll, auditors, ch, def))
 
 	s = *spec
 	s.Stages = []Stage{{Auditors: []int64{1, 2}, Combine: CombineAny}, spec.Stages[1]}
-	differs("combine", fingerprint(&s, auditors, channels, def))
+	differs("combine", fingerprint(&s, ScopeAll, auditors, channels, def))
 	s.Stages = []Stage{spec.Stages[0], {Auditors: []int64{3}, Combine: CombineAny}}
-	differs("fallback", fingerprint(&s, auditors, channels, def))
+	differs("fallback", fingerprint(&s, ScopeAll, auditors, channels, def))
 	s.Stages = []Stage{{Auditors: []int64{2, 1}, Combine: CombineAtLeast, N: 2}, spec.Stages[1]}
-	differs("auditor order", fingerprint(&s, auditors, channels, def))
+	differs("auditor order", fingerprint(&s, ScopeAll, auditors, channels, def))
 	a := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{"thresholds": {"sexual": 0.6}}`)}, 2: auditors[2]}
-	differs("auditor config", fingerprint(spec, a, channels, def))
+	differs("auditor config", fingerprint(spec, ScopeAll, a, channels, def))
 	a = map[int64]storedAuditor{1: auditors[1], 2: auditors[2], 3: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
-	differs("a missing auditor that exists", fingerprint(spec, a, channels, def))
+	differs("a missing auditor that exists", fingerprint(spec, ScopeAll, a, channels, def))
 	ch = map[int64]*liveChannel{1: channels[1], 2: {ID: 2, Type: ChannelTypeSafe, BaseURL: "https://b.example", Model: "m2"}}
-	differs("channel model", fingerprint(spec, auditors, ch, def))
+	differs("channel model", fingerprint(spec, ScopeAll, auditors, ch, def))
 	ch = map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://c.example"}, 2: channels[2]}
-	differs("channel base URL", fingerprint(spec, auditors, ch, def))
-	differs("an unusable channel", fingerprint(spec, auditors, map[int64]*liveChannel{2: channels[2]}, def))
-	differs("the default question set", fingerprint(spec, auditors, channels, []byte(`{"preamble":"q","items":[]}`)))
+	differs("channel base URL", fingerprint(spec, ScopeAll, auditors, ch, def))
+	differs("an unusable channel", fingerprint(spec, ScopeAll, auditors, map[int64]*liveChannel{2: channels[2]}, def))
+	differs("the default question set", fingerprint(spec, ScopeAll, auditors, channels, []byte(`{"preamble":"q","items":[]}`)))
+	// The audit scope (0.10.0): all hashes as before it existed, so the flows
+	// that keep it keep their cache; a narrower one is another verdict.
+	differs("scope input", fingerprint(spec, ScopeInput, auditors, channels, def))
+	differs("scope tools", fingerprint(spec, ScopeTools, auditors, channels, def))
+	if fingerprint(spec, ScopeInput, auditors, channels, def) == fingerprint(spec, ScopeTools, auditors, channels, def) {
+		t.Error("scopes input and tools share a fingerprint")
+	}
 	// The default set only matters to the auditors that use it.
 	own := map[int64]storedAuditor{1: auditors[1], 2: {typ: AuditorTypeSafe, channel: 2, config: []byte(`{"questions": {}}`)}}
-	if fingerprint(spec, own, channels, def) != fingerprint(spec, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
+	if fingerprint(spec, ScopeAll, own, channels, def) != fingerprint(spec, ScopeAll, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
 		t.Error("the default question set changed the fingerprint of a flow that does not use it")
 	}
 }
@@ -1155,13 +1218,13 @@ func TestFingerprintJudgingVersion(t *testing.T) {
 	spec := &Spec{Stages: []Stage{{Auditors: []int64{1}, Combine: CombineAny}}}
 	auditors := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
 	channels := map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://a.example"}}
-	base := fingerprint(spec, auditors, channels, nil)
+	base := fingerprint(spec, ScopeAll, auditors, channels, nil)
 	const version, want = 2, "8049a4172a7adeec"
 	if judgingVersion != version || base != want {
 		t.Fatalf("fingerprint of judging version %d = %s, want %s of version %d: a change of what the fingerprint covers needs a new judgingVersion, and both belong here",
 			judgingVersion, base, want, version)
 	}
-	if base == fingerprintAt(judgingVersion+1, spec, auditors, channels, nil) {
+	if base == fingerprintAt(judgingVersion+1, spec, ScopeAll, auditors, channels, nil) {
 		t.Fatal("another judging version kept the fingerprint")
 	}
 }
@@ -1177,9 +1240,8 @@ func TestParseVerdict(t *testing.T) {
 	}
 }
 
-// Fallback stages have their own role in the views, the prompt text and the
-// records the analysis tools return; a failed stage is marked on its
-// auditors there.
+// Fallback stages have their own role in the flow views; a failed stage is
+// marked in the trace.
 func TestFallbackAndFailedStageViews(t *testing.T) {
 	if stageRole(0, false, true) != RoleFirst || stageRole(1, false, true) != RoleBehavior || stageRole(1, false, false) != RoleReview ||
 		stageRole(2, true, true) != RoleFallback || stageRoleNames[RoleFallback] != "补审" {
@@ -1195,16 +1257,10 @@ func TestFallbackAndFailedStageViews(t *testing.T) {
 	if cur.Stages[2].Role != RoleFallback || !cur.Stages[2].Fallback || cur.Stages[0].Fallback {
 		t.Fatalf("current view = %+v", cur.Stages)
 	}
-	lines := strings.Split(flowPromptText(cur), "\n")
-	if len(lines) != 3 || !strings.HasPrefix(lines[1], "第 2 级 行为审查：") || !strings.HasSuffix(lines[1], "上一级命中才进入，通过即放行") ||
-		!strings.HasPrefix(lines[2], "第 3 级 补审：") || !strings.HasSuffix(lines[2], "前面各级放行（未命中）才进入，命中即判定命中") {
-		t.Fatalf("prompt = %q", lines)
-	}
 
 	// A question-table LLM auditor is described with its questions: the
 	// dictionary defines each row with the question text, the view carries
-	// the table and the prompt line says how it judges (no thresholds: a
-	// yes is a hit).
+	// the table (no thresholds: a yes is a hit).
 	def, _ := DefaultQuestions(nil)
 	llmq, err := compileAuditor(3, "llmq", AuditorLLMQuestions, 9, AuditorConfig{Questions: &JevQuestions{Items: []JevQuestion{
 		{Category: "custom/spam", Label: "垃圾广告", Question: "是否是垃圾广告？", Threshold: 0.5},
@@ -1218,9 +1274,6 @@ func TestFallbackAndFailedStageViews(t *testing.T) {
 	if av := qv.Stages[1].Auditors[0]; av.Type != AuditorLLMQuestions || av.Questions == nil || len(av.Questions.Items) != 2 || av.Thresholds != nil ||
 		av.Model != "judge-1" || qv.Stages[1].Role != RoleReview {
 		t.Fatalf("llm_questions view = %+v", qv.Stages[1])
-	}
-	if line := strings.Split(flowPromptText(qv), "\n")[1]; line != "第 2 级 复核：llmq（LLM 题表，judge-1；问题 2 个，逐题回答是或否，答是即命中）；上一级命中才进入，通过即放行" {
-		t.Fatalf("llm_questions prompt line = %q", line)
 	}
 	var spam, sexual *CategoryDef
 	for i := range qv.Dict.Items {
@@ -1240,10 +1293,6 @@ func TestFallbackAndFailedStageViews(t *testing.T) {
 		len(qv.Dict.Items) != len(OpenAICategories)+1 {
 		t.Fatalf("llm_questions built-in row = %+v (%d items)", sexual, len(qv.Dict.Items))
 	}
-	if prompt := buildAnalysisPrompt("", nil, qv, *qv.Dict); !strings.Contains(prompt, "- custom/spam（垃圾广告）：是否是垃圾广告？") ||
-		!strings.Contains(prompt, "LLM 题表") {
-		t.Fatalf("analysis prompt = %s", prompt)
-	}
 
 	fail := Outcome{Err: errors.New("boom")}
 	tr := runFlow(context.Background(), spec, 5*time.Second, scripted(map[int64]Outcome{1: fail, 2: fail}, nil))
@@ -1251,23 +1300,12 @@ func TestFallbackAndFailedStageViews(t *testing.T) {
 	if !strings.Contains(string(raw), `"failed":true`) || !strings.Contains(string(raw), `"fallback":true`) {
 		t.Fatalf("trace json = %s", raw)
 	}
-	tc := &toolCtx{snap: &snapshot{auditors: auditors}}
-	rec := tc.recordOf(&toolRow{Trace: raw}, 10, false)
-	if len(rec.Stages) != 3 || rec.Stages[0].Role != "初审" || rec.Stages[2].Role != "补审" {
-		t.Fatalf("tool stages = %+v", rec.Stages)
-	}
-	for _, s := range rec.Stages {
-		if !s.StageFailed || s.Error == "" {
-			t.Fatalf("tool stage = %+v", s)
-		}
-	}
 	// A stage that decided is not marked, also with an errored auditor.
 	tr = runFlow(context.Background(), &Spec{Stages: []Stage{{Auditors: []int64{1, 2}, Combine: CombineAll}}}, 5*time.Second,
 		scripted(map[int64]Outcome{1: fail, 2: hit("a", 0.9)}, nil))
 	raw, _ = json.Marshal(tr)
-	out, _ := json.Marshal(tc.recordOf(&toolRow{Trace: raw}, 10, false))
-	if strings.Contains(string(raw), `"failed"`) || strings.Contains(string(raw), `"fallback"`) || strings.Contains(string(out), "stage_failed") {
-		t.Fatalf("trace = %s, tool record = %s", raw, out)
+	if strings.Contains(string(raw), `"failed"`) || strings.Contains(string(raw), `"fallback"`) {
+		t.Fatalf("trace = %s", raw)
 	}
 }
 

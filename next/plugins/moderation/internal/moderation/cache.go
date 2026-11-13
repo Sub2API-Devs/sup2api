@@ -745,6 +745,9 @@ type verdicts struct {
 	passed map[[32]byte]bool
 	hit    *storedHit // a cached hit whose segments are all in the request; read only
 	hitID  string
+	// covered are the segments (hex keys) of every cached hit whose segments
+	// are all in the request: what hit_replay = new_content leaves out.
+	covered map[string]bool
 	// asked is the reading the lookup began with: what a review changed
 	// before it, the lookup saw. The run of the request stores its verdicts
 	// with it (storeVerdicts).
@@ -754,7 +757,8 @@ type verdicts struct {
 // lookupVerdicts reads the cached verdicts of the segments of a request (in
 // request order) under scope: from memory, and (useKV) from the KV whatever
 // memory does not hold. The first cached hit whose whole segment set is in
-// the request is returned for replay; otherwise the segments that passed.
+// the request is returned for replay, the segments of all of them (covered),
+// and the segments that passed.
 // Anything the cache cannot answer is unknown and moderated again.
 //
 // ctx is the caller's, and the only limit of the lookup: the hook call (the
@@ -897,13 +901,13 @@ func (l *lookup) hits(names []string, segs []segValue) (ids []string, hits map[s
 	return ids, hits, unread
 }
 
-// decide: the first hit whose whole segment set is among keys, else the
-// segments with a live pass. The pass of a segment that points to an unread
+// decide: the first hit whose whole segment set is among keys, the segments
+// of every such hit, and the segments with a live pass. The pass of a segment that points to an unread
 // hit does not count: that hit may hold the request's content, so the
 // segment is moderated again (or, under post timing, queued, and the worker
 // looks it up with the KV).
 func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map[string]*storedHit, unread map[string]bool) verdicts {
-	v := verdicts{passed: map[[32]byte]bool{}}
+	v := verdicts{passed: map[[32]byte]bool{}, covered: map[string]bool{}}
 	if len(ids) > 0 {
 		have := make(map[string]bool, len(keys))
 		for _, k := range keys {
@@ -911,9 +915,14 @@ func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map
 		}
 		for _, id := range ids {
 			hit := hits[id]
-			if hit != nil && !slices.ContainsFunc(hit.Keys, func(k string) bool { return !have[k] }) {
+			if hit == nil || slices.ContainsFunc(hit.Keys, func(k string) bool { return !have[k] }) {
+				continue
+			}
+			if v.hit == nil {
 				v.hit, v.hitID = hit, id
-				return v
+			}
+			for _, k := range hit.Keys {
+				v.covered[k] = true
 			}
 		}
 	}
@@ -927,6 +936,17 @@ func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map
 		v.passed[keys[i]] = true
 	}
 	return v
+}
+
+// coversAll reports whether every one of keys is in a hit set or has passed:
+// a request with nothing beside its cached hits (hit_replay = new_content).
+func (v *verdicts) coversAll(keys [][32]byte) bool {
+	for _, k := range keys {
+		if !v.passed[k] && !v.covered[hex.EncodeToString(k[:])] {
+			return false
+		}
+	}
+	return true
 }
 
 // ---------------------------------------------------------------- KV

@@ -13,10 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net/http"
 	"runtime/debug"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,15 +62,16 @@ type Plugin struct {
 	watchMu      sync.Mutex
 	watchVersion atomic.Int64
 
-	legacyDone atomic.Bool
+	// upgraded: the one-time steps of the 0.11.0 upgrade ran (upgradeOnce).
+	upgraded atomic.Bool
 	// parityDone: the one-time 0.8.0 conversion of the watch list ran
 	// (convertParityOnce).
 	parityDone atomic.Bool
 	// parityEnd: when the conversion stops looking for entries added by
 	// 0.7.x nodes (unix nanoseconds; read once parityDone is set).
 	parityEnd atomic.Int64
-	// configured: Configure ran at least once, so the legacy conversion
-	// sees the real settings and not the defaults.
+	// configured: Configure ran at least once, so the one-time conversions
+	// see the real settings and not the defaults.
 	configured atomic.Bool
 
 	// Post queue: workers = max_concurrency, capacity = queue_size.
@@ -102,11 +101,8 @@ type Plugin struct {
 	hourly     *statsAcc
 	categories categoryCache
 	staff      staffCache
-	// AI analyses running on this node and the dispatcher guard.
-	analysesRunning atomic.Int64
-	dispatching     atomic.Bool
-	priceMu         sync.Mutex
-	priceCache      map[string]priceStateEntry
+	priceMu    sync.Mutex
+	priceCache map[string]priceStateEntry
 
 	// blocked maps user id -> expiry (zero = until unblocked).
 	blocked        atomic.Pointer[map[int64]time.Time]
@@ -215,14 +211,6 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	s, err := DecodeSettings(cfg.JSON)
 	if err != nil {
 		return pluginsdk.FieldErrors{}.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象").Err()
-	}
-	for _, key := range s.truncated {
-		p.log.Warn("moderation: user list cut to its limit", "key", key, "limit", maxUserList)
-	}
-	for _, key := range slices.Sorted(maps.Keys(s.droppedIDs)) {
-		// A dropped entry is a user the list does not cover: an allowlisted
-		// user moderated first, or a blocklisted one who is not.
-		p.log.Warn("moderation: user list entries that are no user id were dropped", "key", key, "dropped", s.droppedIDs[key])
 	}
 	c := compile(s)
 	c.settingsHash = settingsDigest(cfg.JSON)

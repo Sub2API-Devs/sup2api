@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { levelRefused, WATCH_LEVELS } from './watchLevels'
+import { watchLocked } from './watchLevels'
 
-describe('levelRefused', () => {
-  it('refuses only the enforce level, and only for an allowlisted user', () => {
-    expect(WATCH_LEVELS.filter((l) => levelRefused(l, true))).toEqual(['enforce'])
-    expect(WATCH_LEVELS.filter((l) => levelRefused(l, false))).toEqual([])
-    expect(levelRefused('enforce', undefined)).toBe(false)
+describe('watchLocked', () => {
+  it('refuses the watch actions for a user on a list or with a locked entry (409 locked)', () => {
+    expect(watchLocked({})).toBe(false)
+    expect(watchLocked({ allowlisted: false, blocklisted: false, locked: false })).toBe(false)
+    expect(watchLocked({ allowlisted: true })).toBe(true)
+    expect(watchLocked({ blocklisted: true })).toBe(true)
+    // still locked while the user already left the lists (the plugin unlocks it shortly)
+    expect(watchLocked({ locked: true })).toBe(true)
   })
 })

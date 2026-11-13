@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ApiError, type PluginHost } from '@sub2api/host'
-import { SAlert, SCHEMA_WIDGETS_KEY, SField, SFormModal, SSegmented } from '@sub2api/ui'
+import { SAlert, SDropdown, SField, SFormModal, SSegmented } from '@sub2api/ui'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
 import BindingEditModal from './BindingEditModal.vue'
 import BindingsTab from './BindingsTab.vue'
 import BlocksTab from './BlocksTab.vue'
 import SettingsTab from './SettingsTab.vue'
+import UserStateSection from './UserStateSection.vue'
 import WatchEditModal from './WatchEditModal.vue'
 import { fetchAccountGroups, fetchAccountNames, setHost } from './host'
 import { resetSessionCaches } from './session'
@@ -23,12 +24,6 @@ const EntityPicker = defineComponent({
   emits: ['update:id'],
   render: () => h('div')
 })
-/** The console's entity-select schema widget: the value of the field in, the new value out. */
-const EntitySelect = defineComponent({
-  props: { modelValue: null, schema: Object, ui: Object, multiple: Boolean, disabled: Boolean },
-  emits: ['update:modelValue'],
-  render: () => h('div')
-})
 
 type Call = (path: string, body?: unknown) => Promise<unknown>
 const pluginGet = vi.fn<Call>()
@@ -36,6 +31,7 @@ const coreGet = vi.fn<Call>()
 const post = vi.fn<Call>()
 const put = vi.fn<Call>()
 const corePut = vi.fn<Call>()
+const del = vi.fn<Call>()
 /** The stored plugin settings (GET /plugins/moderation/settings). */
 let stored: Record<string, unknown> = {}
 /** The bindings of GET /bindings. */
@@ -44,7 +40,7 @@ let bindings: Binding[] = []
 beforeEach(() => {
   stored = {}
   bindings = []
-  for (const f of [pluginGet, coreGet, post, put, corePut]) f.mockReset()
+  for (const f of [pluginGet, coreGet, post, put, corePut, del]) f.mockReset()
   pluginGet.mockImplementation(async (path) => (path === '/bindings' ? { bindings, account_bindings_active: true } : path === '/jev/default-questions' ? { builtin: { preamble: '', items: [] } } : []))
   coreGet.mockImplementation(async (path) => (path.startsWith('/lookup/') ? { items: [], more: false } : { values: stored, schema, ui_schema: ui }))
   post.mockResolvedValue({})
@@ -56,7 +52,7 @@ beforeEach(() => {
     i18n: { t, text: (v: { zh?: string } | string) => (typeof v === 'string' ? v : (v?.zh ?? '')), locale: { value: 'zh' } },
     components: { EntityPicker },
     plugin: { key: 'moderation' },
-    pluginApi: { get: pluginGet, post, put },
+    pluginApi: { get: pluginGet, post, put, del },
     api: { get: coreGet, put: corePut, list: async () => ({ items: [], paged: false, page: {} }) },
     permissions: { superuser: () => true, has: () => true },
     can: () => true,
@@ -418,42 +414,49 @@ describe('fetchAccountNames', () => {
   })
 })
 
-describe('the user lists of the settings', () => {
-  const LISTS = ['allowlist_user_ids', 'blocklist_user_ids'] as const
+describe('the user lists', () => {
+  const lockMenu = async (state: Record<string, unknown>) => {
+    const w = mount(UserStateSection, { props: { userId: 9, state: { watch: null, allowlisted: false, blocklisted: false, staff: false, blocked: false, blocked_until: null, ...state } } })
+    await flushPromises()
+    return { w, menu: w.findComponent(SDropdown) }
+  }
 
-  it('are picked with the entity-select widget and stored as lists of id strings', () => {
-    for (const k of LISTS) {
-      expect([ui[k]['ui:widget'], ui[k]['ui:options']]).toEqual(['entity-select', { kind: 'user' }])
-      expect([schema.properties[k].type, schema.properties[k].items.type, schema.properties[k].maxItems]).toEqual(['array', 'string', 1000])
-    }
+  it('lock a user in the user drawer with the lock route, not the settings', async () => {
+    const { w, menu } = await lockMenu({ allowlisted: true })
+    expect(menu.props('actions').map((a: { key: string }) => a.key)).toEqual(['blocklist', 'unlock'])
+    menu.vm.$emit('select', 'blocklist')
+    await flushPromises()
+    expect(put).toHaveBeenCalledWith('/watchlist/9/lock', { list: 'blocklist' })
+    expect(corePut).not.toHaveBeenCalled()
+    expect(w.emitted('lists-changed')).toHaveLength(1)
   })
 
-  it("render the console's widget and save what it picks, with the retired list kept in line", async () => {
-    stored = { mode: 'observe', allowlist_user_ids: ['8'], blocklist_user_ids: [] }
-    const w = mount(SettingsTab, { attachTo: document.body, global: { provide: { [SCHEMA_WIDGETS_KEY as symbol]: { 'entity-select': EntitySelect } } } })
+  it('unlock a user with DELETE on the lock route', async () => {
+    const { w, menu } = await lockMenu({ blocklisted: true })
+    menu.vm.$emit('select', 'unlock')
     await flushPromises()
-    const [allow, block] = w.findAllComponents(EntitySelect)
-    expect([allow.props('modelValue'), allow.props('multiple')]).toEqual([['8'], true])
-    expect([block.props('modelValue'), block.props('multiple')]).toEqual([[], true])
+    expect(del).toHaveBeenCalledWith('/watchlist/9/lock')
+    expect(w.emitted('lists-changed')).toHaveLength(1)
+  })
+})
 
-    allow.vm.$emit('update:modelValue', ['8', '9'])
-    block.vm.$emit('update:modelValue', ['9'])
+describe('the save of a settings page', () => {
+  it('stores the settings brought to the current schema: retired keys folded and gone, undeclared keys dropped', async () => {
+    stored = { mode: 'observe', cache_ttl_seconds: 0, ban_window_hours: 2, allowlist_user_ids: ['8'], analysis_channel_id: 5 }
+    const w = mount(SettingsTab, { props: { page: 'policy' } })
     await flushPromises()
     await w.find('form').trigger('submit')
     await flushPromises()
     expect(corePut).toHaveBeenCalledTimes(1)
-    const sent = (corePut.mock.calls[0][1] as { values: Record<string, unknown> }).values
-    expect(sent).toEqual({ mode: 'observe', allowlist_user_ids: ['8', '9'], blocklist_user_ids: ['9'], exempt_user_ids: ['8'] })
+    expect((corePut.mock.calls[0][1] as { values: Record<string, unknown> }).values).toEqual({ mode: 'observe', verdict_cache_days: 0, ban_window_seconds: 7200 })
   })
 
-  it('refuse more than 1000 users before anything is sent', async () => {
-    stored = { mode: 'observe' }
-    const w = mount(SettingsTab, { attachTo: document.body, global: { provide: { [SCHEMA_WIDGETS_KEY as symbol]: { 'entity-select': EntitySelect } } } })
-    await flushPromises()
-    w.findAllComponents(EntitySelect)[0].vm.$emit('update:modelValue', Array.from({ length: 1001 }, (_, i) => String(i + 1)))
+  it.each(['policy', 'cache', 'advanced'] as const)('drops the stored 0.1 API key on a save of the %s page', async (page) => {
+    stored = { mode: 'observe', api_key: '******' }
+    const w = mount(SettingsTab, { props: { page } })
     await flushPromises()
     await w.find('form').trigger('submit')
     await flushPromises()
-    expect(corePut).not.toHaveBeenCalled()
+    expect((corePut.mock.calls[0][1] as { values: Record<string, unknown> }).values).toEqual({ mode: 'observe' })
   })
 })

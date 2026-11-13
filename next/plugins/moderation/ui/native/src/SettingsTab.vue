@@ -9,7 +9,6 @@ import {
   SHint,
   SInput,
   SSegmented,
-  SSelect,
   SSettingRow,
   SSettingsGroup,
   SSpinner,
@@ -22,34 +21,33 @@ import {
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import VerdictCacheRow from './VerdictCacheRow.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
-import { useCatalog } from './catalog'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, withRetiredMirrored, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, currentSettings, displayValues, editableKeys, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
+import type { SectionKey } from './nav'
 import { useAsync } from './useAsync'
+import { DurationWidget } from './durationWidget'
+import { listsImportPending, useStatus } from './status'
 import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, useModHost } from './host'
 import type { JevQuestions } from './types'
 
-// All the moderation settings (CONTRACTS §72.15; the plugin page is where
-// they are edited, ui.settings mode native, §75.5): the fields of
+// One page of the moderation settings (CONTRACTS §72.15; the plugin page is
+// where they are edited, ui.settings mode native, §75.5): the fields of
 // forms/settings.schema.json in the ui:section groups of
-// forms/settings.ui.json, rendered by the schema widgets (the console's own
-// among them: the allowlist and the blocklist pick their users with
-// entity-select), except a few with their own editor here: the block
-// response preview per API format, the AI analysis channel picker, the
-// webhook address and secret ("set" / clear) and the Jev default question
-// set. The converted 0.1 fields are hidden and go back as stored; a stored
-// 0.1 API key can only be cleared.
+// forms/settings.ui.json whose page is this one (nav.ts), rendered by the
+// schema widgets, except a few with their own editor here: the block
+// response preview per API format, the webhook address and secret ("set" /
+// clear) and the Jev default question set.
 //
-// 0.8.0: `mode` is the switch and the default level; the allowlist starts
-// from the retired exempt_user_ids until it is saved, and the verdict cache
-// days from the retired cache_ttl_seconds (settingsForm.ts). Of the retired
-// keys only exempt_user_ids is written: a save of the allowlist or of the
-// blocklist puts the allowlist without the blocklisted users there, for
-// nodes still on 0.7.2 (withRetiredMirrored). Under the cache days,
-// moderation:manage users can empty the verdict cache of every node
-// (VerdictCacheRow).
+// The stored values are brought to the current schema (settingsForm.ts
+// currentSettings): retired keys are shown folded into their new keys and
+// any save drops what the schema no longer declares and the 0.1 API key.
+// The user lists are the locked entries of the watch list (userLock.ts).
+// Until the status says the one-time import of the lists of the stored
+// settings is done, the page does not save (a save would drop them).
+// Under the cache days, moderation:manage users can empty the verdict cache
+// of every node (VerdictCacheRow).
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -57,33 +55,34 @@ import type { JevQuestions } from './types'
 // settings API has no version to compare). A key someone else changed that
 // this page changed too is confirmed first, then this page's value wins. A
 // number left empty is not stored, so the schema default applies.
+const props = defineProps<{ page: SectionKey }>()
 const host = useModHost()
 const t = host.t
 const text = (v: unknown) => (v ? host.i18n.text(v as never) : '')
-const catalog = useCatalog()
-/** The console's schema widgets (a SchemaForm injects them itself; the fields here are rendered one by one). */
-const widgets = inject(SCHEMA_WIDGETS_KEY, undefined)
+/** The console's schema widgets (a SchemaForm injects them itself; the fields here are rendered one by one) and the plugin's duration. */
+const widgets = { ...inject(SCHEMA_WIDGETS_KEY, undefined), duration: DurationWidget }
 
 const WEBHOOK = ['notify_webhook_url', 'notify_webhook_secret'] as const
 type WebhookKey = (typeof WEBHOOK)[number]
 
 /** Values shown by the schema widgets. */
 const form = reactive<Record<string, unknown>>({})
-/** The AI analysis channel picker (0 = none). */
-const channelId = ref(0)
 /** Webhook inputs: what is typed; kept = the stored value is kept while its input stays empty. */
 const webhook = reactive<Record<WebhookKey, string>>({ notify_webhook_url: '', notify_webhook_secret: '' })
 const kept = reactive<Record<string, boolean>>({})
 const jev = ref<JevQuestions | null>(null)
 const errs = reactive<FieldErrors>({})
 const saving = ref(false)
+/** The status (loaded by the dashboard) says the lists are not imported yet: no save. */
+const status = useStatus()
+const listsPending = computed(() => listsImportPending(status.data.value))
 /** Collapsed groups opened by the user. */
 const opened = reactive<Record<string, boolean>>({})
 
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
-/** The stored values when the page loaded, and this page's values then (what a save compares with). */
+/** The stored values when the page loaded (currentSettings), and this page's values then (what a save compares with). */
 let loaded: Record<string, unknown> = {}
-/** The stored settings keep the verdict cache off (the retired cache_ttl_seconds = 0). */
+/** The stored settings keep the verdict cache off (verdict_cache_days = 0). */
 const cacheOff = ref(false)
 const initial = ref<PageValues>({})
 
@@ -92,9 +91,9 @@ const settings = computed(() => data.value?.[0] ?? null)
 const defaults = computed(() => data.value?.[1] ?? null)
 const schema = computed(() => settings.value?.schema ?? null)
 const ui = computed(() => settings.value?.ui_schema ?? null)
-const sections = computed<SettingSection[]>(() => settingSections(schema.value, ui.value))
-/** The keys of this page (errors on other keys are toasted). */
-const keys = computed(() => editableKeys(sections.value, settings.value?.values || {}))
+const sections = computed<SettingSection[]>(() => sectionsOf(settingSections(schema.value, ui.value), props.page))
+/** The keys of this page (errors on other keys are toasted; the other pages' keys go back as stored). */
+const keys = computed(() => editableKeys(sections.value))
 const widgetKeys = computed(() => schemaKeys(keys.value))
 
 const prop = (k: string) => schema.value?.properties?.[k] ?? {}
@@ -110,26 +109,22 @@ const schemaDefault = (k: string) => {
 
 watch(data, (v) => {
   if (!v) return
-  const stored = v[0].values || {}
+  const stored = currentSettings(v[0].schema, v[0].values || {})
   for (const k of Object.keys(form)) delete form[k]
   Object.assign(form, displayValues(v[0].schema, stored, widgetKeys.value))
-  // the picker has no empty choice: an unset channel shows its default
-  const ch = stored.analysis_channel_id
-  channelId.value = typeof ch === 'number' ? ch : Number(schemaDefault('analysis_channel_id')) || 0
-  for (const k of [...WEBHOOK, LEGACY_KEY]) kept[k] = stored[k] === SETTINGS_MASK
   for (const k of WEBHOOK) {
     const x = stored[k]
+    kept[k] = x === SETTINGS_MASK
     webhook[k] = kept[k] || typeof x !== 'string' ? '' : x
   }
   const set = stored.jev_default_set as JevQuestions | null | undefined
   jev.value = set ? copyQuestions(set) : null
   clearErrors(errs)
-  loaded = { ...stored }
-  cacheOff.value = verdictCacheOff(stored)
+  loaded = stored
+  cacheOff.value = stored[CACHE_DAYS_KEY] === 0
   initial.value = pageValues()
 })
 onMounted(reload)
-defineExpose({ reload })
 
 /** A webhook value as sent: the new value, the mask to keep the stored one, or undefined to clear it (a secret is sent as typed). */
 function webhookValue(k: WebhookKey) {
@@ -140,24 +135,20 @@ function webhookValue(k: WebhookKey) {
 /** The keys of this page as sent; undefined = removed (its default applies). */
 function pageValues(): PageValues {
   const out: PageValues = {}
-  for (const k of widgetKeys.value) out[k] = sentSetting(prop(k), loaded, k, form[k])
-  if (keys.value.includes('analysis_channel_id')) out.analysis_channel_id = Number(channelId.value) || 0
+  for (const k of widgetKeys.value) out[k] = sentValue(prop(k), form[k])
   for (const k of WEBHOOK) if (keys.value.includes(k)) out[k] = webhookValue(k)
   if (keys.value.includes('jev_default_set')) out.jev_default_set = jev.value ? jevPayload(jev.value) : null
-  if (keys.value.includes(LEGACY_KEY)) out[LEGACY_KEY] = kept[LEGACY_KEY] ? SETTINGS_MASK : undefined
   return out
 }
 const dirty = computed(() => !!settings.value && JSON.stringify(pageValues()) !== JSON.stringify(initial.value))
+/** reload for the header button; dirty for leaving the page (ModerationDashboard). */
+defineExpose({ reload, dirty })
 
 function setField(k: string, v: unknown) {
   form[k] = v
   delete errs[k]
 }
 const clearError = (k: string) => delete errs[k]
-function toggleLegacyKey() {
-  kept[LEGACY_KEY] = !kept[LEGACY_KEY]
-  clearError(LEGACY_KEY)
-}
 
 /** Schema checks of the changed keys before the request (the core checks again). */
 function validate(current: PageValues): boolean {
@@ -186,33 +177,36 @@ function validate(current: PageValues): boolean {
 }
 
 async function save() {
+  if (listsPending.value) return
   clearErrors(errs)
   const current = pageValues()
   if (!validate(current)) return
   saving.value = true
   try {
     const latest = await fetchPluginSettings()
-    const m = mergeSettings(keys.value, loaded, latest.values || {}, initial.value, current)
-    if (!m.changed.length) {
+    const stored = latest.values || {}
+    const m = mergeSettings(keys.value, loaded, currentSettings(latest.schema, stored), initial.value, current)
+    // nothing edited still saves what currentSettings drops or folds
+    if (JSON.stringify(m.values) === JSON.stringify(stored)) {
       host.toast(t('settingsTab.noChanges'), 'info')
       return
     }
     if (m.conflicts.length) {
-      const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
+      const names = joinList(m.conflicts.map(label))
       if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
-    await savePluginSettings(withRetiredMirrored(m.values, m.changed))
+    await savePluginSettings(m.values)
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {
     // The first error of a key is shown at its input; others are toasted. A
     // kept secret the core asks to re-enter (§75.1) says so in the plugin's
-    // words; the hidden 0.1 key cannot be re-entered, only cleared.
+    // words.
     applyErrorsOrToast(errs, e, keys.value, settingsKey)
     if (isApiError(e)) {
       for (const [path, code] of Object.entries(e.fieldCodes)) {
         const k = settingsKey(path)
-        if (code === 'reenter') errs[k] = k === LEGACY_KEY ? t('settingsTab.legacyKeyReenter') : t('settingsTab.reenter')
+        if (code === 'reenter') errs[k] = t('settingsTab.reenter')
       }
     }
   } finally {
@@ -230,19 +224,6 @@ const preview = computed(() =>
   blockResponse(format.value, Number(form.block_status || schemaDefault('block_status')), String(form.block_message || schemaDefault('block_message')))
 )
 
-const channelOptions = computed(() => [
-  { value: 0, label: t('settingsTab.noAnalysis') },
-  ...catalog.state.channels.filter((c) => c.type === 'llm').map((c) => ({ value: c.id, label: c.enabled ? c.name : `${c.name} (${t('disabled')})` }))
-])
-/** The analysis channel is not a usable llm channel (status channel_problem): the server leaves analyses off. */
-const channelError = computed(() => {
-  const id = Number(channelId.value) || 0
-  if (errs.analysis_channel_id || !id || !catalog.state.loaded) return errs.analysis_channel_id || ''
-  const ch = catalog.state.channels.find((c) => c.id === id && c.type === 'llm')
-  if (!ch) return t('settingsTab.analysisChannelInvalid', { id })
-  return ch.enabled ? '' : t('statusLine.analysisProblem.unusable')
-})
-
 const jevMode = computed({
   get: () => (jev.value ? 'custom' : 'builtin'),
   set: (m: string) => (jev.value = m === 'custom' && defaults.value ? copyQuestions(defaults.value.builtin) : null)
@@ -259,17 +240,7 @@ const jevOptions = computed(() => [
     <SAlert v-else-if="error" tone="danger">{{ error }}</SAlert>
     <SAlert v-else-if="!sections.length" tone="danger">{{ t('settingsTab.noSchema') }}</SAlert>
     <form v-else class="mod-form mod-form-page" @submit.prevent="save">
-      <SAlert v-if="keys.includes(LEGACY_KEY)" :tone="kept[LEGACY_KEY] ? 'warning' : 'info'" data-testid="mod-legacy-key">
-        {{ kept[LEGACY_KEY] ? t('settingsTab.legacyKeyKept') : t('settingsTab.legacyKeyCleared') }}
-        <template v-if="errs[LEGACY_KEY]">
-          <br />
-          <span class="mod-text-danger">{{ errs[LEGACY_KEY] }}</span>
-        </template>
-        <template #actions>
-          <SButton size="sm" @click="toggleLegacyKey">{{ kept[LEGACY_KEY] ? t('settingsTab.legacyKeyClear') : t('settingsTab.legacyKeyUndo') }}</SButton>
-        </template>
-      </SAlert>
-
+      <SAlert v-if="listsPending" tone="warning">{{ t('settingsTab.listsPending') }}</SAlert>
       <SSettingsGroup
         v-for="g in sections"
         :key="g.id"
@@ -280,11 +251,8 @@ const jevOptions = computed(() => [
         @update:open="opened[g.id] = $event"
       >
         <template v-for="k in g.keys" :key="k">
-          <SSettingRow v-if="k === 'analysis_channel_id'" :label="label(k)" :description="help(k) || undefined" :error="channelError || undefined">
-            <SSelect v-model="channelId" class="mod-setting-control" :options="channelOptions" />
-          </SSettingRow>
           <SSettingRow
-            v-else-if="k === 'notify_webhook_url' || k === 'notify_webhook_secret'"
+            v-if="k === 'notify_webhook_url' || k === 'notify_webhook_secret'"
             :label="label(k)"
             :description="(kept[k] ? t('settingsTab.secretKept') : help(k)) || undefined"
             :error="errs[k]"
@@ -339,7 +307,7 @@ const jevOptions = computed(() => [
 
       <div class="mod-editor-footer">
         <SHint v-if="dirty" size="xs" tone="warning" class="mod-mr-auto">{{ t('settingsTab.unsaved') }}</SHint>
-        <SButton type="submit" variant="primary" :loading="saving">{{ t('save') }}</SButton>
+        <SButton type="submit" variant="primary" :loading="saving" :disabled="listsPending">{{ t('save') }}</SButton>
       </div>
     </form>
   </div>

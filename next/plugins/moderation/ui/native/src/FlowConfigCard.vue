@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SBadge, SCard, SField, SHint, SInput, SLink, SSelect, SSwitch, STagInput } from '@sub2api/ui'
+import { SAlert, SBadge, SCard, SField, SHint, SInput, SLink, SSelect, SSwitch, STagInput } from '@sub2api/ui'
 import FlowTimeoutField from './FlowTimeoutField.vue'
 import { enumOptions } from './format'
 import { useModHost } from './host'
-import type { Spec } from './types'
+import { SCOPES, type Scope, type Spec } from './types'
 import { NAME_MAX } from './flowOps'
 
 // Name, enabled switch, bound groups (read-only, with the count of account
-// bindings), sample rate, model scope and total timeout of a flow (new-api
-// flow-config-card.tsx). The enabled switch is its own column here (not in
-// the spec) and saves at once.
+// bindings), sample rate, model scope, moderated scope and total timeout of
+// a flow (new-api flow-config-card.tsx). The enabled switch and the scope
+// are columns of the flow (not in the spec) and save at once; a flow from
+// before the scope existed (null) moderates everything and is told so.
 const props = defineProps<{
   name: string
   enabled: boolean
+  scope: Scope | null
   draft: Spec
   /** names of the groups bound to the saved flow (edited in the list) */
   groups: string[]
@@ -22,17 +24,20 @@ const props = defineProps<{
   autoMs: number
   isNew: boolean
   disabled: boolean
-  enabledBusy?: boolean
+  /** the field being saved at once */
+  busy?: string | null
 }>()
 const emit = defineEmits<{
   (e: 'update:name', v: string): void
   (e: 'update:enabled', v: boolean): void
+  (e: 'update:scope', v: Scope): void
   (e: 'update:draft', v: Spec): void
   (e: 'go-list'): void
 }>()
 const t = useModHost().t
 
 const filterOptions = computed(() => enumOptions('modelFilter', ['all', 'only', 'exclude']))
+const scopeOptions = computed(() => enumOptions('flows.scope', SCOPES))
 const patch = (p: Partial<Spec>) => emit('update:draft', { ...props.draft, ...p })
 const setFilter = (p: Partial<Spec['model_filter']>) => patch({ model_filter: { ...props.draft.model_filter, ...p } })
 
@@ -51,7 +56,7 @@ function setRate(v: unknown) {
 
       <SField :label="t('enabled')">
         <div class="mod-config-inline">
-          <SSwitch :model-value="enabled" :disabled="disabled || enabledBusy" :aria-label="t('enabled')" @update:model-value="emit('update:enabled', $event)" />
+          <SSwitch :model-value="enabled" :disabled="disabled || busy === 'enabled'" :aria-label="t('enabled')" @update:model-value="emit('update:enabled', $event)" />
           <SHint inline size="xs">{{ enabled ? t('flows.enabledOn') : t('flows.enabledOff') }}</SHint>
         </div>
       </SField>
@@ -94,6 +99,13 @@ function setRate(v: unknown) {
             class="mod-grow"
             @update:model-value="setFilter({ models: $event })"
           />
+        </div>
+      </SField>
+
+      <SField :label="t('flows.scopeTitle')" :hint="t('flows.scopeHint')" class="mod-config-wide" data-testid="mod-flow-scope">
+        <div class="mod-form">
+          <SSelect :model-value="scope ?? 'all'" :options="scopeOptions" :disabled="disabled || busy === 'scope'" :aria-label="t('flows.scopeTitle')" @update:model-value="emit('update:scope', $event as Scope)" />
+          <SAlert v-if="!scope || scope === 'all'" :tone="scope ? 'warning' : 'info'">{{ scope ? t('flows.scopeWarn') : t('flows.scopeLegacy') }}</SAlert>
         </div>
       </SField>
 

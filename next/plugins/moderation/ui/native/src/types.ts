@@ -43,9 +43,6 @@ export interface Runtime {
   cache_epoch?: number
   blocked_users: number
   watched_users: number
-  /** P2 (§72.13.4); absent on 0.2 */
-  /** channel_problem: why a set analysis_channel_id is not used (the core saves settings unchecked) */
-  analysis?: { channel_configured: boolean; channel_problem?: 'not_found' | 'not_llm' | 'unusable'; pending: number; running: number }
   /** call costs that could not be queued for pricing */
   dropped_costs?: number
 }
@@ -53,6 +50,11 @@ export interface Runtime {
 /** Row of GET /events (no `text`, has `text_excerpt`). */
 /** Record filters a record detail can set (click-to-filter). */
 export type EventFilter = { endpoint?: string; session_fp?: string; request_id?: string }
+
+/** How a request found its flow (0.10.0): a binding, the default flow, or the default flow after the binding stopped applying. */
+export type FlowSource = 'group' | 'account' | 'account_any' | 'default' | 'fallback'
+/** Why a binding does not apply: its flow is disabled, unpublished or deleted, or its published spec could not be read on the node (invalid). */
+export type FallbackReason = 'disabled' | 'unpublished' | 'deleted' | 'invalid'
 
 export interface ModEvent {
   id: number
@@ -72,6 +74,14 @@ export interface ModEvent {
   result: Result | ''
   flow_id: number
   flow_version: number
+  /** how the flow was found (0.10.0; absent on older records) */
+  flow_source?: FlowSource
+  /** flow_source fallback: the bound flow and why it did not apply */
+  flow_fallback?: { flow_id: number; reason: FallbackReason }
+  /** what decided checking first or in the background (0.10.0; absent on older records, which show the mode instead) */
+  level_source?: 'blocklist' | 'allowlist' | 'watch' | 'default'
+  /** the level that applied: enforce = checked first */
+  level?: WatchLevel
   severity: string
   hit_categories: string[]
   highest_category: string
@@ -97,13 +107,6 @@ export interface ModEvent {
   text_excerpt?: string
   /** per-stage trace (list and detail; null on 0.1 records) */
   trace?: Trace | null
-  /** P2 AI verdict (§72.13.4); empty / absent until an analysis reviewed the record */
-  ai_verdict?: AIVerdict | '' | null
-  ai_severity?: string | null
-  ai_category?: string | null
-  ai_evidence?: string | null
-  ai_reason?: string | null
-  ai_analysis_id?: number | null
 }
 
 export interface HitCategory {
@@ -213,9 +216,9 @@ export interface RelatedEvent {
 /** The record user's moderation state now. */
 export interface UserState {
   watch: Watch | null
-  /** on the allowlist of the settings: only moderated after the request, never refused or banned */
+  /** on the allowlist (a locked entry): only moderated after the request, never refused or banned */
   allowlisted: boolean
-  /** on the blocklist of the settings: always moderated first (a user on both lists is blocklisted) */
+  /** on the blocklist (a locked entry): always moderated first */
   blocklisted: boolean
   staff: boolean
   blocked: boolean
@@ -277,17 +280,14 @@ export interface Watch {
   hits_since_seen?: number
   note: string
   updated_at: string
-  /** P2 analysis queue and latest result (§72.13.4) */
-  analysis_requested_at?: string | null
-  analysis_source?: 'auto' | 'manual' | '' | null
-  /** a node holds a live claim on the queued analysis */
-  analysis_running?: boolean
-  latest_analysis_id?: number | null
-  latest_analysis_status?: AnalysisStatus | '' | null
-  latest_trend?: Trend | '' | null
-  latest_suggestion?: Suggestion | '' | null
-  analyzed_at?: string | null
+  /** a locked entry (0.10.0) is the user's place on a user list: its level is fixed, it never expires, the watch API refuses a level change or a removal (409 locked); PUT / DELETE /watchlist/:id/lock (0.11.0) lock and unlock */
+  locked?: boolean
+  /** the user list of a locked entry */
+  lock?: UserList
 }
+
+/** The user lists (locked watch entries): allowlist = background only (observe), blocklist = always checked first (enforce). */
+export type UserList = 'allowlist' | 'blocklist'
 
 export interface SeverityCounts {
   high: number
@@ -308,11 +308,11 @@ export interface WatchItem extends Watch {
   top_categories: Array<{ category: string; label?: string; count: number }>
   /** records whose highest category is not among top_categories */
   top_other: number
-  /** verdict counts of the latest successful analysis */
-  ai_counts: VerdictCounts | null
-  /** the user lists of the settings (a user on both is blocklisted) */
+  /** the user list of the user's locked entry */
   allowlisted?: boolean
   blocklisted?: boolean
+  /** the user is a moderator, who cannot be locked (the entry predates that) */
+  staff?: boolean
 }
 
 export interface WatchCounts {
@@ -321,12 +321,13 @@ export interface WatchCounts {
   blocking: number
   /** enforce-level entries with new hits since last seen; absent before 0.8.0 */
   blocking_with_new?: number
+  /** locked entries (0.10.0), also counted in watching / blocking */
+  locked?: number
 }
 
 /** Envelope members of GET /watchlist besides data and page. */
 export interface WatchListMeta {
   counts: WatchCounts
-  analysis_every_violations: number
 }
 
 export interface WatchEvent {
@@ -337,16 +338,7 @@ export interface WatchEvent {
   to_level: string
   reason: string
   operator_id: number | null
-  analysis_id?: number | null
   created_at: string
-}
-
-/** Suspicious records by AI verdict (none = not analysed yet). */
-export interface AIVerdictCounts {
-  violation: number
-  false_positive: number
-  unsure: number
-  none: number
 }
 
 /** All suspicious records of a user. */
@@ -356,7 +348,6 @@ export interface UserSummary {
   confirmed: number
   false_positive: number
   by_severity: SeverityCounts
-  ai_verdicts: AIVerdictCounts
 }
 
 /** One "group → flow@version" the user's suspicious records of the last 30 days came through. */
@@ -366,7 +357,6 @@ export interface ContextSource {
   flow_name: string
   version: number
   count: number
-  ai_verdicts: AIVerdictCounts
   /** the group's flow version now */
   current: boolean
 }
@@ -394,8 +384,6 @@ export interface UserDetail extends UserState {
   }
   /** last 30 UTC days */
   daily: UserDay[]
-  latest_analysis: Analysis | null
-  analysis: { running: boolean; queued: boolean; violations_since_analysis: number; every: number }
 }
 
 export type Protocol = 'openai_chat' | 'openai_responses' | 'anthropic'
@@ -439,8 +427,6 @@ export interface Channel {
   proxy?: string
   stats?: ChannelStats | null
   used_by?: Array<{ id: number; name: string }>
-  /** the AI analysis channel */
-  analysis?: boolean
   created_at: string
   updated_at: string
 }
@@ -486,17 +472,6 @@ export interface TodayCounts {
   auditor_calls: number
   tokens_in: number
   tokens_out: number
-  analyses: number
-  analyses_failed: number
-  analysis_tokens_in: number
-  analysis_tokens_out: number
-}
-
-export interface AIReviewCounts {
-  reviewed: number
-  violation: number
-  false_positive: number
-  unsure: number
 }
 
 /** Last-hour health of an auditor or a channel; rates are 0–1. */
@@ -542,13 +517,16 @@ export interface Status {
   error_rate_alert_percent: number
   today: TodayCounts
   today_from: string
-  ai_review: AIReviewCounts
   watch: WatchCounts
+  /** bindings whose flow is disabled, unpublished or deleted (0.10.0): their requests go by a wider binding */
+  stale_bindings?: number
+  /** the one-time import of the user lists of the settings into locked watch entries is done (0.11.0) */
+  lists_imported: boolean
   auditors: HealthRow[]
   channels: HealthRow[]
   funnels: Funnel[]
   queue: QueueStatus[]
-  costs: { total: CostSummary; audit: CostSummary; analysis: CostSummary; manual: CostSummary; channels: CostRef[]; auditors: CostRef[] }
+  costs: { total: CostSummary; audit: CostSummary; manual: CostSummary; channels: CostRef[]; auditors: CostRef[] }
   runtime: Runtime
 }
 
@@ -622,32 +600,6 @@ export interface StatsQuery {
   group_id?: number | ''
 }
 
-// ---- AI analysis (§72.13.4)
-
-export type AIVerdict = 'violation' | 'false_positive' | 'unsure'
-export type Trend = 'occasional' | 'persistent' | 'escalating' | 'likely_false_positive'
-export type Suggestion = 'release' | 'observe' | 'block'
-/** a stale analysis has status ok and error stale (§72.13.4) */
-export type AnalysisStatus = 'ok' | 'failed'
-
-export interface VerdictCounts {
-  violation: number
-  false_positive: number
-  unsure: number
-  high?: number
-  medium?: number
-  low?: number
-}
-
-export interface RecordVerdict {
-  record_id: number
-  verdict: AIVerdict
-  severity?: string
-  category?: string
-  evidence?: string
-  reason?: string
-}
-
 export interface FlowRef {
   flow_id: number
   name?: string
@@ -655,76 +607,6 @@ export interface FlowRef {
   via?: string
   historical?: boolean
   deleted?: boolean
-}
-
-export interface AnalysisStep {
-  step: number
-  tool?: string
-  /** argument digest */
-  args?: string
-  latency_ms: number
-  tokens_in?: number
-  tokens_out?: number
-  result_bytes?: number
-  truncated?: boolean
-  error?: string
-  notes?: Array<{ kind: string; record_id?: number }>
-}
-
-/** Row of GET /watchlist/:user_id/analyses (no trace, no record_verdicts). */
-export interface Analysis {
-  id: number
-  user_id: number
-  source: 'auto' | 'manual' | string
-  status: AnalysisStatus | string
-  error?: string
-  trend?: Trend | ''
-  suggestion?: Suggestion | ''
-  summary?: string
-  main_problems?: string[] | null
-  verdict_counts?: VerdictCounts | null
-  flows_seen?: FlowRef[] | null
-  model?: string
-  steps: number
-  tokens_in: number
-  tokens_out: number
-  /** user_analyses.cost: USD decimal string; null when no call was priced */
-  cost?: string | null
-  unpriced_calls?: number
-  duration_ms: number
-  created_at: string
-}
-
-/** GET /analyses/:id */
-export interface AnalysisDetail extends Analysis {
-  record_verdicts?: RecordVerdict[] | null
-  trace?: AnalysisStep[] | null
-}
-
-export interface CategoryDef {
-  category: string
-  name?: string
-  source?: string
-  stage?: number
-  auditor?: string
-  from?: string
-  definition?: string
-}
-
-export interface AnalysisPrompt {
-  group_id?: number
-  flow: FlowVersionDetail | null
-  dict: CategoryDef[] | null
-  prompt: string
-  bytes?: number
-}
-
-export interface AnalysisTool {
-  name: string
-  purpose?: string
-  args?: string
-  returns?: string
-  kind?: 'read' | 'end' | string
 }
 
 // ---- flow versions (§72.13.5)
@@ -844,10 +726,21 @@ export interface Spec {
   stages: Stage[]
 }
 
+/**
+ * What of a request a flow moderates (0.10.0, design D1): input = system,
+ * developer and user text with the user's images and documents; tools adds
+ * the tool results; all = everything the client sent (assistant turns and
+ * tool definitions included).
+ */
+export const SCOPES = ['input', 'tools', 'all'] as const
+export type Scope = (typeof SCOPES)[number]
+
 export interface Flow {
   id: number
   name: string
   enabled: boolean
+  /** a column of the flow, not part of the spec: applies at once, not versioned; null = a flow from before 0.10.0, which moderates everything */
+  scope: Scope | null
   draft: Spec
   published: Spec | null
   version: number
@@ -896,6 +789,10 @@ export interface Binding {
   flow_id: number
   /** the flow is disabled, unpublished or gone: the binding does not apply and a wider one decides */
   inactive?: boolean
+  /** why the binding does not apply ('' = it applies; 0.10.0) */
+  fallback_reason?: FallbackReason | ''
+  /** the flow its requests go by now (0 = not moderated; 0.10.0) */
+  effective_flow_id?: number
 }
 
 export interface BindingsView {
@@ -972,7 +869,7 @@ export interface Group {
 
 /**
  * Body of POST / PATCH /watchlist. expires_at (RFC 3339, "" = never) wins over
- * days; reason goes to the history; analysis_id links the AI suggestion applied.
+ * days; reason goes to the history.
  */
 export interface WatchChange {
   level?: WatchLevel
@@ -980,7 +877,6 @@ export interface WatchChange {
   expires_at?: string
   note?: string
   reason?: string
-  analysis_id?: number
 }
 
 /** Auditor fields as saved, or tried unsaved instead of (or over) the stored ones. */
@@ -1061,7 +957,3 @@ export interface ImportResult {
   auditor_ids?: number[]
 }
 
-// ---- page
-
-/** Tabs of the moderation page (?tab=). */
-export type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'bindings' | 'auditors' | 'channels' | 'test' | 'settings'

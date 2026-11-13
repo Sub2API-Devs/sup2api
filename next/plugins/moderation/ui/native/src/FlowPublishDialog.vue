@@ -46,7 +46,7 @@ const lines = computed(() =>
   props.draft.stages.map((st, i) => {
     const head = t('flows.pubStage', {
       n: i + 1,
-      role: t(`flows.role.${stageRole(i, st, lookup.value.typeOf)}`),
+      role: t(`flows.role.${stageRole(i, st)}`),
       auditors: st.auditors.map(lookup.value.nameOf).join(' ∥ ')
     })
     const combine = st.auditors.length > 1 ? ` · ${t(`flows.combineOpt.${st.combine || 'any'}`)}${st.combine === 'at_least' ? ` (N = ${st.n ?? 1})` : ''}` : ''

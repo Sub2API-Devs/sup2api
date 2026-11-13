@@ -27,7 +27,7 @@ import (
 // nothing, and no call is made after the end.
 func TestKVCallsCountFailuresNotEndedContexts(t *testing.T) {
 	kv := &kvFake{}
-	p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, _, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	ctx := context.Background()
 	const n = 2*kvSegUnit + 176 // three calls
 	keys := make([]string, n)
@@ -144,7 +144,7 @@ func TestKVCallsCountFailuresNotEndedContexts(t *testing.T) {
 // holds. A change whose caller left while it waited is not made.
 func TestKVChangesOfAKeyTakeTurns(t *testing.T) {
 	kv := &kvFake{}
-	p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, _, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	ctx := context.Background()
 	c := p.cfg.Load()
 	const scope = "e0:1:fp"
@@ -245,7 +245,7 @@ func TestKVFailureAuditsAgain(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
 	fail := &kv.fail
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	openAIFlow(t, h, mod.srv.URL)
 	calls := func() int64 { return mod.count("/v1/moderations") }
 	const hit, clean = "MOD-HIT-sexual kv", "a clean text for the kv"
@@ -293,7 +293,7 @@ func TestKVFailureAuditsAgain(t *testing.T) {
 // a fresh TTL, and a part older than the TTL is not used.
 func TestKVValueKeepsItsWriteTime(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := openAIFlow(t, h, mod.srv.URL)
 	scope, ttl := flowScope(p, flow), p.cfg.Load().cacheTTL
 	now := time.Now()
@@ -342,7 +342,7 @@ func TestLookupReadsEverySegment(t *testing.T) {
 			mod := newFakeMod(t)
 			// One chunk, whatever the number of segments.
 			cfg := map[string]any{"mode": ModeEnforce, "input_max_chars": 100000}
-			p1, h1, fh := startDB(t, nil, cfg)
+			p1, h1, fh := startDB(t, cfg)
 			openAIFlow(t, h1, mod.srv.URL)
 			calls := (segments + kvSegUnit - 1) / kvSegUnit
 			body := longRequest(segments)
@@ -390,7 +390,7 @@ func TestKnownSegmentsMakeNoKVCall(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
 	var clock atomic.Int64
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 	flow := openAIFlow(t, h, mod.srv.URL)
 	const segments = 150
 	body := longRequest(segments)
@@ -446,7 +446,7 @@ func TestKnownSegmentsMakeNoKVCall(t *testing.T) {
 func TestLookupEndsWithItsRequest(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	openAIFlow(t, h, mod.srv.URL)
 	const text = "MOD-HIT-sexual and the client left"
 	// The KV does not answer.
@@ -504,7 +504,7 @@ func TestLookupEndsWithItsRequest(t *testing.T) {
 func TestPassDoesNotHideAHitAnotherNodeStored(t *testing.T) {
 	base, calls := newPairMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
-	p1, h1, fh := startDB(t, nil, cfg)
+	p1, h1, fh := startDB(t, cfg)
 	flow := openAIFlow(t, h1, base)
 	const more = 70
 	// among is a request of one part of the hit set, first, and 70 segments
@@ -573,7 +573,7 @@ func TestPassDoesNotHideAHitAnotherNodeStored(t *testing.T) {
 func TestUnreadableHitEntryIsUnknown(t *testing.T) {
 	base, calls := newPairMod(t)
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	flow := openAIFlow(t, h, base)
 	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, pairWhole)); !denied(r) || replayed(r) {
 		t.Fatalf("the pair = %+v", r)
@@ -633,7 +633,7 @@ func TestUnreadableHitEntryIsUnknown(t *testing.T) {
 func TestStalePointerLeavesMemory(t *testing.T) {
 	base, calls := newPairMod(t)
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve}, withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeObserve}, withClock(&clock))
 	flow := openAIFlow(t, h, base)
 	// The pair is a cached hit, its last part a cached pass.
 	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, pairWhole)); r.GetNote() != queuedNote {
@@ -691,7 +691,7 @@ func TestStalePointerRemovalKeepsANewerPointer(t *testing.T) {
 	base, calls := newPairMod(t)
 	kv := &kvFake{}
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 	flow := openAIFlow(t, h, base)
 	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, pairWhole)); !denied(r) || replayed(r) {
 		t.Fatalf("the pair = %+v", r)
@@ -754,7 +754,7 @@ func TestStalePointerRemovalKeepsANewerPointer(t *testing.T) {
 func TestMemoryHoldsWhatTheKVHolds(t *testing.T) {
 	base, calls := newPairMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
-	p1, h1, fh := startDB(t, nil, cfg)
+	p1, h1, fh := startDB(t, cfg)
 	flow := openAIFlow(t, h1, base)
 	// The first node stores the hit of {A, B}: in its memory the two keys and
 	// the hit entry, as in the KV.
@@ -817,7 +817,7 @@ func TestMemoryHoldsWhatTheKVHolds(t *testing.T) {
 func TestRepeatedBeforeTheWriteIsModeratedAgain(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	openAIFlow(t, h, mod.srv.URL)
 	calls := func() int64 { return mod.count("/v1/moderations") }
 	for _, tc := range []struct {
@@ -879,7 +879,7 @@ func TestRepeatedBeforeTheWriteIsModeratedAgain(t *testing.T) {
 func TestHitEntryIsWrittenBeforeItsPointers(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	openAIFlow(t, h, mod.srv.URL)
 	entered := kv.hold(func(key string) bool { return strings.HasPrefix(key, "h:") })
 	defer kv.open()
@@ -915,7 +915,7 @@ func TestHitWhoseWriteFailedIsCachedNowhere(t *testing.T) {
 	cfg := map[string]any{"mode": ModeEnforce}
 	kv := &kvFake{}
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, cfg, withKV(kv), withClock(&clock))
+	p, h, fh := startDB(t, cfg, withKV(kv), withClock(&clock))
 	flow := openAIFlow(t, h, base)
 	// The node judges the pair a hit while the KV takes no writes: nothing in
 	// the KV, nothing in memory, one kv error (the write; the lookup and the
@@ -1010,7 +1010,7 @@ func TestHitWhoseWriteFailedIsCachedNowhere(t *testing.T) {
 // answers would be thrown away.
 func TestVerdictWriteStopsAtAFailedRead(t *testing.T) {
 	kv := &kvFake{}
-	p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, _, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	const scope = "e0:1:fp"
 	passes := make([][32]byte, 2*kvSegUnit+1) // three calls to read them
 	for i := range passes {
@@ -1042,7 +1042,7 @@ func TestVerdictWriteStopsAtAFailedRead(t *testing.T) {
 // parts as passed, until they expire.
 func TestVerdictWriteCutShortForgetsWhatItWrote(t *testing.T) {
 	kv := &kvFake{}
-	p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, _, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	const scope = "e0:1:fp"
 	ctx := context.Background()
 	ttl := p.cfg.Load().cacheTTL
@@ -1100,7 +1100,7 @@ func TestVerdictWriteCutShortForgetsWhatItWrote(t *testing.T) {
 // those runs is cached meanwhile. When the KV answers again they all land.
 func TestWaitingVerdictWritesAreReported(t *testing.T) {
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	const scope, runs = "e0:1:fp", 40
 	writing := func() (status, health int64) {
 		t.Helper()
@@ -1138,7 +1138,7 @@ func TestWaitingVerdictWritesAreReported(t *testing.T) {
 func TestStopEndsVerdictWrites(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	openAIFlow(t, h, mod.srv.URL)
 	// The lookup of the request is answered (its call is the last one the KV
 	// answers); the write of its run is not.
@@ -1170,7 +1170,7 @@ func TestStopEndsVerdictWrites(t *testing.T) {
 // context did is none.
 func TestAlertStateCountsKVFailuresLikeTheCache(t *testing.T) {
 	kv := &kvFake{}
-	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, _, _ := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	ctx := context.Background()
 	kv.fail.Store(true)
 	errs := p.stats.kvErrors.Load()

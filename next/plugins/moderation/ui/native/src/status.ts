@@ -20,6 +20,14 @@ export function useStatus(): AsyncState<Status> {
 }
 
 /**
+ * The one-time import of the user lists of the settings (0.11.0) is not
+ * done yet: a settings save now would drop the lists before they are
+ * imported, so the settings pages do not save. Unknown (false) until the
+ * status is loaded.
+ */
+export const listsImportPending = (s: Status | null | undefined) => !!s && s.lists_imported !== true
+
+/**
  * Watch entries with new hits since last seen: of the observe level, of the
  * enforce level (null on a backend before 0.8.0, which has no
  * blocking_with_new) and of both.

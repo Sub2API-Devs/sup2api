@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,10 +19,17 @@ import (
 // {group, account, flow} as loadSnapshot registers them (account 0 = a
 // group binding).
 func bindingSnapshot(live []int64, bindings ...[3]int64) *snapshot {
+	return deadBindingSnapshot(live, nil, bindings...)
+}
+
+// deadBindingSnapshot is bindingSnapshot with flows that are not live, by
+// the reason (snapshot.dead); any other flow is gone.
+func deadBindingSnapshot(live []int64, dead map[int64]string, bindings ...[3]int64) *snapshot {
 	s := emptySnapshot()
 	for _, id := range live {
 		s.flows[id] = &liveFlow{ID: id}
 	}
+	maps.Copy(s.dead, dead)
 	for _, b := range bindings {
 		if b[1] == 0 {
 			s.bindGroup(b[0], b[2])
@@ -29,6 +38,68 @@ func bindingSnapshot(live []int64, bindings ...[3]int64) *snapshot {
 		}
 	}
 	return s
+}
+
+// How a request found its flow (events.flow_source, CONTRACTS §72.17,
+// 0.10.0): the binding that decided, or a fallback naming the most specific
+// binding passed over because its flow is not live, and why.
+func TestFlowMatchSource(t *testing.T) {
+	// Flows 1-3 are live, 4 is disabled, 5 unpublished, 6 gone.
+	s := deadBindingSnapshot([]int64{1, 2, 3}, map[int64]string{4: FallbackDisabled, 5: FallbackUnpublished},
+		[3]int64{0, 0, 1}, [3]int64{9, 0, 2}, [3]int64{10, 0, 4}, [3]int64{11, 0, 6},
+		[3]int64{9, 7, 5}, [3]int64{0, 7, 3}, [3]int64{12, 8, 4}, [3]int64{13, 9, 1})
+	type want struct {
+		flow     int64
+		source   string
+		fallback *StaleBinding
+	}
+	check := func(name string, f *liveFlow, m flowMatch, w want) {
+		t.Helper()
+		var got int64
+		if f != nil {
+			got = f.ID
+		}
+		if got != w.flow || m.source != w.source || !reflect.DeepEqual(m.fallback, w.fallback) {
+			t.Errorf("%s = flow %d %s %+v, want %+v", name, got, m.source, m.fallback, w)
+		}
+	}
+	disabled, unpublished, gone := &StaleBinding{4, FallbackDisabled}, &StaleBinding{5, FallbackUnpublished}, &StaleBinding{6, FallbackDeleted}
+	for _, tc := range []struct {
+		group int64
+		w     want
+	}{
+		{9, want{2, FlowSourceGroup, nil}},
+		{5, want{1, FlowSourceDefault, nil}},
+		{0, want{1, FlowSourceDefault, nil}},
+		{10, want{1, FlowSourceFallback, disabled}},
+		{11, want{1, FlowSourceFallback, gone}},
+	} {
+		f, m := s.flowFor(tc.group)
+		check(fmt.Sprintf("flowFor(%d)", tc.group), f, m, tc.w)
+	}
+	for _, tc := range []struct {
+		group, account int64
+		w              want
+	}{
+		{13, 9, want{1, FlowSourceAccount, nil}},
+		{5, 7, want{3, FlowSourceAccountAny, nil}},
+		{9, 7, want{3, FlowSourceFallback, unpublished}}, // the group + account binding is passed over
+		{12, 8, want{1, FlowSourceFallback, disabled}},
+		{9, 6, want{2, FlowSourceGroup, nil}},
+		{10, 6, want{1, FlowSourceFallback, disabled}}, // the group binding is passed over
+		{5, 6, want{1, FlowSourceDefault, nil}},
+	} {
+		f, m := s.flowForAccount(tc.group, tc.account)
+		check(fmt.Sprintf("flowForAccount(%d, %d)", tc.group, tc.account), f, m, tc.w)
+	}
+	for _, tc := range [][3]int64{{10, 0, 1}, {9, 0, 2}, {9, 7, 3}, {12, 8, 1}, {0, 7, 3}} {
+		if got := s.effectiveFlow(tc[0], tc[1]); got != tc[2] {
+			t.Errorf("effectiveFlow(%d, %d) = %d, want %d", tc[0], tc[1], got, tc[2])
+		}
+	}
+	if len(s.stale) != 4 {
+		t.Errorf("stale bindings = %v", s.stale)
+	}
 }
 
 // The most specific binding decides (CONTRACTS §72.17): the account within
@@ -49,7 +120,7 @@ func TestFlowForAccount(t *testing.T) {
 		t.Helper()
 		for _, tc := range cases {
 			var got int64
-			if f := s.flowForAccount(tc.group, tc.account); f != nil {
+			if f, _ := s.flowForAccount(tc.group, tc.account); f != nil {
 				got = f.ID
 			}
 			if got != tc.flow {
@@ -80,7 +151,7 @@ func TestFlowForAccount(t *testing.T) {
 	t.Run("group bound to a disabled flow takes the default flow", func(t *testing.T) {
 		s := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 0, 4})
 		check(t, s, want{9, 6, 1}, want{9, 0, 1})
-		if f := s.flowFor(9); f == nil || f.ID != 1 {
+		if f, _ := s.flowFor(9); f == nil || f.ID != 1 {
 			t.Fatalf("flowFor(9) = %+v", f)
 		}
 		// The console still lists the group under the disabled flow.
@@ -204,7 +275,7 @@ func noteFlow(r *pluginv1.GatewayRequestHookResponse, flow int64) bool {
 // 0.8.0 a group bound to a disabled flow falls back to the default flow.
 func TestUpgradeKeepsGroupBindings(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -268,7 +339,7 @@ func TestUpgradeKeepsGroupBindings(t *testing.T) {
 // group and settles the request. GET /bindings marks them inactive.
 func TestInactiveAccountBindingDoesNotDeferToAttempt(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -349,7 +420,7 @@ func TestInactiveAccountBindingDoesNotDeferToAttempt(t *testing.T) {
 // is sent to it, and a flow runs once per request.
 func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -384,6 +455,12 @@ func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 	mustHook(t, h, requestReq("r3", 9, "MOD-HIT-violence"))
 	if r := mustHook(t, h, attemptReq("r3", 9, 7, "MOD-HIT-violence")); !denied(r) || !noteFlow(r, strict) {
 		t.Fatalf("group + account = %+v", r)
+	}
+	// The records say which binding decided (0.10.0).
+	for rid, source := range map[string]string{"r1": FlowSourceDefault, "r3": FlowSourceAccount} {
+		if ev := recordOf(t, h, rid); ev.FlowSource == nil || *ev.FlowSource != source {
+			t.Fatalf("record of %s: flow_source %v, want %s", rid, ev.FlowSource, source)
+		}
 	}
 	mustHook(t, h, requestReq("r4", 12, "MOD-HIT-violence"))
 	if r := mustHook(t, h, attemptReq("r4", 12, 7, "MOD-HIT-violence")); denied(r) {
@@ -438,7 +515,7 @@ func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 // its flow, also for a published and enabled flow whose spec it cannot read.
 func TestBindingInactiveFollowsSnapshot(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	inactive := func() bool {
 		t.Helper()
@@ -446,7 +523,11 @@ func TestBindingInactiveFollowsSnapshot(t *testing.T) {
 		if len(v.Bindings) != 1 || v.Bindings[0].FlowID != flow || v.Bindings[0].GroupID != 9 {
 			t.Fatalf("bindings = %+v", v.Bindings)
 		}
-		return v.Bindings[0].Inactive
+		b := v.Bindings[0]
+		if b.Inactive != (b.FallbackReason != "") || b.Inactive != (b.EffectiveFlowID == 0) {
+			t.Fatalf("binding = %+v", b)
+		}
+		return b.Inactive
 	}
 	if inactive() {
 		t.Fatal("binding to a running flow is inactive")
@@ -473,5 +554,8 @@ func TestBindingInactiveFollowsSnapshot(t *testing.T) {
 	}
 	if !inactive() {
 		t.Fatal("binding to a flow the node does not run is reported active")
+	}
+	if v := decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil)); v.Bindings[0].FallbackReason != FallbackInvalid {
+		t.Fatalf("fallback reason = %+v", v.Bindings[0])
 	}
 }

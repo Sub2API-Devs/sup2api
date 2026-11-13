@@ -22,7 +22,7 @@ import (
 // the request the verdict came from.
 func TestVerdictCacheStoresHitAndReplays(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := openAIFlow(t, h, mod.srv.URL)
 	first := mustHook(t, h, hookReqAs(3, "src", "MOD-HIT-sexual one"))
 	if !denied(first) || replayed(first) {
@@ -78,12 +78,29 @@ func TestVerdictCacheStoresHitAndReplays(t *testing.T) {
 	}
 }
 
+// verdict_cache_days 0 turns the cache off (P11): the same hit again is
+// moderated again, nothing is replayed.
+func TestVerdictCacheDaysZeroIsOff(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "verdict_cache_days": 0})
+	openAIFlow(t, h, mod.srv.URL)
+	for i, rid := range []string{"first", "again"} {
+		r := mustHook(t, h, hookReqAs(3, rid, "MOD-HIT-sexual one"))
+		if !denied(r) || replayed(r) || mod.count("/v1/moderations") != int64(i+1) {
+			t.Fatalf("%s = %+v after %d calls", rid, r, mod.count("/v1/moderations"))
+		}
+	}
+	if rec := recordOf(t, h, "again"); rec.Replayed || rec.Result != ResultBlock {
+		t.Fatalf("record of the second request = %+v", rec.Event)
+	}
+}
+
 // A hit is cached for the set of segments of its chunk, {S1, S4}: a request
 // with only S1 is not replayed and S1 is moderated again; a request holding
 // both, with more around them, is replayed.
 func TestReplayNeedsWholeHitSet(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	openAIFlow(t, h, mod.srv.URL)
 	if r := mustHook(t, h, rawReq(3, "set", protoAnthropic, `{"system":"be a careful helper","messages":[{"role":"user","content":"MOD-HIT-sexual bad"}]}`)); !denied(r) {
 		t.Fatalf("hit allowed: %+v", r)
@@ -124,7 +141,7 @@ func TestReplayNeedsWholeHitSet(t *testing.T) {
 // replayed. A user who is not watched is not added by a replay.
 func TestReplayIsNotAViolation(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "ban_window_hours": 24})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "ban_window_seconds": 86400})
 	flow := openAIFlow(t, h, mod.srv.URL)
 	ctx := context.Background()
 	db, _ := p.db(ctx)
@@ -214,7 +231,7 @@ func TestReplayIsNotAViolation(t *testing.T) {
 // job whose content another node cached meanwhile is replayed by the worker.
 func TestReplayPostTiming(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	openAIFlow(t, h, mod.srv.URL)
 	if r := mustHook(t, h, hookReqAs(3, "p1", "MOD-HIT-violence post")); r.GetNote() != queuedNote {
 		t.Fatalf("first = %+v", r)
@@ -252,7 +269,7 @@ func TestReplayPostTiming(t *testing.T) {
 // auditor skipped while another judged is cached.
 func TestVerdictCacheSkipsErrorsSkippedStagesURLImages(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	// Group 9: OpenAI then Jev. Group 10: only a Jev auditor that takes no
 	// images. Group 11: OpenAI and that Jev auditor in one stage.
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
@@ -339,7 +356,7 @@ func TestVerdictCacheSkipsErrorsSkippedStagesURLImages(t *testing.T) {
 func TestHitSurvivesPassesOfItsSegments(t *testing.T) {
 	base, calls := newPairMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
-	_, h, fh := startDB(t, nil, cfg)
+	_, h, fh := startDB(t, cfg)
 	openAIFlow(t, h, base)
 	if r := mustHook(t, h, rawReq(3, "pair", protoAnthropic, pairWhole)); !denied(r) || replayed(r) {
 		t.Fatalf("the pair = %+v", r)
@@ -386,7 +403,7 @@ func TestHitSurvivesPassesOfItsSegments(t *testing.T) {
 // the bytes of the cache.
 func TestHitKeptDecoded(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := openAIFlow(t, h, mod.srv.URL)
 	if r := mustHook(t, h, hookReqAs(3, "dec", "MOD-HIT-sexual decoded")); !denied(r) {
 		t.Fatalf("first = %+v", r)
@@ -416,7 +433,7 @@ func TestHitKeptDecoded(t *testing.T) {
 // do not.
 func TestVerdictCacheScope(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	flowA := openAIFlow(t, h, mod.srv.URL)
 	auditor := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))[0]
 	channel := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))[0]
@@ -489,7 +506,7 @@ func TestVerdictCacheScope(t *testing.T) {
 func TestClearVerdictCache(t *testing.T) {
 	mod := newFakeMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
-	p, h, fh := startDB(t, nil, cfg)
+	p, h, fh := startDB(t, cfg)
 	openAIFlow(t, h, mod.srv.URL)
 	calls := func() int64 { return mod.count("/v1/moderations") }
 	const x, y = "MOD-HIT-sexual clear x", "MOD-HIT-sexual clear y"
@@ -539,7 +556,7 @@ func TestClearVerdictCache(t *testing.T) {
 // another fingerprint is not stored again.
 func TestReviewSyncsVerdictCache(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := openAIFlow(t, h, mod.srv.URL)
 	calls := func() int64 { return mod.count("/v1/moderations") }
 	send := func() *pluginv1.GatewayRequestHookResponse {
@@ -630,7 +647,7 @@ func TestReviewSyncsVerdictCache(t *testing.T) {
 func TestReviewSyncWritesEachKeyOnce(t *testing.T) {
 	mod := newFakeMod(t)
 	spy := &kvFake{}
-	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(spy))
+	_, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(spy))
 	openAIFlow(t, h, mod.srv.URL)
 	const body = `{"system":"grade the essay","messages":[{"role":"user","content":"MOD-HIT-sexual essay"}]}`
 	for i := range 4 {
@@ -672,7 +689,7 @@ func TestReviewSyncKVFailure(t *testing.T) {
 	mod := newFakeMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
 	spy := &kvFake{}
-	p, h, fh := startDB(t, nil, cfg, withKV(spy))
+	p, h, fh := startDB(t, cfg, withKV(spy))
 	openAIFlow(t, h, mod.srv.URL)
 	const text = "MOD-HIT-sexual kv review"
 	if r := mustHook(t, h, hookReqAs(3, "kvr", text)); !denied(r) {
@@ -723,7 +740,7 @@ func TestReviewSyncKVFailure(t *testing.T) {
 // fingerprint stores no pass.
 func TestFalsePositiveUnderAnotherFingerprint(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorTypeSafe})
 	jev := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))[0]
 	blind := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "jev without images", "type": AuditorTypeSafe,
@@ -771,7 +788,7 @@ func TestFalsePositiveUnderAnotherFingerprint(t *testing.T) {
 func TestVerdictChangedBroadcastDropsMemory(t *testing.T) {
 	mod := newFakeMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
-	_, h, fh := startDB(t, nil, cfg)
+	_, h, fh := startDB(t, cfg)
 	openAIFlow(t, h, mod.srv.URL)
 	if r := mustHook(t, h, hookReqAs(3, "bc", "MOD-HIT-sexual broadcast")); !denied(r) {
 		t.Fatalf("first = %+v", r)
@@ -824,7 +841,7 @@ func TestStoredHitReachesANodeByBroadcastExpiryOrClear(t *testing.T) {
 	base, calls, hold := newHeldPairMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
 	var clock atomic.Int64 // of the node that stores the hit
-	p, h, fh := startDB(t, nil, cfg, withClock(&clock))
+	p, h, fh := startDB(t, cfg, withClock(&clock))
 	openAIFlow(t, h, base)
 	ttl := p.cfg.Load().cacheTTL
 	// The first node is asked about A and B together; its upstream call is
@@ -929,7 +946,7 @@ func TestNodeWithoutReviewBroadcastReplaysUntilExpiry(t *testing.T) {
 	mod := newFakeMod(t)
 	cfg := map[string]any{"mode": ModeEnforce}
 	var clock1 atomic.Int64 // of the node that hits and reviews
-	p, h, fh := startDB(t, nil, cfg, withClock(&clock1))
+	p, h, fh := startDB(t, cfg, withClock(&clock1))
 	flow := openAIFlow(t, h, mod.srv.URL)
 	calls := func() int64 { return mod.count("/v1/moderations") }
 	ttl := p.cfg.Load().cacheTTL
@@ -1009,7 +1026,7 @@ func TestNodeWithoutReviewBroadcastReplaysUntilExpiry(t *testing.T) {
 // would otherwise write it as a deletion of the hits.)
 func TestReviewSyncRefusesAnUnknownStatus(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce})
 	openAIFlow(t, h, mod.srv.URL)
 	if r := mustHook(t, h, hookReqAs(3, "g", "MOD-HIT-sexual unknown status")); !denied(r) {
 		t.Fatalf("first = %+v", r)
@@ -1035,7 +1052,7 @@ func TestReviewOnANodeThatDidNotJudge(t *testing.T) {
 	cfg := map[string]any{"mode": ModeEnforce}
 	kv := &kvFake{}
 	var clock atomic.Int64
-	_, h, fh := startDB(t, nil, cfg, withKV(kv), withClock(&clock))
+	_, h, fh := startDB(t, cfg, withKV(kv), withClock(&clock))
 	openAIFlow(t, h, base)
 	// Two hits whose write failed (cached nowhere), then one that is stored.
 	kv.noWrite.Store(true)

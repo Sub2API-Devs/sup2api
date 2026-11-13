@@ -44,23 +44,24 @@ func settled(r *pluginv1.GatewayRequestHookResponse) *pluginv1.GatewayRequestHoo
 	return out
 }
 
-// attemptFlow is the flow an attempt still has to run, nil when none: the
+// attemptFlow is the flow an attempt still has to run and how it was found
+// (flowForAccount), nil when none: the
 // request hook moderated the request (its group does not depend on the
 // account), the account is not moderated, or an earlier attempt of the
 // request ran the same flow (a failover moderates again only when the new
 // account has another flow).
-func (p *Plugin) attemptFlow(snap *snapshot, meta *pluginv1.RequestMeta) *liveFlow {
+func (p *Plugin) attemptFlow(snap *snapshot, meta *pluginv1.RequestMeta) (*liveFlow, flowMatch) {
 	rid, group := meta.GetRequestId(), meta.GetGroupId()
 	done, left := p.attempts.get(rid)
 	if !left && !snap.perAccount(group) {
-		return nil
+		return nil, flowMatch{}
 	}
-	f := snap.flowForAccount(group, meta.GetAccountId())
+	f, match := snap.flowForAccount(group, meta.GetAccountId())
 	if f == nil || slices.Contains(done, f.ID) {
-		return nil
+		return nil, flowMatch{}
 	}
 	p.attempts.add(rid, f.ID)
-	return f
+	return f, match
 }
 
 const (
