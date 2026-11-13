@@ -106,3 +106,50 @@ WHERE action = 'authz.sync.grant' AND detail->>'key' = $1 AND detail->>'via' = '
 		t.Fatalf("inherit audit from %v %v", from, err)
 	}
 }
+
+// Handing new plugin permissions to a role is a change of that role
+// (editableRole): a custom role within the actor only, built-in roles the
+// super admin alone, super admin roles never; unknown roles are invalid.
+func TestCanGrantToRoles(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	ops := addUser(t, s, "ops@x.com", RoleOperator)
+	for key, perms := range map[string][]string{"small": {"user:read"}, "big": {"user:read", "role:define"}} {
+		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt(key, key), PermissionKeys: perms}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	can := func(actor int64, roles ...string) string {
+		t.Helper()
+		var code string
+		_ = db.Tx(ctx, func(tx pgx.Tx) error {
+			if err := s.CanGrantToRoles(ctx, tx, actor, roles); err != nil {
+				code = core.AsError(err).Code
+			}
+			return nil
+		})
+		return code
+	}
+	for _, c := range []struct {
+		name  string
+		actor int64
+		roles []string
+		want  string
+	}{
+		{"custom within", ops, []string{"small", "small"}, ""},
+		{"custom wider", ops, []string{"small", "big"}, "permission_denied"},
+		{"built-in", ops, []string{RoleUser}, "permission_denied"},
+		{"super admin role", ops, []string{RoleSuperAdmin}, "permission_denied"},
+		{"unknown", ops, []string{"nope"}, "invalid_argument"},
+		{"none", ops, nil, ""},
+		{"super admin on built-in and custom", root, []string{RoleAdmin, RoleUser, "big"}, ""},
+		{"super admin on super admin role", root, []string{RoleSuperAdmin}, "permission_denied"},
+	} {
+		if got := can(c.actor, c.roles...); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}

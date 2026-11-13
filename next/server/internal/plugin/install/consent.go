@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 
@@ -398,31 +399,40 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 	return nil
 }
 
-// checkRoleGrantRights verifies the operator may hand the plugin permissions
-// this version adds to the roles the request names (SEC-H2): role:define,
-// and holding each of them. Manifest defaults are the system's own grants.
-// Only permissions the catalog does not have yet are handed out (authz
-// SyncPlugin), so an upgrade adding none needs neither - carrying a running
-// plugin forward must not require role:define.
+// checkRoleGrantRights verifies the operator may hand the permissions this
+// version adds to the roles the request names (SEC-H2): role:define, and
+// every such role must be one the operator may change (CanGrantToRoles:
+// built-in roles only for the super admin, custom roles within the
+// operator's own rights, never a super admin role). The new permissions
+// themselves need not be held. Manifest defaultRoles are the catalog's own
+// defaults and need nothing. Only permissions the catalog does not have yet
+// are handed out (authz SyncPlugin), so an upgrade adding none needs nothing
+// even with roles named - carrying a running plugin forward must not
+// require role:define.
 func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest) error {
 	if isSystem(ctx) {
 		return nil
 	}
-	var perms []string
+	named := map[string][]string{}
 	for _, up := range m.UserPermissions {
 		if roles, ok := req.overrideRoles(up.Key); ok && len(roles) > 0 {
-			perms = append(perms, manifest.PermissionKey(m.Key, up.Key))
+			named[manifest.PermissionKey(m.Key, up.Key)] = roles
 		}
 	}
-	if len(perms) == 0 {
+	if len(named) == 0 {
 		return nil
 	}
 	var existing []string
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, perms).Scan(&existing); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, slices.Collect(maps.Keys(named))).Scan(&existing); err != nil {
 		return err
 	}
-	perms = slices.DeleteFunc(perms, func(p string) bool { return slices.Contains(existing, p) })
-	if len(perms) == 0 {
+	var roles []string
+	for key, rs := range named {
+		if !slices.Contains(existing, key) {
+			roles = append(roles, rs...)
+		}
+	}
+	if len(roles) == 0 {
 		return nil
 	}
 	ok, err := s.d.Authz.Can(ctx, actorID, "role:define")
@@ -430,10 +440,14 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 		return err
 	}
 	if !ok {
-		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:define")
+		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:define").
+			WithDetails(map[string]any{"permission": "role:define"})
 	}
-	// Actor must hold all permissions being granted to roles
-	return s.d.Authz.CanGrant(ctx, actorID, perms)
+	if s.d.Permissions == nil {
+		return core.ErrInternal.WithMessage("the permission catalog is not available")
+	}
+	slices.Sort(roles)
+	return s.d.Permissions.CanGrantToRoles(ctx, tx, actorID, slices.Compact(roles))
 }
 
 // Reject marks a version rejected. A plugin that was never installed and

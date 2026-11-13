@@ -247,6 +247,10 @@ type PermissionCatalog interface {
 	// newly created ones to their GrantRoles and to the holders of their
 	// InheritFrom keys, then deletes ones no longer declared.
 	SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []PermissionDef) error
+	// CanGrantToRoles fails unless actorID may change every role of
+	// roleKeys (super admin roles never), as handing them a plugin's new
+	// permissions does.
+	CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error
 	// SetPluginActive flips status active/disabled (enable/disable).
 	SetPluginActive(ctx context.Context, tx pgx.Tx, pluginKey string, active bool) error
 	// DeletePlugin removes the plugin's permissions and grants (uninstall).

@@ -92,6 +92,38 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 	return nil
 }
 
+// CanGrantToRoles implements core.PermissionCatalog: actorID may hand new
+// plugin permissions to each role of roleKeys, which is a change of that
+// role (editableRole: built-in roles are the super admin's alone, a custom
+// role must be within the actor's grantSet). Super admin roles already hold
+// every permission and are refused; unknown keys are invalid. The roles stay
+// locked in tx, which is bumped as for every role write.
+func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error {
+	if roleKeys = dedupe(roleKeys); len(roleKeys) == 0 {
+		return nil
+	}
+	v, err := s.Bump(ctx, tx)
+	if err != nil {
+		return err
+	}
+	s.committedLater(v)
+	roles, err := resolveRoles(ctx, tx, roleKeys)
+	if err != nil {
+		return err
+	}
+	for _, r := range roles {
+		if r.superuser {
+			return core.ErrPermissionDenied.WithMessage(t(ctx,
+				"the super admin role holds every permission and is not granted plugin permissions",
+				"超级管理员角色本来拥有全部权限，不能授予插件权限")).WithDetails(map[string]any{"role": r.key})
+		}
+		if _, err := s.editableRole(ctx, tx, actorID, r.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // grantPluginDefault grants the newly created plugin permission key to roles
 // but super admin ones (which hold every permission), audited.
 func (s *Service) grantPluginDefault(ctx context.Context, tx pgx.Tx, key string, roles []string) error {

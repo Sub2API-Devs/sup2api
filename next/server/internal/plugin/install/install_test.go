@@ -46,6 +46,9 @@ type fakePerms struct {
 	mu      sync.Mutex
 	syncs   []syncCall
 	deleted []string
+	// checked records CanGrantToRoles calls; denyRoles fails them.
+	checked   [][]string
+	denyRoles error
 }
 
 func (f *fakePerms) SyncPlugin(_ context.Context, _ pgx.Tx, key string, defs []core.PermissionDef) error {
@@ -62,6 +65,12 @@ func (f *fakePerms) SyncPlugin(_ context.Context, _ pgx.Tx, key string, defs []c
 	}
 	f.syncs = append(f.syncs, syncCall{key, defs, roles})
 	return nil
+}
+func (f *fakePerms) CanGrantToRoles(_ context.Context, _ pgx.Tx, _ int64, roles []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.checked = append(f.checked, roles)
+	return f.denyRoles
 }
 func (f *fakePerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error { return nil }
 func (f *fakePerms) DeletePlugin(_ context.Context, _ pgx.Tx, key string) error {

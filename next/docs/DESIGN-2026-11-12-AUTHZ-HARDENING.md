@@ -529,3 +529,13 @@
     手工 SQL 不写审计，也不会递增 `authz_meta.version`，各节点的权限缓存要到下一次权限变更或重启才刷新；更推荐在角色页勾选（立即生效并带审计）。
   - 旧控制台（仍发 `role_keys_for_new_permissions: ["admin"]`）照旧只给 admin。
 - 回滚：revert 这个提交即可，无迁移；已按新默认授出的角色权限保留，需要时在角色页取消。
+
+## T59 P1：新插件权限的授予资格（manifest 默认按系统目录默认，显式覆盖走 editableRole，产品性收紧）
+
+- 改动：`install.checkRoleGrantRights` 只看同意请求显式指定的角色（`new_permission_roles` 或旧字段 `role_keys_for_new_permissions`，只算本次目录里还不存在的权限）：要求 `role:define`（403 `details.permission = role:define`），再调用新的 `core.PermissionCatalog.CanGrantToRoles(ctx, tx, actor, roleKeys)`。authz 的实现对每个角色走核心 `editableRole`（内置角色只有超管能改，决策 6；自定义角色当前权限须 ⊆ 操作者，M5），超管角色 403，未知角色 400 `role_keys` `unknown`；与其他角色写入一样先 `Bump` 并锁住角色行。去掉了此前“操作者必须持有被授予的新权限”（`CanGrant`）的要求：新 key 本身不要求操作者持有。manifest `defaultRoles` 不检查任何权限，在同一事务里由 `SyncPlugin` 以系统身份（actor 0）授予并写 `authz.sync.grant` 审计，与 `SyncCore` 自动授予一致。插件域不另写角色判断。
+- 测试：`authz.TestCanGrantToRoles`（真实库：operator 对权限 ⊆ 自己的自定义角色通过，对更大的自定义角色、内置角色、超管角色 403，未知 400；超管对内置与自定义通过、对超管角色 403），`install.TestConsentRoleGrantRights`（没有 `role:define` 带显式角色 403；目录拒绝时 403 且检查的是去重后的角色；不带显式角色时没有 `role:define` 也按 manifest 默认授予；升级不新增权限时带角色不需要 `role:define`）。
+- 影响对象：
+  - 非超管（含内置 admin）在同意页勾选内置角色（admin、operator、supplier、user）或权限比自己大的自定义角色：由成功（期 3a 遗留路径，等于绕过决策 6 改内置角色）变为 403。不勾选时按 manifest 默认授予，不受影响。控制台列出全部角色，勾了不能改的角色会在提交时报错。
+  - 旧控制台默认发 `role_keys_for_new_permissions: ["admin"]`：非超管用旧控制台安装带新权限的插件会 403，需要升级控制台或不勾选（发空数组）。
+  - 只有 `role:define` 而不持有插件新权限的人，现在可以把新权限交给自己能改的自定义角色（新 key 不要求持有）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
