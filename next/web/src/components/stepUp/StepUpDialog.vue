@@ -36,6 +36,8 @@ const passkeyOnly = computed(() => !options.value.length && !!info.value?.method
 const needsPassword = computed(() => !!info.value?.password_required || method.value === 'password')
 const scopeKey = computed(() => `stepUp.scope.${props.scope.replace(/\./g, '_')}`)
 const action = computed(() => (te(scopeKey.value) ? t(scopeKey.value) : props.scope))
+/** Errors without a field of their own (the passkey, the method, …) go to the alert. */
+const alertError = computed(() => errors.value.form || Object.entries(errors.value).filter(([k]) => k !== 'password' && k !== 'code').map(([, v]) => v).join(' '))
 const canSubmit = computed(() => !!method.value && (!needsPassword.value || !!password.value) && (method.value !== 'totp' || !!code.value.trim()))
 
 async function load() {
@@ -96,7 +98,7 @@ async function submit() {
     @submit="submit"
   >
     <p class="text-sm text-fg-muted">{{ t('stepUp.intro', { action }) }}<template v-if="info?.password_required"> {{ t('stepUp.passwordToo') }}</template></p>
-    <SAlert v-if="errors.form || errors.method" tone="danger" dense data-testid="step-up-error">{{ errors.form || errors.method }}</SAlert>
+    <SAlert v-if="alertError" tone="danger" dense data-testid="step-up-error">{{ alertError }}</SAlert>
     <SSkeleton v-if="!info && !errors.form" class="h-16" />
     <template v-else-if="info">
       <SAlert v-if="!options.length" tone="warning" dense data-testid="step-up-none">{{ passkeyOnly ? t('stepUp.passkeyUnsupported') : t('stepUp.none') }}</SAlert>

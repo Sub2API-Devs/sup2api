@@ -75,26 +75,33 @@ const enable = () =>
     open('codes')
     await load()
   })
+/** Runs a card action once at a time (a double click would ask for two verifications). */
+async function act(fn: () => Promise<void>) {
+  if (busy.value) return
+  busy.value = true
+  try {
+    await fn()
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    busy.value = false
+  }
+}
 async function disable() {
   if (!(await confirm({ title: t('me.twoFactor.disable'), message: t('me.twoFactor.disableConfirm'), danger: true }))) return
-  try {
+  await act(async () => {
     await api.post('/me/two-factor/disable')
     toast(t('me.twoFactor.disabled'), 'success')
     await load()
-  } catch (e) {
-    notifyError(e)
-  }
+  })
 }
-async function regenerate() {
-  try {
+const regenerate = () =>
+  act(async () => {
     const r = await api.post<{ backup_codes: string[] }>('/me/two-factor/backup-codes')
     backupCodes.value = r.backup_codes
     open('codes')
     await load()
-  } catch (e) {
-    notifyError(e)
-  }
-}
+  })
 </script>
 
 <template>
@@ -103,8 +110,8 @@ async function regenerate() {
       <template v-if="status?.enabled">
         <SBadge tone="success" data-testid="two-factor-on">{{ t('me.twoFactor.on') }}</SBadge>
         <span class="hidden text-xs text-fg-muted sm:inline">{{ t('me.twoFactor.codesLeft', { n: status.backup_codes_left }) }}</span>
-        <SButton size="sm" data-testid="two-factor-regenerate" @click="regenerate">{{ t('me.twoFactor.regenerate') }}</SButton>
-        <SButton size="sm" variant="danger" data-testid="two-factor-disable" @click="disable">{{ t('me.twoFactor.disable') }}</SButton>
+        <SButton size="sm" data-testid="two-factor-regenerate" :disabled="busy" @click="regenerate">{{ t('me.twoFactor.regenerate') }}</SButton>
+        <SButton size="sm" variant="danger" data-testid="two-factor-disable" :disabled="busy" @click="disable">{{ t('me.twoFactor.disable') }}</SButton>
       </template>
       <SButton v-else-if="status" size="sm" variant="primary" icon="shield" data-testid="two-factor-enable" @click="open('password')">{{ t('me.twoFactor.enable') }}</SButton>
     </template>

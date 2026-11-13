@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // Hands the caller's super admin role to another user (POST
 // /system/super-admin/transfer). The request brings up the step-up dialog
-// (password and a passkey or code); the transfer ends every session of both,
-// so the caller signs in again.
+// (password and a passkey or code), which the route spends before it looks
+// at the target, so an inactive target is refused here first. The transfer
+// ends every session of both: the caller is signed out locally.
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { api } from '@sub2api/host'
+import { api, session } from '@sub2api/host'
 import { SAlert, SField, SFormModal, toast } from '@sub2api/ui'
 import EntityPicker from '@/components/EntityPicker.vue'
+import type { User } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
 import { applyFormError } from '@/utils/formErrors'
@@ -36,10 +38,16 @@ async function submit() {
   busy.value = true
   errors.value = {}
   try {
-    await api.post('/system/super-admin/transfer', { target_user_id: Number(target.value) })
+    const user = await api.get<User>(`/users/${Number(target.value)}`)
+    if (user.status !== 'active') {
+      errors.value = { target_user_id: t('users.transfer.inactive') }
+      return
+    }
+    await api.post('/system/super-admin/transfer', { target_user_id: user.id })
     toast(t('users.transfer.done'), 'success')
     emit('update:open', false)
-    await auth.logout()
+    // The server already ended this session: no /auth/logout round trip.
+    session.clear()
     await plugins.reset()
     await router.replace('/login')
   } catch (e) {

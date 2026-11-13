@@ -121,7 +121,8 @@ function rowActions(u: User): MenuAction[] {
     { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:assign') },
     { key: 'pricing', label: t('users.pricing.action'), hidden: !auth.has('segment:read') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
-    { key: 'password', label: t('users.resetPassword.action'), hidden: !auth.has('user:password:reset') || self },
+    // PATCH /users/:id needs user:update, a password for another user also user:password:reset.
+    { key: 'password', label: t('users.resetPassword.action'), hidden: !auth.has('user:update') || !auth.has('user:password:reset') || self },
     { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:password:reset') || self },
     { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || self }
@@ -149,7 +150,7 @@ function onAction(u: User, key: string) {
   else if (key === 'pricing') openPricing(u)
   else if (key === 'ledger') router.push({ path: '/ledger', query: { user_id: String(u.id) } })
   else if (key === 'balance') openBalance(u)
-  else if (key === 'password') passwordUser.value = u
+  else if (key === 'password') openPassword(u)
   else if (key === 'security') resetSecurity(u)
   else if (key === 'transfer') transferOpen.value = true
   else if (key === 'delete') remove(u)
@@ -261,8 +262,14 @@ function openBalance(u: User) {
 
 // ------------------------------------------------------------------ password reset, super admin transfer
 
+const passwordOpen = ref(false)
 const passwordUser = ref<User | null>(null)
 const transferOpen = ref(false)
+
+function openPassword(u: User) {
+  passwordUser.value = u
+  passwordOpen.value = true
+}
 
 // ------------------------------------------------------------------ delete
 
@@ -369,7 +376,7 @@ function remove(u: User) {
     <UserPricingDrawer v-model:open="pricingOpen" :user="pricingUser" @changed="list.reload()" />
 
     <!-- password reset, super admin transfer -->
-    <ResetPasswordDialog :open="!!passwordUser" :user="passwordUser" @update:open="(v) => !v && (passwordUser = null)" />
+    <ResetPasswordDialog v-model:open="passwordOpen" :user="passwordUser" />
     <TransferSuperAdminDialog v-model:open="transferOpen" />
 
     <!-- balance -->

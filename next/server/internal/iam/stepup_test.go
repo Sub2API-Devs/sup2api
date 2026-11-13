@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"strconv"
@@ -233,6 +234,15 @@ func TestStepUpWithPasskey(t *testing.T) {
 	}
 	if err := s.ConsumeStepUp(core.WithStepUp(ctx, p.Proof, testOperation), core.StepUpUserDelete); err != nil {
 		t.Fatal(err)
+	}
+	// A refused assertion is a field error, not a 401 (the console would refresh the session).
+	bad, err := s.BeginStepUpPasskey(ctx, r, id, core.StepUpUserDelete, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badIn := VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodPasskey, FlowToken: bad.FlowToken, Credential: json.RawMessage(`{"id":"x"}`)}
+	if _, err := s.VerifyStepUp(ctx, r, id, badIn, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("refused assertion: %v", err)
 	}
 	// The ceremony is used up.
 	in.Credential = a.get(t, begin)

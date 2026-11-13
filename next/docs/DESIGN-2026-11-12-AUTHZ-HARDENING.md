@@ -725,9 +725,11 @@
   - **T79 用户页**：超管行在邮箱旁显示“超级管理员”徽标；别人看超管行没有任何操作，超管本人那一行只有“移交超管”（`TransferSuperAdminDialog`：选目标、危险确认，`POST /system/super-admin/transfer {target_user_id}`，二次验证由拦截弹出，成功后提示并登出到登录页）。新增“重置密码”（`ResetPasswordDialog`，`PATCH /users/:id {password}`，`user.password.reset`），条件：`user:password:reset`、不是本人、不是超管行。原计划的 `SelfConfirmFields` 不再需要（被 StepUpDialog 取代）。D13（目标未开 2FA 的提示）：用户列表不返回 2FA 状态，改为在目标选择处常驻提示建议对方先开启。
   - **权限树**（角色页与访问密钥选择器共用 `PermissionTree`）：`step_up` 的权限旁显示盾牌图标“使用时需二次验证”，有这类权限时在图例里说明。访问密钥选择器按接口顺序展示 self 模块、核心模块与插件模块。
   - mock 服务（`npm run dev`）补 `/me/verify*`、`X-Verify-Proof` 校验与通行密钥改名。
+  - 后端一处（审查发现）：二次验证的通行密钥断言失败由 401 改为 400 `credential/failed`（`iam.errStepUpPasskeyFailed`；登录仍是 401）。之前控制台把这个 401 当会话过期，刷新令牌后重发已用掉的 flow_token，用户看到的是“步骤已过期”。`TestStepUpWithPasskey` 覆盖。
+  - 审查修复：重放同样经过 401 续期；请求中止时不再弹或作废验证；登出/会话结束时取消排队的验证；每个请求一个新弹窗（同 scope 连续两次不复用旧输入）；“重置密码”还要求 `user:update`（PATCH 路由权限）；移交前先查目标是否启用，免得白白耗掉一次验证；移交成功后只清本地会话（服务端已结束），不再调 /auth/logout；关 2FA、重新生成备用码防重复点击。
 - 测试：`http.spec`（重放一次、FormData 与 JSON body 原样、取消、不重复询问、其他 403 不拦截）；`StepUpDialog.spec`、`stepUp.spec`（默认通行密钥、切换验证码、密码 + 第二因素、仅密码、错码字段、只有通行密钥而浏览器不支持、取消通行密钥提示）；`ChangePasswordDialog.spec`、`TwoFactorCard.spec`、`PasskeysCard.spec`（新请求体、改名）；`TransferSuperAdminDialog.spec`、`ResetPasswordDialog.spec`、`UsersView.superAdmin.spec`（超管行操作、重置密码条件）；`PermissionTree.spec`、`AccessKeysCard.spec`（step_up 标记、模块顺序）。
 - 影响对象：控制台用户。高危操作每次弹出验证；改密码不再在表单里填当前密码（在验证弹窗里填）。必须与 S1–S4 同版本发布。
-- 回滚：revert S5 的提交。单独回滚 S5 而保留 S1–S4 会让上述流程重新 403，应一起回滚。
+- 回滚：revert S5 及其 review fixes 的提交（含上面那处后端错误码，回滚后通行密钥验证失败恢复 401）。单独回滚 S5 而保留 S1–S4 会让上述流程重新 403，应一起回滚。
 
 ## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
 

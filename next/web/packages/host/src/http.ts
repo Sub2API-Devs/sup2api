@@ -195,9 +195,10 @@ export interface HttpConfig {
   /**
    * Called on 403 verification_required: resolves the proof the request is
    * replayed with, or null when the user cancels (the request then fails
-   * with VERIFICATION_CANCELLED). Unset, the 403 is the request's error.
+   * with VERIFICATION_CANCELLED). `signal` is the request's: once it aborts
+   * the verification is moot. Unset, the 403 is the request's error.
    */
-  onVerificationRequired?: (challenge: VerificationChallenge) => Promise<string | null>
+  onVerificationRequired?: (challenge: VerificationChallenge, signal?: AbortSignal) => Promise<string | null>
   locale?: () => string
 }
 
@@ -419,26 +420,30 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     return fetch(buildURL(path, opts.query), { method, headers, body, signal: opts.signal })
   }
 
-  let res = await doFetch()
-
-  if (res.status === 401 && !opts.anonymous) {
+  /** One attempt, renewing the session once on 401. */
+  const send = async (extra?: Record<string, string>): Promise<Response> => {
+    let res = await doFetch(extra)
+    if (res.status !== 401 || opts.anonymous) return res
     const hadSession = !!session.get()
     const outcome: RefreshOutcome = hadSession ? await refreshSession(sentToken) : 'invalid'
-    if (outcome === 'ok') res = await doFetch()
+    if (outcome === 'ok') res = await doFetch(extra)
     // A network / server error while refreshing keeps the session: the next
     // request tries again instead of signing the user out.
     if (res.status === 401 && outcome !== 'error') {
       session.clear()
       config.onUnauthenticated?.(hadSession ? 'expired' : 'unauthenticated')
     }
+    return res
   }
 
+  let res = await send()
   let json = await safeJSON(res)
   const challenge = verificationChallenge(res, json, opts)
   if (challenge) {
-    const proof = await config.onVerificationRequired!(challenge)
+    const proof = await config.onVerificationRequired!(challenge, opts.signal)
+    if (opts.signal?.aborted) throw new DOMException('request aborted', 'AbortError')
     if (!proof) throw new ApiError(403, { code: VERIFICATION_CANCELLED, message: '', details: json.error.details })
-    res = await doFetch({ 'X-Verify-Proof': proof })
+    res = await send({ 'X-Verify-Proof': proof })
     json = await safeJSON(res)
   }
   if (res.status === 204) { opts.onSuccessHeaders?.(new Headers(res.headers)); return null }

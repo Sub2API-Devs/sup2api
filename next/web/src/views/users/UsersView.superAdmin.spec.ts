@@ -64,6 +64,12 @@ describe('UsersView super admin rows', () => {
     expect(actions(w, 2)).not.toContain('password')
   })
 
+  it('offers no password reset without user:update (the route\'s own permission)', async () => {
+    mocks.perms.delete('user:update')
+    const w = await render()
+    expect(actions(w, 2)).not.toContain('password')
+  })
+
   it('offers no password reset on the caller itself', async () => {
     mocks.me = { id: 2 }
     const w = await render()

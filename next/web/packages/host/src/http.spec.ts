@@ -225,13 +225,13 @@ describe('step-up verification', () => {
     json({ code: 'verification_required', message: 'verify', details: { scope: 'user.delete', context: 'DELETE /api/v1/users/5', methods: [], password_required: false, ...details } }, 403)
 
   it('asks for a proof and replays the request once with X-Verify-Proof', async () => {
-    const ask = vi.fn(async () => 'proof-1')
+    const ask = vi.fn(async (_c: unknown, _s?: AbortSignal) => 'proof-1')
     http.configureHttp({ onVerificationRequired: ask })
     const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? new Response(null, { status: 204 }) : required()))
     const form = new FormData()
     form.append('f', 'x')
     expect(await http.api.upload('/users/5', form)).toBeNull()
-    expect(ask).toHaveBeenCalledWith({ scope: 'user.delete', context: 'DELETE /api/v1/users/5', password_required: false })
+    expect(ask.mock.calls[0][0]).toEqual({ scope: 'user.delete', context: 'DELETE /api/v1/users/5', password_required: false })
     expect(spy).toHaveBeenCalledTimes(2)
     expect(spy.mock.calls[1][1].headers['X-Verify-Proof']).toBe('proof-1')
     expect(spy.mock.calls[1][1].body).toBe(form)
@@ -257,6 +257,34 @@ describe('step-up verification', () => {
     stubFetch(() => required())
     await expect(http.api.del('/users/5')).rejects.toMatchObject({ code: 'verification_required' })
     expect(ask).toHaveBeenCalledTimes(1)
+  })
+
+  it('renews the session when the replay meets an expired token, keeping the proof', async () => {
+    http.session.set({ access_token: 'old', refresh_token: 'r1', expires_at: Date.now() + 3600_000 })
+    http.configureHttp({ onVerificationRequired: async () => 'p' })
+    const spy = stubFetch((url, init) => {
+      if (url.includes('/auth/refresh')) return json({ access_token: 'new', refresh_token: 'r2', expires_in: 7200 })
+      if (!init.headers['X-Verify-Proof']) return required()
+      return init.headers.Authorization === 'Bearer new' ? json({ ok: 1 }) : json({ code: 'unauthenticated', message: 'expired' }, 401)
+    })
+    expect(await http.api.del('/users/5')).toEqual({ ok: 1 })
+    expect(spy.mock.calls.at(-1)![1].headers['X-Verify-Proof']).toBe('p')
+  })
+
+  it('gives the hook the request signal and fails as aborted once it aborts', async () => {
+    const ctrl = new AbortController()
+    let seen: AbortSignal | undefined
+    http.configureHttp({
+      onVerificationRequired: async (_c, signal) => {
+        seen = signal
+        ctrl.abort()
+        return null
+      }
+    })
+    const spy = stubFetch(() => required())
+    await expect(http.api.del('/users/5', undefined, { signal: ctrl.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(seen).toBe(ctrl.signal)
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('leaves other 403s alone', async () => {

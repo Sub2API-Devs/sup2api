@@ -71,6 +71,7 @@ export default {
     warning: 'There is only one super admin. After the transfer you become an admin, both of you sign in again, and you cannot undo it yourself.',
     target: 'New super admin',
     targetHint: 'Pick an active user. They should turn on two-factor authentication or add a passkey first.',
+    inactive: 'Only an active user can become the super admin',
     submit: 'Transfer',
     done: 'Super admin transferred. Sign in again.'
   }

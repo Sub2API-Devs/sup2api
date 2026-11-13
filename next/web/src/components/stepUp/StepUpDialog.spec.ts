@@ -109,6 +109,31 @@ describe('StepUpDialog', () => {
     expect(w.emitted('verified')).toBeUndefined()
   })
 
+  it('shows a refused passkey in the alert', async () => {
+    const { ApiError } = await import('@sub2api/host')
+    api.get.mockResolvedValue(methods(['passkey']))
+    api.post.mockImplementation(async (path: string) => {
+      if (path === '/me/verify/begin') return { flow_token: 'ft', options: { publicKey: {} } }
+      throw new ApiError(400, { code: 'invalid_argument', message: 'bad', details: { fields: [{ field: 'credential', code: 'failed', message: 'passkey verification failed' }] } })
+    })
+    webauthn.getPasskey.mockResolvedValue({ id: 'cred' })
+    const w = render()
+    await flushPromises()
+    await submit(w)
+    expect(w.get('[data-testid="step-up-error"]').text()).toContain('passkey verification failed')
+  })
+
+  it('takes the password with a passkey when the scope requires it', async () => {
+    api.get.mockResolvedValue(methods(['passkey'], true))
+    api.post.mockImplementation(async (path: string) => (path === '/me/verify/begin' ? { flow_token: 'ft', options: { publicKey: {} } } : { proof: 'P' }))
+    webauthn.getPasskey.mockResolvedValue({ id: 'cred' })
+    const w = render('superadmin.transfer')
+    await flushPromises()
+    await field(w, 'step-up-password').setValue('pw')
+    await submit(w)
+    expect(api.post).toHaveBeenLastCalledWith('/me/verify', { scope: 'superadmin.transfer', context: CONTEXT, method: 'passkey', password: 'pw', flow_token: 'ft', credential: { id: 'cred' } })
+  })
+
   it('says so when only passkeys are set up and the browser cannot use them', async () => {
     webauthn.supported = false
     api.get.mockResolvedValue(methods(['passkey']))
