@@ -29,19 +29,27 @@ func TestRoleGrantsPriority(t *testing.T) {
 		{Key: "growth:use", DefaultRoles: []string{"user", "admin"}, InheritFrom: []string{"growth:read"}},
 		{Key: "growth:stats:read"},
 		{Key: "growth:manage", DefaultRoles: []string{"operator"}},
+		{Key: "growth:quiet", DefaultRoles: []string{}},
 	}}
 	cases := []struct {
 		name string
 		req  ConsentRequest
 		want map[string][]string
+
+		existing map[string]bool
 	}{
-		{"manifest", ConsentRequest{}, map[string][]string{"growth:use": {"user", "admin"}, "growth:stats:read": {"admin"}, "growth:manage": {"operator"}}},
-		{"legacy", ConsentRequest{RoleKeysForNewPermissions: []string{"ops"}}, map[string][]string{"growth:use": {"ops"}, "growth:stats:read": {"ops"}, "growth:manage": {"ops"}}},
+		{"manifest", ConsentRequest{}, map[string][]string{"growth:use": {"user", "admin"}, "growth:stats:read": {"admin"}, "growth:manage": {"operator"}, "growth:quiet": {}}, nil},
+		// growth:use inherits growth:read, which the catalog has: a rename
+		// keeps the old holders only.
+		{"rename", ConsentRequest{}, map[string][]string{"growth:use": {}, "growth:stats:read": {"admin"}, "growth:manage": {"operator"}, "growth:quiet": {}},
+			map[string]bool{"plugin.growth:growth:read": true}},
+		{"legacy", ConsentRequest{RoleKeysForNewPermissions: []string{"ops"}}, map[string][]string{"growth:use": {"ops"}, "growth:stats:read": {"ops"}, "growth:manage": {"ops"}, "growth:quiet": {"ops"}},
+			map[string]bool{"plugin.growth:growth:read": true}},
 		{"explicit", ConsentRequest{RoleKeysForNewPermissions: []string{"ops"}, NewPermissionRoles: map[string][]string{"growth:use": {"auditor"}, "growth:manage": {}}},
-			map[string][]string{"growth:use": {"auditor"}, "growth:stats:read": {"ops"}, "growth:manage": {}}},
+			map[string][]string{"growth:use": {"auditor"}, "growth:stats:read": {"ops"}, "growth:manage": {}, "growth:quiet": {"ops"}}, nil},
 	}
 	for _, c := range cases {
-		got := roleGrants(m, c.req)
+		got := roleGrants(m, c.req, c.existing)
 		if len(got) != len(c.want) {
 			t.Fatalf("%s: %v", c.name, got)
 		}
@@ -51,7 +59,7 @@ func TestRoleGrantsPriority(t *testing.T) {
 			}
 		}
 	}
-	defs := PermissionDefs(m, roleGrants(m, ConsentRequest{}))
+	defs := PermissionDefs(m, roleGrants(m, ConsentRequest{}, nil))
 	if !slices.Equal(defs[0].GrantRoles, []string{"user", "admin"}) || !slices.Equal(defs[0].InheritFrom, []string{"growth:read"}) {
 		t.Fatalf("def = %+v", defs[0])
 	}

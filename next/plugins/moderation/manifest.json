@@ -152,6 +152,7 @@
     },
     {
       "key": "moderation:exempt",
+      "defaultRoles": [],
       "inheritFrom": ["moderation:read"],
       "label": {
         "en": "Exempt from moderation watch and bans",

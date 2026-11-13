@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -86,14 +87,21 @@ func unionDefs(a, b []core.PermissionDef) []core.PermissionDef {
 }
 
 // roleGrants resolves, per local userPermission key, the roles a permission
-// created now is granted to: an explicit override (overrideRoles) or the
-// manifest default (defaultRoles, admin when omitted).
-func roleGrants(m *manifest.Manifest, req ConsentRequest) map[string][]string {
+// created now is granted to: an explicit override (overrideRoles); none for
+// a rename or split, which inherits from an old key the catalog has
+// (existing, catalogKeys) and so only keeps that key's holders; otherwise
+// the manifest default (defaultRoles: admin when omitted, none when []). A
+// first install has no old key, so it gets the defaults.
+func roleGrants(m *manifest.Manifest, req ConsentRequest, existing map[string]bool) map[string][]string {
 	out := make(map[string][]string, len(m.UserPermissions))
 	for _, up := range m.UserPermissions {
-		if roles, ok := req.overrideRoles(up.Key); ok {
+		renamed := slices.ContainsFunc(up.InheritFrom, func(from string) bool { return existing[manifest.PermissionKey(m.Key, from)] })
+		switch roles, ok := req.overrideRoles(up.Key); {
+		case ok:
 			out[up.Key] = roles
-		} else {
+		case renamed:
+			out[up.Key] = []string{}
+		default:
 			out[up.Key] = up.Roles()
 		}
 	}

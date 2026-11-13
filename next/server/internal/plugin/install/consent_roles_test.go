@@ -87,3 +87,36 @@ SELECT 'plugin.guard:' || k, 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'd
 		t.Fatalf("new def %+v", d)
 	}
 }
+
+// A permission inheriting from an old key the catalog has is a rename: the
+// consent hands it no default roles, only the old key's holders (SyncPlugin
+// InheritFrom); without the old key (a first install) it gets its defaults.
+func TestConsentRenameInheritsOnly(t *testing.T) {
+	for _, old := range []bool{false, true} {
+		e := newEnv(t)
+		ctx := context.Background()
+		m := pkgtest.Guard("guard", "0.1.0", "sub2api")
+		m.UserPermissions[0].DefaultRoles = []string{"user"}
+		m.UserPermissions[0].InheritFrom = []string{"rules:view"}
+		if _, err := e.svc.Upload(ctx, pkgtest.Build(m, e.root), e.admin, UploadOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		if old {
+			if _, err := e.db.Pool.Exec(ctx, `INSERT INTO permissions (key, module, label, source, plugin_key, status)
+VALUES ('plugin.guard:rules:view', 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'disabled')`); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: explicitGuardGrants()}, e.admin); err != nil {
+			t.Fatal(err)
+		}
+		defs := e.perms.syncs[len(e.perms.syncs)-1].defs
+		want := []string{"user"}
+		if old {
+			want = []string{}
+		}
+		if !slices.Equal(defs[0].GrantRoles, want) || !slices.Equal(defs[0].InheritFrom, []string{"rules:view"}) || !slices.Equal(defs[1].GrantRoles, []string{"admin"}) {
+			t.Fatalf("old key %v: defs %+v", old, defs)
+		}
+	}
+}

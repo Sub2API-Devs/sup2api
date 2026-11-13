@@ -15,9 +15,10 @@ var BuiltinRoleKeys = []string{"admin", "operator", "supplier", "user"}
 var DefaultPermissionRoles = []string{"admin"}
 
 // Roles reports the built-in roles the permission is granted to when first
-// created: DefaultRoles, or DefaultPermissionRoles when it declares none.
+// created: DefaultRoles, DefaultPermissionRoles when omitted (nil), none for
+// an explicit empty list.
 func (up UserPermission) Roles() []string {
-	if len(up.DefaultRoles) == 0 {
+	if up.DefaultRoles == nil {
 		return slices.Clone(DefaultPermissionRoles)
 	}
 	return slices.Clone(up.DefaultRoles)

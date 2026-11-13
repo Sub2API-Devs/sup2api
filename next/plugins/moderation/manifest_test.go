@@ -79,8 +79,9 @@ func TestManifest(t *testing.T) {
 	for _, up := range m.UserPermissions {
 		perms[up.Key] = true
 		// moderation:exempt (staff) was split from moderation:read, whose
-		// holders inherit it; no route or menu uses it.
-		if up.Key == moderation.PermExempt && (len(up.InheritFrom) != 1 || up.InheritFrom[0] != "moderation:read" || len(up.DefaultRoles) != 0) {
+		// holders inherit it; it has no default roles ([] is none) and no
+		// route or menu uses it.
+		if up.Key == moderation.PermExempt && (len(up.InheritFrom) != 1 || up.InheritFrom[0] != "moderation:read" || up.DefaultRoles == nil || len(up.DefaultRoles) != 0) {
 			t.Errorf("exempt = %+v", up)
 		}
 	}

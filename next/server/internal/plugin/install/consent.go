@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 	"sort"
 
@@ -236,10 +235,14 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	if err := s.checkGrantRights(ctx, actorID, decisions, c.trust, c.publisherID != nil); err != nil {
 		return nil, err
 	}
-	if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req); err != nil {
+	existing, err := catalogKeys(ctx, tx, m)
+	if err != nil {
 		return nil, err
 	}
-	roles := roleGrants(m, req)
+	if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req, existing); err != nil {
+		return nil, err
+	}
+	roles := roleGrants(m, req, existing)
 	for _, d := range decisions {
 		scope, _ := json.Marshal(d.scope)
 		if _, err := tx.Exec(ctx, `
@@ -410,27 +413,14 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 // are handed out (authz SyncPlugin), so an upgrade adding none needs nothing
 // even with roles named - carrying a running plugin forward must not
 // require role:define.
-func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest) error {
+func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest, existing map[string]bool) error {
 	if isSystem(ctx) {
 		return nil
 	}
-	named := map[string][]string{}
-	for _, up := range m.UserPermissions {
-		if roles, ok := req.overrideRoles(up.Key); ok && len(roles) > 0 {
-			named[manifest.PermissionKey(m.Key, up.Key)] = roles
-		}
-	}
-	if len(named) == 0 {
-		return nil
-	}
-	var existing []string
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, slices.Collect(maps.Keys(named))).Scan(&existing); err != nil {
-		return err
-	}
 	var roles []string
-	for key, rs := range named {
-		if !slices.Contains(existing, key) {
-			roles = append(roles, rs...)
+	for _, up := range m.UserPermissions {
+		if named, ok := req.overrideRoles(up.Key); ok && !existing[manifest.PermissionKey(m.Key, up.Key)] {
+			roles = append(roles, named...)
 		}
 	}
 	if len(roles) == 0 {
@@ -449,6 +439,28 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 	}
 	slices.Sort(roles)
 	return s.d.Permissions.CanGrantToRoles(ctx, tx, actorID, slices.Compact(roles))
+}
+
+// catalogKeys are the keys of m's userPermissions and of their inheritFrom
+// that the permission catalog has now (tx holds the plugin row, so no other
+// consent changes them meanwhile).
+func catalogKeys(ctx context.Context, tx pgx.Tx, m *manifest.Manifest) (map[string]bool, error) {
+	var keys []string
+	for _, up := range m.UserPermissions {
+		keys = append(keys, manifest.PermissionKey(m.Key, up.Key))
+		for _, from := range up.InheritFrom {
+			keys = append(keys, manifest.PermissionKey(m.Key, from))
+		}
+	}
+	var found []string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, keys).Scan(&found); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(found))
+	for _, k := range found {
+		out[k] = true
+	}
+	return out, nil
 }
 
 // Reject marks a version rejected. A plugin that was never installed and
