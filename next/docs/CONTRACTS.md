@@ -75,7 +75,7 @@
 
 ## 4. 权限清单（核心）
 
-模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`session_only`）表示只能由登录会话使用，访问密钥不能带（§80）。
+模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`session_only`）表示只能由登录会话使用，访问密钥不能带（§80）。👑（`superOnly`，2026-11-12，决策 D2）表示超管专属：不在任何内置角色的默认权限里（新库、新增权限的自动授予、恢复默认都不给），只有超级管理员持有，也只有超级管理员能显式授给某个角色（授予检查要求操作者自己持有，§43.6）；`GET /permissions` 不返回这个标记。
 
 | 模块 | 权限 |
 |---|---|
@@ -89,14 +89,14 @@
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` |
 | sticky | `sticky:read` `sticky:manage` |
-| plugin | `plugin:read` `plugin:install`🔐🔑 `plugin:manage`🔐 `plugin:uninstall`🔐🔑 `plugin:grant:high`🔐🔑 `plugin:grant:critical`🔐🔑 `plugin:grant:db_schema_unconfined`🔐🔑 `plugin:egress:read` `plugin:market:read` |
-| publisher | `publisher:read` `publisher:manage`🔐🔑 |
+| plugin | `plugin:read` `plugin:install`🔐🔑 `plugin:manage`🔐 `plugin:uninstall`🔐🔑 `plugin:grant:high`🔐🔑 `plugin:grant:critical`🔐🔑👑 `plugin:grant:db_schema_unconfined`🔐🔑👑 `plugin:egress:read` `plugin:market:read` |
+| publisher | `publisher:read` `publisher:manage`🔐🔑👑 |
 | node | `node:read` |
 | gateway | `gateway:use` |
 | settings | `settings:read` `settings:manage`🔐🔑 |
-| system_update | `system:update:read` `system:update:execute`🔐🔑 `system:update:recover`🔐🔑 |
+| system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
-内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（全部核心权限）、`operator`（运维：除 `settings` `sticky` `plugin` `publisher` 模块以外的全部核心权限，即没有系统设置、插件、插件市场和发布者页面）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维：除 `settings` `sticky` `plugin` `publisher` 模块和超管专属 👑 以外的全部核心权限，即没有系统设置、插件、插件市场和发布者页面，也不能执行或恢复核心升级）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
 
 ## 5. REST API（`/api/v1`）
 

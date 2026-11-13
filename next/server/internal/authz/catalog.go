@@ -31,8 +31,10 @@ type corePerm struct {
 	// identity or authorization in the role editor; display only, it has no
 	// bearing on access keys.
 	sensitive bool
-	// superOnly: no built-in role's defaults may accept the permission
-	// (TestCatalogFlagInvariants); only a superuser grants it explicitly.
+	// superOnly: the permission is in no built-in role's defaults, whatever
+	// the role's grants say (builtinRole.accepts), so it is never granted
+	// automatically; only the super admin, who alone holds it, grants it
+	// explicitly to a role (decision D2).
 	superOnly bool
 	// sessionOnly keeps the permission out of access keys (KeyAllowed):
 	// identity takeover, host-level control, code execution, trust roots and
@@ -127,14 +129,14 @@ var coreModules = []coreModule{
 		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件", sensitive: true},
 		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true, sessionOnly: true},
 		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, sessionOnly: true},
-		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, sessionOnly: true},
-		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, sessionOnly: true},
+		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, superOnly: true, sessionOnly: true},
 		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
 		{key: "plugin:market:read", en: "Browse the plugin market", zh: "浏览插件市场"},
 	}},
 	{"publisher", lt("Publishers", "发布者"), []corePerm{
 		{key: "publisher:read", en: "View publishers", zh: "查看发布者"},
-		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, sessionOnly: true},
+		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, superOnly: true, sessionOnly: true},
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
 		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
@@ -154,8 +156,8 @@ var coreModules = []coreModule{
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
 		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
-		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, sessionOnly: true},
-		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, sessionOnly: true},
+		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, superOnly: true, sessionOnly: true},
 	}},
 }
 
@@ -181,9 +183,10 @@ type builtinRole struct {
 	name        core.LocalizedText
 	description core.LocalizedText
 	superuser   bool
-	// grants reports whether a core permission is in the role's defaults;
-	// nil means none. New core permissions are granted to the role when
-	// grants accepts them, and a reset restores exactly this set.
+	// grants reports whether a core permission is in the role's defaults,
+	// superOnly ones aside (accepts); nil means none. New core permissions
+	// are granted to the role when it accepts them, and a reset restores
+	// exactly this set.
 	grants func(p corePerm) bool
 	// assignable lists the built-in roles its holders may assign by
 	// default, and assignCustom adds every custom role (decision 5). A
@@ -199,7 +202,7 @@ func oneOf(keys []string) func(corePerm) bool {
 
 var builtinRoles = []builtinRole{
 	{key: RoleSuperAdmin, name: lt("Super admin", "超级管理员"), description: lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), superuser: true},
-	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default", "默认拥有全部核心权限"),
+	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default, except those reserved for the super admin", "默认拥有除超级管理员专属权限以外的全部核心权限"),
 		grants:     func(corePerm) bool { return true },
 		assignable: []string{RoleOperator, RoleSupplier, RoleUser}, assignCustom: true},
 	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"),
@@ -230,15 +233,17 @@ func builtinRoleByKey(key string) (builtinRole, bool) {
 	return builtinRole{}, false
 }
 
+// accepts reports whether p is in r's defaults: never a superOnly one.
+func (r builtinRole) accepts(p corePerm) bool {
+	return r.grants != nil && !p.superOnly && r.grants(p)
+}
+
 // defaultPermissions returns the core permissions r has by default.
 func (r builtinRole) defaultPermissions() []string {
 	var out []string
-	if r.grants == nil {
-		return out
-	}
 	for _, m := range coreModules {
 		for _, p := range m.perms {
-			if r.grants(p) {
+			if r.accepts(p) {
 				out = append(out, p.key)
 			}
 		}

@@ -139,6 +139,75 @@ func TestBuiltinRolesSuperAdminOnly(t *testing.T) {
 	}
 }
 
+// Decision D2: the super-only permissions are in no built-in role's defaults,
+// on a new database or after a reset; a sync neither grants them nor takes
+// away what a role already holds; and only the super admin, who alone holds
+// them, hands them to a role.
+func TestSuperOnlyPermissions(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	superOnly := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
+	holds := func(roleKey string) []string {
+		t.Helper()
+		var held []string
+		for _, k := range rolePermissionKeys(t, s, roleID(t, s, roleKey)) {
+			if slices.Contains(superOnly, k) {
+				held = append(held, k)
+			}
+		}
+		return held
+	}
+	for _, b := range builtinRoles {
+		if got := holds(b.key); len(got) != 0 {
+			t.Errorf("%s holds %v by default", b.key, got)
+		}
+	}
+	for _, k := range superOnly {
+		mustCan(t, s, admin, k, false)
+		mustCan(t, s, root, k, true)
+	}
+
+	// The admin cannot hand them out; the super admin can, to a custom role
+	// and, explicitly, to a built-in one.
+	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "updater", Name: lt("Updater", "升级"), PermissionKeys: []string{"system:update:execute"}}); !isCode(err, "permission_denied") {
+		t.Fatalf("admin grants a super-only permission: %v", err)
+	}
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "updater", Name: lt("Updater", "升级"), PermissionKeys: superOnly}); err != nil {
+		t.Fatalf("super admin grants super-only permissions: %v", err)
+	}
+	if got := holds("updater"); len(got) != len(superOnly) {
+		t.Fatalf("updater holds %v", got)
+	}
+	adminID := roleID(t, s, RoleAdmin)
+	cur := rolePermissionKeys(t, s, adminID)
+	if _, err := s.SetRolePermissions(ctx, root, adminID, append(cur, "publisher:manage")); err != nil {
+		t.Fatal(err)
+	}
+	mustCan(t, s, admin, "publisher:manage", true)
+
+	// A sync leaves what the role holds; a reset takes it back to defaults.
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM permissions WHERE key = 'system:update:recover'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := holds(RoleAdmin); !slices.Equal(got, []string{"publisher:manage"}) {
+		t.Fatalf("admin after a sync that created a super-only permission: %v", got)
+	}
+	if _, err := s.ResetRole(ctx, root, adminID); err != nil {
+		t.Fatal(err)
+	}
+	if got := holds(RoleAdmin); len(got) != 0 {
+		t.Fatalf("admin after a reset: %v", got)
+	}
+	mustCan(t, s, admin, "publisher:manage", false)
+}
+
 // M5: a role:define holder cannot change or delete a role granting more than
 // it holds, so it cannot weaken a stronger user's role and then act on that
 // user. Roles within its own permissions stay editable.

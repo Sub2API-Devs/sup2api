@@ -36,7 +36,7 @@ func TestCatalogFlagInvariants(t *testing.T) {
 				continue
 			}
 			for _, r := range builtinRoles {
-				if r.grants != nil && r.grants(p) {
+				if r.accepts(p) || slices.Contains(r.defaultPermissions(), p.key) {
 					t.Errorf("%s is superOnly but in the defaults of %s", p.key, r.key)
 				}
 			}
@@ -49,11 +49,14 @@ func TestCatalogFlagInvariants(t *testing.T) {
 // sessionOnly is the decided list kept out of access keys (CONTRACTS §80).
 func TestCatalogFlaggedSets(t *testing.T) {
 	t.Parallel()
-	var sensitive, session []string
+	var sensitive, session, super []string
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if p.sensitive {
 				sensitive = append(sensitive, p.key)
+			}
+			if p.superOnly {
+				super = append(super, p.key)
 			}
 			if p.sessionOnly {
 				session = append(session, p.key)
@@ -77,8 +80,14 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"role:assign", "role:define", "settings:manage",
 		"system:update:execute", "system:update:recover", "user:password:reset",
 	}
+	// Decision D2: what only the super admin holds by default.
+	wantSuper := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
 	slices.Sort(sensitive)
 	slices.Sort(session)
+	slices.Sort(super)
+	if !slices.Equal(super, wantSuper) {
+		t.Errorf("superOnly = %v, want %v", super, wantSuper)
+	}
 	if !slices.Equal(sensitive, wantSensitive) {
 		t.Errorf("sensitive = %v\nwant %v", sensitive, wantSensitive)
 	}
@@ -142,7 +151,7 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 
 	want := map[grant]int{{custom, "inherit"}: 1}
 	for _, r := range builtinRoles {
-		if r.grants != nil && r.grants(probe) {
+		if r.accepts(probe) {
 			want[grant{roleID(t, s, r.key), "default"}] = 1
 		}
 	}

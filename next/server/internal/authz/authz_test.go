@@ -209,8 +209,11 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if !byKey[RoleSuperAdmin].Superuser || !byKey[RoleSuperAdmin].Builtin {
 		t.Fatalf("super_admin: %+v", byKey[RoleSuperAdmin])
 	}
-	if len(byKey[RoleAdmin].PermissionKeys) != n {
-		t.Fatalf("admin perms = %d, want %d", len(byKey[RoleAdmin].PermissionKeys), n)
+	// The admin holds every core permission but the five reserved for the
+	// super admin (decision D2).
+	superOnly := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
+	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
+		t.Fatalf("admin perms = %d of %d: %v", len(got), n, got)
 	}
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
 		t.Fatalf("user perms = %v", byKey[RoleUser].PermissionKeys)
@@ -240,7 +243,7 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 			t.Fatalf("operator has %s", k)
 		}
 	}
-	if !slices.Contains(op.PermissionKeys, "account:update") || !slices.Contains(op.PermissionKeys, "system:update:execute") {
+	if !slices.Contains(op.PermissionKeys, "account:update") || slices.Contains(op.PermissionKeys, "system:update:execute") {
 		t.Fatalf("operator perms = %v", op.PermissionKeys)
 	}
 
@@ -575,13 +578,14 @@ func TestRoleGrantEscalation(t *testing.T) {
 		PermissionKeys: []string{"user:read", "account:read"}}); err != nil {
 		t.Fatalf("operator creates role: %v", err)
 	}
-	// The super admin is not limited; the admin holds every core permission.
+	// The super admin is not limited; the admin holds every core permission
+	// but those reserved for the super admin.
 	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "installer", Name: lt("Installer", "安装"),
-		PermissionKeys: []string{"plugin:install", "settings:manage", "system:update:execute"}}); err != nil {
+		PermissionKeys: []string{"plugin:install", "settings:manage"}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "updater", Name: lt("Updater", "升级"),
-		PermissionKeys: []string{"system:update:execute"}}); err != nil {
+		PermissionKeys: []string{"system:update:read", "price:manage"}}); err != nil {
 		t.Fatal(err)
 	}
 
