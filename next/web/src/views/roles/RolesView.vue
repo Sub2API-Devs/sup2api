@@ -123,43 +123,48 @@ async function save() {
   const r = selected.value
   if (!r || readOnly.value) return
   if (permsDirty.value && permsMissing.value && !(await confirm({ message: t('roles.overwriteUnknown'), danger: true }))) return
+  // Each changed part has its own endpoint; they run in order and stop at the first refusal.
+  const steps = [
+    metaDirty.value && (() => api.patch(`/roles/${r.id}`, { name: { en: form.nameEn.trim(), zh: form.nameZh.trim() }, description: form.description.trim() })),
+    permsDirty.value && (() => api.put(`/roles/${r.id}/permissions`, { permission_keys: [...perms.value].sort() })),
+    assignableDirty.value && (() => api.put(`/roles/${r.id}/assignable`, { role_keys: [...assignable.value].sort(), assign_custom: assignCustom.value }))
+  ].filter((step) => !!step)
   saving.value = true
   saveMissing.value = ''
+  let done = 0
+  let missing = ''
   try {
-    if (metaDirty.value) {
-      await api.patch(`/roles/${r.id}`, {
-        name: { en: form.nameEn.trim(), zh: form.nameZh.trim() },
-        description: form.description.trim()
-      })
-    }
-    if (permsDirty.value) {
-      await api.put(`/roles/${r.id}/permissions`, { permission_keys: [...perms.value].sort() })
-    }
-    if (assignableDirty.value) {
-      await api.put(`/roles/${r.id}/assignable`, { role_keys: [...assignable.value].sort(), assign_custom: assignCustom.value })
+    for (const step of steps) {
+      await step()
+      done++
     }
     toast(t('common.saved'), 'success')
-    await loadRoles()
-    const fresh = roles.value.find((x) => x.id === r.id)
-    if (fresh) {
-      // Keep the edited permissions if the list endpoint omits permission_keys.
-      if (!Array.isArray(fresh.permission_keys)) fresh.permission_keys = [...perms.value]
-      selectRole(fresh, true)
-    }
-    if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
   } catch (e) {
-    saveMissing.value = missingText(e)
+    missing = missingText(e)
     notifyError(e)
-  } finally {
-    saving.value = false
   }
+  // Something was written (all of it, or the parts before a refusal): show what the role now is.
+  if (done) await showSaved(r, done === steps.length).catch(notifyError)
+  saveMissing.value = missing
+  saving.value = false
+}
+
+async function showSaved(r: RoleRow, complete: boolean) {
+  await loadRoles()
+  const fresh = roles.value.find((x) => x.id === r.id)
+  if (fresh) {
+    // Keep the saved permissions if the list endpoint omits permission_keys.
+    if (!Array.isArray(fresh.permission_keys) && complete) fresh.permission_keys = [...perms.value]
+    selectRole(fresh, true)
+  }
+  if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
 }
 
 /** The permissions and managed roles a refused save lacked, as one line. */
 function missingText(e: unknown): string {
   if (!isApiError(e)) return ''
   const d = e.details
-  const list = (v: unknown) => (Array.isArray(v) ? v.join(', ') : '')
+  const list = (v: unknown) => (Array.isArray(v) ? v.join(t('roles.listSep')) : '')
   return [
     list(d.missing) && t('roles.missingPermissions', { keys: list(d.missing) }),
     list(d.missing_assignable) && t('roles.missingAssignable', { keys: list(d.missing_assignable) }),
@@ -329,7 +334,7 @@ async function restoreDefaults() {
 
           <PermissionTree v-model:granted="perms" :modules="modules" :all-granted="selected.superuser" :read-only="readOnly" />
 
-          <RoleAssignable v-if="!selected.superuser" v-model:keys="assignable" v-model:assign-custom="assignCustom" :roles="roles" :read-only="readOnly" />
+          <RoleAssignable v-if="!selected.superuser && Array.isArray(selected.assignable_role_keys)" v-model:keys="assignable" v-model:assign-custom="assignCustom" :roles="roles" :read-only="readOnly" />
 
           <div v-if="auth.has('user:read')" class="flex flex-wrap items-center gap-2 border-t border-line pt-4 text-sm">
             <SHint inline class="shrink-0">{{ t('roles.membersLabel') }}:</SHint>

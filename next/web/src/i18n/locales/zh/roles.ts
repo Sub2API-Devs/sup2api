@@ -34,6 +34,7 @@ export default {
   assignableHint: '持有该角色的人能把这些角色分配给用户，也只能管理所持角色（默认的 user 除外）都在这份清单里的用户。分配时还要求被分配角色的权限不超出操作者自己的权限。',
   assignCustom: '全部自定义角色',
   assignCustomHint: '包括以后新建的自定义角色，但不含持有者自己持有的角色。',
+  listSep: '、',
   missingPermissions: '缺少权限：{keys}',
   missingAssignable: '缺少可管理角色：{keys}',
   missingAssignCustom: '你自己没有“全部自定义角色”',

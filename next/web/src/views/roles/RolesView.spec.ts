@@ -114,4 +114,30 @@ describe('RolesView permissions (T77)', () => {
     expect(w.find('[data-testid="role-create"]').exists()).toBe(false)
     expect(w.find('[data-testid="role-save"]').exists()).toBe(false)
   })
+
+  it('sends only the changed parts, and after a partial failure shows what was saved', async () => {
+    mocks.put.mockClear()
+    mocks.patch.mockClear()
+    mocks.put.mockRejectedValueOnce(new ApiError(403, { code: 'permission_denied', message: 'no', details: { missing: ['a:b'], missing_assign_custom: true } }))
+    const w = await open(2)
+    const name = w.findAll('input').find(i => (i.element as HTMLInputElement).value === 'Lead')!
+    await name.setValue('Lead 2')
+    await w.get('[data-testid="role-assign-custom"]').trigger('click')
+    lookups.roles = roles.map(r => (r.id === 2 ? { ...r, name: 'Lead 2' } : r))
+    await w.get('[data-testid="role-save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledTimes(1)
+    // Permissions unchanged: only the managed roles were PUT (and refused).
+    expect(mocks.put.mock.calls.map(c => (c as unknown[])[0])).toEqual(['/roles/2/assignable'])
+    expect(w.get('[data-testid="role-save-missing"]').text()).toContain('a:b')
+    // The saved name is shown; the refused switch is back to what the role has.
+    expect(w.text()).toContain('Lead 2')
+    expect(w.get('[data-testid="role-assign-custom"]').attributes('aria-checked')).toBe('false')
+  })
+
+  it('offers delete on a custom role and restore on a built-in role to the super admin', async () => {
+    expect((await open(2)).find('[data-testid="role-menu"]').exists()).toBe(true)
+    expect((await open(1, { superuser: true })).find('[data-testid="role-menu"]').exists()).toBe(true)
+    expect((await open(3, { superuser: true })).find('[data-testid="role-assignable"]').exists()).toBe(false)
+  })
 })

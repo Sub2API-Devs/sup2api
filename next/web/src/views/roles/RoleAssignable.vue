@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SCheckbox, SField, SHint, SSwitch } from '@sub2api/ui'
 import type { Role } from '@/api/types'
 import { lt } from '@/i18n'
+import { flip } from './flip'
 
 // The roles a role's holders manage (CONTRACTS §43.6): the roles they may
 // assign, and the users they may act on (every non-default role of the target
@@ -15,12 +16,6 @@ const { t } = useI18n()
 
 const options = computed(() => props.roles.filter((r) => !r.superuser))
 
-function toggle(key: string, on: boolean) {
-  const next = new Set(keys.value)
-  if (on) next.add(key)
-  else next.delete(key)
-  keys.value = next
-}
 </script>
 
 <template>
@@ -34,7 +29,7 @@ function toggle(key: string, on: boolean) {
         :model-value="keys.has(r.key)"
         :disabled="readOnly"
         :data-role="r.key"
-        @update:model-value="toggle(r.key, !!$event)"
+        @update:model-value="keys = flip(keys, r.key, !!$event)"
       >
         {{ lt(r.name) || r.key }}
       </SCheckbox>
