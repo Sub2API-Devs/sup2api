@@ -26,6 +26,7 @@ export default {
     model_price_not_configured: 'Model price not configured',
     model_not_allowed: 'Model not allowed',
     rate_limited: 'Too many requests',
+    too_many_drafts: 'You have too many unfinished account drafts. Finish or close one, or wait about 15 minutes for abandoned ones to be cleaned up',
     no_available_account: 'No available account',
     plugin_unavailable: 'Plugin unavailable',
     unavailable: 'Service unavailable',

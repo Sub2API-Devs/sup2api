@@ -30,14 +30,22 @@ func (s *Service) querier() store.Querier {
 // may act on it. Tests without a database seed the cache and are answered
 // from it.
 func (s *Service) usersRoleSet(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, error) {
+	set, _, err := s.usersRoles(ctx, q, userIDs)
+	return set, err
+}
+
+// usersRoles is usersRoleSet with the keys of those roles, sorted; tests
+// without a database have no role keys.
+func (s *Service) usersRoles(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, []string, error) {
 	if s.db == nil {
-		return s.cachedUnion(userIDs), nil
+		return s.cachedUnion(userIDs), nil, nil
 	}
 	var keys []string
-	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
-		return core.PermissionSet{}, err
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key ORDER BY r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
+		return core.PermissionSet{}, nil, err
 	}
-	return s.RolesPermissions(ctx, q, keys)
+	set, err := s.RolesPermissions(ctx, q, keys)
+	return set, keys, err
 }
 
 // cachedUnion is usersRoleSet for tests without a database.
@@ -53,8 +61,9 @@ func (s *Service) cachedUnion(userIDs []int64) core.PermissionSet {
 	return set
 }
 
-// grantSet is what actorID may hand out and act upon: what its roles grant,
-// narrowed by its access key, which never leaves a superuser. It reads
+// grantSet is what actorID may hand out (grants and role assignment): what
+// its roles grant, narrowed by its access key, which never leaves a
+// superuser. Whom it acts on is its roles alone (canActOnUsers, FU6). It reads
 // through q, so a check inside a transaction sees that transaction and never
 // this node's cache, which may lag another node's change (C-L4).
 func (s *Service) grantSet(ctx context.Context, q store.Querier, actorID int64) (core.PermissionSet, error) {
@@ -115,10 +124,27 @@ func superAdminTransferOnly(ctx context.Context) *core.Error {
 // actor. Only a non-superuser misses anything, so it misses the flag of a
 // superuser target.
 func cannotActOn(ctx context.Context, target core.PermissionSet) *core.Error {
+	notManageable := map[string]any{"reason": "not_manageable"}
 	if target.Superuser {
-		return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a superuser", "你不能修改超级用户"))
+		return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a superuser", "你不能修改超级用户")).WithDetails(notManageable)
 	}
-	return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户"))
+	return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户")).WithDetails(notManageable)
+}
+
+// cannotActOnPeer is the denial of an action on a target holding roleKey, a
+// role the actor cannot assign: a user it does not manage (canActOnUsers).
+func cannotActOnPeer(ctx context.Context, roleKey string) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot modify a user holding a role you cannot assign",
+		"你不能修改持有你无权分配的角色的用户")).WithDetails(map[string]any{"role": roleKey, "reason": "not_manageable"})
+}
+
+// superuserSessionOnly is the denial of a change to a superuser's account
+// through an access key (decision 1, canActOnUsers).
+func superuserSessionOnly(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"a superuser's account changes only through the superuser's own session",
+		"超级管理员的账号只能由其本人的登录会话修改")).WithDetails(map[string]any{"reason": "session_only"})
 }
 
 // cannotActOnRole is the denial of a change to a role granting more than the
@@ -127,6 +153,14 @@ func cannotActOnRole(ctx context.Context) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx,
 		"you cannot change a role with permissions you don't have",
 		"你不能修改含有你所没有权限的角色"))
+}
+
+// builtinRoleSuperOnly is the denial of a change to a built-in role by anyone
+// but the super admin (editableRole).
+func builtinRoleSuperOnly(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"only the super admin can change built-in roles",
+		"只有超级管理员可以修改内置角色"))
 }
 
 // audit records one audit_logs row of an authz change through q, the
@@ -151,39 +185,74 @@ func (s *Service) CanActOn(ctx context.Context, actorID int64, targetPerms []str
 }
 
 // CanActOnUser is CanActOnUsers for one target.
-func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) error {
-	return s.CanActOnUsers(ctx, actorID, targetID)
+func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.UserAction, targetID int64) error {
+	return s.CanActOnUsers(ctx, actorID, action, targetID)
 }
 
-// CanActOnUsers implements core.UserGuard: what the targets' roles grant
-// together must be within the actor's grantSet. Each target within the actor
-// is the same as their union within it, so one query serves any number of
-// targets. The target's side is what its ROLES grant, not what it can do
-// right now: a disabled user can do nothing, and comparing against that
-// would let anyone with user:update re-enable a disabled admin or set its
-// password and take the account over (SEC-H2). The actor itself among the
-// targets and the system (actor 0) pass; ActOnOthers refuses the former. An
-// access key acts with less than its owner's roles, so its owner is a target
-// like any other: no access key changes a superuser, its own included
-// (decision 1).
-func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error {
-	return s.canActOnUsers(ctx, s.querier(), actorID, targetIDs...)
+// CanActOnUsers implements core.UserGuard, the one rule of whom a caller may
+// act on (FU6): every role a target holds, the default user role aside, must
+// be one the actor may assign (its assignable list is the roles it manages;
+// with the default lists an admin manages neither other admins nor itself,
+// the user role is left out so that a role with user:update and no
+// assignable list still serves plain users), and what the targets' roles
+// grant must be within the actor's (SEC-H2). A superuser manages everyone,
+// itself included. The target's side is what its ROLES grant, not what it
+// can do right now: a disabled user can do nothing, and comparing against
+// that would let anyone with user:update re-enable a disabled admin and take
+// the account over. The actor's side is its roles too: an access key narrows
+// what the caller may do (the route's permission), not whom. One exception
+// keeps decision 1: ActOnIdentity on a superuser is refused to an access key.
+// An action on oneself that passes (only a superuser's, with the default
+// lists; also a custom role with assign_custom, or listing itself, manages
+// its holders, themselves included) is audited here, the one place. The row
+// says the check passed, not that the action then succeeded.
+func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, action core.UserAction, targetIDs ...int64) error {
+	return s.canActOnUsers(ctx, s.querier(), actorID, action, targetIDs...)
 }
 
-// canActOnUsers is CanActOnUsers reading through q.
-func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, targetIDs ...int64) error {
-	self := actorID
-	if core.ByAccessKey(ctx, actorID) {
-		self = 0
-	}
-	ids := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == self })
+// canActOnUsers is CanActOnUsers reading through q, the transaction of the
+// change when there is one.
+func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, action core.UserAction, targetIDs ...int64) error {
+	ids := slices.Compact(slices.Sorted(slices.Values(targetIDs)))
 	if actorID == 0 || len(ids) == 0 {
 		return nil
 	}
-	slices.Sort(ids)
-	target, err := s.usersRoleSet(ctx, q, slices.Compact(ids))
+	actor, err := s.usersRoleSet(ctx, q, []int64{actorID})
 	if err != nil {
 		return err
 	}
-	return s.covers(ctx, q, actorID, target, cannotActOn(ctx, target))
+	target, roles, err := s.usersRoles(ctx, q, ids)
+	if err != nil {
+		return err
+	}
+	if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
+		return err
+	}
+	for _, key := range roles {
+		if key != RoleUser && !actor.CanAssign(key) {
+			return cannotActOnPeer(ctx, key)
+		}
+	}
+	// Only an actor that manages the superuser gets this far with one.
+	if action == core.ActOnIdentity && target.Superuser && core.ByAccessKey(ctx, actorID) {
+		return superuserSessionOnly(ctx)
+	}
+	if !slices.Contains(ids, actorID) {
+		return nil
+	}
+	return s.auditSelf(ctx, q, actorID)
+}
+
+// auditSelf records an action of actorID on itself that CanActOnUsers let
+// through: self, and the session or access key it came by.
+func (s *Service) auditSelf(ctx context.Context, q store.Querier, actorID int64) error {
+	if s.db == nil {
+		return nil // tests without a database: nowhere to audit
+	}
+	detail := map[string]any{"self": true, "via": "session", "request_id": core.RequestID(ctx)}
+	if core.ByAccessKey(ctx, actorID) {
+		key, _ := core.AccessKey(ctx)
+		detail["via"], detail["access_key_id"] = "access_key", key.KeyID
+	}
+	return s.audit(ctx, q, actorID, "user.act_on_self", "user", actorID, detail)
 }

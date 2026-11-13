@@ -165,7 +165,9 @@ async function containerFailure(titleKey: string, e: unknown, stamp: number) {
   }
   const reason = reasonOf(e)
   let setup: CcgSetupProblem[] = []
-  if (!reason || reason === 'not_configured') {
+  // The per-user draft limit says nothing about the setup: no probe.
+  const overLimit = isApiError(e) && e.code === 'too_many_drafts'
+  if (!overLimit && (!reason || reason === 'not_configured')) {
     try {
       setup = setupProblems(await api.get<{ account_runtimes?: boolean; mode?: string; has_admin_key?: boolean }>('/system/ccgateway/remote-config'))
     } catch {

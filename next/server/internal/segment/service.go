@@ -66,12 +66,45 @@ func fieldError(ctx context.Context, field, code, en, zh string) core.FieldError
 	return core.FieldError{Field: field, Code: code, Message: t(ctx, en, zh)}
 }
 
-// actOnOthers fails unless the caller may choose the user group of the
-// users: none of them is the caller, and none holds roles granting more than
-// the caller's (C-L7).
-func (s *Service) actOnOthers(ctx context.Context, userIDs ...int64) error {
+// actOnUsers fails unless the caller may choose the user group of the users:
+// it manages every one of them, itself only as a superuser (C-L7, FU6).
+func (s *Service) actOnUsers(ctx context.Context, userIDs ...int64) error {
 	actor, _ := core.UserID(ctx)
-	return core.ActOnOthers(ctx, s.users, actor, userIDs...)
+	return s.users.CanActOnUsers(ctx, actor, core.ActOnData, userIDs...)
+}
+
+// errOwnSegment is the refusal of a change to the terms of a user group the
+// caller is in (GuardOwnSegments).
+func errOwnSegment(ctx context.Context) *core.Error {
+	return core.ErrConflict.WithMessage(t(ctx, "you cannot change the terms of a user group you are in", "你不能修改自己所在用户组的定价或授权"))
+}
+
+// GuardOwnSegments fails unless the caller may change what the segments
+// charge or grant (discount, grants, rates, model prices): the caller is a
+// member of none of them, or it manages itself (UserGuard on itself: only a
+// superuser with the built-in assignable lists, audited there; FU2, FU6).
+// It is the one check of every such write; refusals are 409. Other members
+// are not targets: these writes are on the segment. The default segment is
+// exempt: everyone is in it, so changing it is changing the platform's
+// prices, as price:manage and group:manage do, not one's own; dropping the
+// is_default condition tightens it. q is the writer's transaction or the
+// pool.
+func GuardOwnSegments(ctx context.Context, q store.Querier, users core.UserGuard, segmentIDs []int64) error {
+	actor, _ := core.UserID(ctx)
+	if actor == 0 || len(segmentIDs) == 0 {
+		return nil
+	}
+	var member bool
+	if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users u JOIN segments s ON s.id = u.segment_id
+		WHERE u.id = $1 AND s.id = ANY($2) AND NOT s.is_default)`,
+		actor, segmentIDs).Scan(&member); err != nil || !member {
+		return err
+	}
+	err := users.CanActOnUsers(ctx, actor, core.ActOnData, actor)
+	if err != nil && core.AsError(err).Code == core.ErrPermissionDenied.Code {
+		return errOwnSegment(ctx).WithCause(err)
+	}
+	return err
 }
 
 // NotFound is the not_found of a user group that does not exist. It is the

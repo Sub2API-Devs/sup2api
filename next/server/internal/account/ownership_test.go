@@ -17,6 +17,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -966,5 +967,62 @@ func TestOwnCustomUpstream(t *testing.T) {
 	moved := map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-123", "base_url": "https://other.example"}}
 	if code, out := e.doAs(alice, "POST", path+"/models/fetch", moved); code != 403 {
 		t.Fatalf("fetch models at a moved base_url: %d %v", code, out)
+	}
+}
+
+// TestBuiltinSupplierRole runs a supplier as the built-in roles make one
+// (user + supplier, decision 7) through the account routes: an OAuth-type
+// account is created, a custom-upstream one needs account:relay, groups
+// cannot be bound (no account:group:bind for now), and other users' accounts
+// do not exist for it. The key set the other tests call supplierKeys is the
+// role's default.
+func TestBuiltinSupplierRole(t *testing.T) {
+	fake := fakeAuthz{keys: map[int64][]string{}}
+	e, _, _, _ := preparationFixtureWith(t, fake)
+	ctx := context.Background()
+	roles := authz.New(authz.Deps{DB: e.db})
+	if err := roles.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	keysOf := func(roleKeys ...string) []string {
+		t.Helper()
+		set, err := roles.RolesPermissions(ctx, e.db.Pool, roleKeys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.Sorted(maps.Keys(set.Keys))
+	}
+	if got := keysOf(authz.RoleSupplier); !slices.Equal(got, slices.Sorted(slices.Values(supplierKeys))) {
+		t.Fatalf("supplier role grants %v, want %v", got, supplierKeys)
+	}
+	alice := e.addUser("alice@x.com")
+	fake.keys[e.uid], fake.keys[alice] = adminKeys, keysOf(authz.RoleUser, authz.RoleSupplier)
+
+	oauth := core.PluginInfo{Key: "oauth", Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "OAuth"}}}
+	e.gen.plugins = append(e.gen.plugins, oauth)
+	e.gen.types = append(e.gen.types, core.AccountTypeBinding{Plugin: oauth, Client: e.plat,
+		Type:       manifest.AccountType{ID: "claude_oauth", Form: manifest.Form{Mode: "schema"}, UpstreamFields: []string{}},
+		FormSchema: json.RawMessage(`{"type":"object"}`)})
+	code, out := e.doAs(alice, "POST", "/accounts", map[string]any{"name": "mine", "plugin_key": "oauth", "type": "claude_oauth", "credentials": map[string]any{}})
+	if code != 201 {
+		t.Fatalf("create claude_oauth: %d %v", code, out)
+	}
+	mine := fmt.Sprintf("/accounts/%d", int64(data(out)["id"].(float64)))
+	relay := map[string]any{"name": "relay", "plugin_key": "relay", "type": "relay_key",
+		"credentials": map[string]any{"api_key": "sk-good-key-123", "base_url": "https://relay.example"}}
+	if code, out := e.doAs(alice, "POST", "/accounts", relay); code != 403 {
+		t.Fatalf("create custom upstream: %d %v", code, out)
+	}
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('g1') RETURNING id`)
+	if code, out := e.doAs(alice, "PATCH", mine, map[string]any{"group_ids": []int64{group}}); code != 403 {
+		t.Fatalf("bind a group: %d %v", code, out)
+	}
+
+	theirs := int64(e.createAs(e.uid, "theirs", nil)["id"].(float64))
+	if code, out := e.doAs(alice, "GET", fmt.Sprintf("/accounts/%d", theirs), nil); code != 404 {
+		t.Fatalf("read another user's account: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "GET", "/accounts", nil); code != 200 || total(out) != 1 {
+		t.Fatalf("list: %d %v", code, out)
 	}
 }

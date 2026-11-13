@@ -41,9 +41,11 @@ func (a fakeAuthz) Can(_ context.Context, uid int64, permission string) (bool, e
 func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (fakeAuthz) CanGrant(context.Context, int64, []string) error      { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error      { return nil }
-func (fakeAuthz) CanActOnUsers(context.Context, int64, ...int64) error { return nil }
+func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
+func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
+func (fakeAuthz) CanActOnUsers(context.Context, int64, core.UserAction, ...int64) error {
+	return nil
+}
 
 // env is the segment service behind the real router. admin has every
 // permission, masked every one but user:read, plain none. All three are

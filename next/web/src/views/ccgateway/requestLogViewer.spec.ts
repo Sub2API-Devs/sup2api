@@ -111,6 +111,12 @@ describe('upstream request facts', () => {
     expect(f).toMatchObject({ betas: ['x'], session: 'meta-sess', requestClass: 'subagent', attempts: null, bodyBytes: -1, bodySha256: '', inputSha256: '', changed: null, stream: null, method: '' })
   })
 
+  it('shows the host the core sends without settings:manage', () => {
+    const { url: _url, ...summary } = upstream
+    expect(upstreamFacts({ metadata: {}, upstream_request: { ...summary, host: 'api.anthropic.com' } })!.url).toBe('api.anthropic.com')
+    expect(upstreamFacts({ metadata: {}, upstream_request: { ...upstream, host: 'other' } })!.url).toBe(upstream.url)
+  })
+
   it('reads header values as strings or string lists', () => {
     const f = upstreamFacts({ metadata: {}, upstream_request: { headers: { 'X-Api-Key': ['[REDACTED]'], 'accept': ['a', 'b'], 'empty': [], 'mixed': ['a', 1] } } })!
     expect(f.headers).toEqual([

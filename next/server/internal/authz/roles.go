@@ -101,10 +101,11 @@ func (s *Service) getRole(ctx context.Context, q store.Querier, id int64) (*Role
 
 // editableRole locks role id inside tx, which has called Bump, and returns
 // it when actorID may change it: the super admin role is frozen for everyone
-// (name, description, permissions, reset, delete), and any other role must be
-// within the actor's grantSet (canActOnRole, M5: an actor who could weaken a
-// role above it could then act on that role's holders). The system (actor 0)
-// passes. Every role write goes through it.
+// (name, description, permissions, assignable list, reset, delete), any other
+// built-in role is the super admin's alone to change (decision 6), and a
+// custom role must be within the actor's grantSet (cannotActOnRole, M5: an
+// actor who could weaken a role above it could then act on that role's
+// holders). The system (actor 0) passes. Every role write goes through it.
 func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64) (*Role, error) {
 	r, err := scanRole(tx.QueryRow(ctx, roleSelect+` WHERE r.id = $1 FOR UPDATE OF r`, id))
 	switch {
@@ -116,6 +117,8 @@ func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64
 		return nil, errSuperuserRoleFrozen
 	case actorID == 0:
 		return r, nil
+	case r.Builtin:
+		return r, s.covers(ctx, tx, actorID, core.PermissionSet{Superuser: true}, builtinRoleSuperOnly(ctx))
 	}
 	cur, err := s.RolesPermissions(ctx, tx, []string{r.Key})
 	if err != nil {
@@ -135,7 +138,8 @@ type CreateRoleInput struct {
 	AssignCustom       bool     `json:"assign_custom"`
 }
 
-// CreateRole creates a custom (non-superuser) role. The actor must hold all
+// CreateRole creates a custom (non-superuser) role; its key may not be one
+// reserved for a built-in role (reservedRoleKey). The actor must hold all
 // permissions being granted and be able to assign every role the new role
 // may assign, as for SetRolePermissions and SetRoleAssignable (CONTRACTS
 // §43.6), checked inside the transaction after Bump.
@@ -143,6 +147,9 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 	var fields []core.FieldError
 	if !roleKeyRe.MatchString(in.Key) {
 		fields = append(fields, core.FieldError{Field: "key", Code: "invalid", Message: "must match ^[a-z][a-z0-9_]{1,49}$"})
+	}
+	if reservedRoleKey(in.Key) {
+		fields = append(fields, core.FieldError{Field: "key", Code: "reserved", Message: "this key is reserved for a built-in role"})
 	}
 	if in.Name.Get("en") == "" {
 		fields = append(fields, core.FieldError{Field: "name", Code: "required", Message: "name is required"})
@@ -196,7 +203,7 @@ type UpdateRoleInput struct {
 }
 
 // UpdateRole changes name/description of a role actorID may edit
-// (editableRole; built-in roles included).
+// (editableRole; built-in roles included, by the super admin).
 func (s *Service) UpdateRole(ctx context.Context, actorID, id int64, in UpdateRoleInput) (*Role, error) {
 	if in.Name != nil && in.Name.Get("en") == "" {
 		return nil, core.InvalidFields(core.FieldError{Field: "name", Code: "required", Message: "name is required"})
@@ -519,14 +526,8 @@ func (s *Service) checkAssignment(ctx context.Context, q store.Querier, actorID,
 			return err
 		}
 	}
-	if actorID != userID {
-		target, err := s.usersRoleSet(ctx, q, []int64{userID})
-		if err != nil {
-			return err
-		}
-		if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
-			return err
-		}
+	if err := s.canActOnUsers(ctx, q, actorID, core.ActOnIdentity, userID); err != nil {
+		return err
 	}
 	grant, err := s.RolesPermissions(ctx, q, roleKeysOf(added))
 	if err != nil {

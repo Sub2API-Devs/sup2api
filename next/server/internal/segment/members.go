@@ -25,7 +25,7 @@ func (s *Service) addMembers(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := s.actOnOthers(ctx, in.UserIDs...); err != nil {
+	if err := s.actOnUsers(ctx, in.UserIDs...); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

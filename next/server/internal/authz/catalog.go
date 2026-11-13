@@ -12,7 +12,10 @@ const (
 	RoleSuperAdmin = "super_admin"
 	RoleAdmin      = "admin"
 	RoleOperator   = "operator"
-	RoleUser       = "user"
+	// RoleSupplier is an add-on role: a supplier holds it next to RoleUser
+	// and brings its own accounts and proxies (CONTRACTS §21).
+	RoleSupplier = "supplier"
+	RoleUser     = "user"
 )
 
 type coreModule struct {
@@ -28,11 +31,15 @@ type corePerm struct {
 	// identity or authorization in the role editor; display only, it has no
 	// bearing on access keys.
 	sensitive bool
-	// superOnly: no built-in role's defaults may accept the permission
-	// (TestCatalogFlagInvariants); only a superuser grants it explicitly.
+	// superOnly: the permission is in no built-in role's defaults, whatever
+	// the role's grants say (builtinRole.accepts), and it inherits only from
+	// superOnly ones (TestCatalogFlagInvariants), so no role gets it
+	// automatically. By default only the super admin holds it; a grant needs
+	// a holder, so delegating it starts with the super admin (decision D2).
 	superOnly bool
 	// sessionOnly keeps the permission out of access keys (KeyAllowed):
-	// identity takeover and host-level control (CONTRACTS §80).
+	// identity takeover, host-level control, code execution, trust roots and
+	// plaintext credentials (CONTRACTS §80).
 	sessionOnly bool
 	// inherits: when the permission is first created, every role holding
 	// one of these keys gets it too (splitting a permission keeps its
@@ -77,7 +84,7 @@ var coreModules = []coreModule{
 		{key: "account:update", en: "Edit accounts", zh: "编辑账号"},
 		{key: "account:delete", en: "Delete accounts", zh: "删除账号", sensitive: true},
 		{key: "account:test", en: "Test accounts", zh: "测试账号"},
-		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true},
+		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true, sessionOnly: true},
 		// Ownership (CONTRACTS §21): "own" keys only reach accounts the caller
 		// created; a full key above overrides its own counterpart.
 		{key: "account:own:read", en: "Read own accounts", zh: "查看自己创建的账号"},
@@ -85,7 +92,7 @@ var coreModules = []coreModule{
 		{key: "account:own:update", en: "Edit own accounts", zh: "编辑自己创建的账号"},
 		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
 		{key: "account:own:test", en: "Test own accounts", zh: "测试自己创建的账号"},
-		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true},
+		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, sessionOnly: true},
 		{key: "account:settings:custom", en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
 		{key: "account:group:bind", en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
 		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true},
@@ -119,21 +126,23 @@ var coreModules = []coreModule{
 	}},
 	{"plugin", lt("Plugins", "插件"), []corePerm{
 		{key: "plugin:read", en: "View plugins", zh: "查看插件"},
-		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true},
+		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true, sessionOnly: true},
 		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件", sensitive: true},
-		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
-		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true},
-		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true},
-		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true},
+		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true, sessionOnly: true},
+		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, sessionOnly: true},
+		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, superOnly: true, sessionOnly: true},
 		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
 		{key: "plugin:market:read", en: "Browse the plugin market", zh: "浏览插件市场"},
 	}},
 	{"publisher", lt("Publishers", "发布者"), []corePerm{
 		{key: "publisher:read", en: "View publishers", zh: "查看发布者"},
-		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true},
+		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, superOnly: true, sessionOnly: true},
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
 		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
+	}},
+	{"audit", lt("Audit", "审计"), []corePerm{
 		{key: "audit:read", en: "View audit logs", zh: "查看审计日志"},
 	}},
 	{"task", lt("Scheduled tasks", "定时任务"), []corePerm{
@@ -150,28 +159,64 @@ var coreModules = []coreModule{
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
 		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
-		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true},
-		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true},
+		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, superOnly: true, sessionOnly: true},
 	}},
 }
 
 // userRolePermissions are granted to the built-in "user" role.
 var userRolePermissions = []string{"apikey:self:manage", "balance:self:read", "usage:self:read", "gateway:use"}
 
-// operatorExcludedModules are the core modules the built-in "operator" role
-// does not get: settings (sticky sessions live on the settings page) and the
-// plugin pages (plugins, market, publishers).
-var operatorExcludedModules = []string{"settings", "sticky", "plugin", "publisher"}
+// supplierPermissions are granted to the built-in "supplier" role: its own
+// accounts and proxies and nothing else. account:group:bind is left out for
+// now (decision D27), so a supplier binds no groups.
+var supplierPermissions = []string{
+	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
+	"proxy:own:read", "proxy:own:manage",
+}
+
+// operatorPermissions are granted to the built-in "operator" role, an
+// explicit list (decision D3), so that a new core permission reaches the
+// role only by being added here: day-to-day users, groups, accounts and
+// proxies, read access to money and observability, and what a user has.
+// Left out on purpose: role:define, balance:adjust, usage:settle,
+// user:delete, user:password:reset, account:credential:view,
+// account:settings:custom (the one account key that restricts a full-level
+// caller; group:bind and relay only bind own-level callers and mean nothing
+// next to the full-level keys), price:manage, task:manage, sticky sessions,
+// settings, plugins, publishers and core updates.
+//
+// The own-level account and proxy keys are redundant next to the full-level
+// ones, and kept: the role editor stores "all" as {all, own}, and holding
+// them lets an operator assign the supplier role, whose defaults they are.
+// That is why account:own:credential:view is here while
+// account:credential:view is not: it shows the credentials of accounts the
+// operator created itself.
+var operatorPermissions = slices.Concat([]string{
+	"user:read", "user:create", "user:update",
+	"role:read", "role:assign",
+	"group:read", "group:manage",
+	"segment:read", "segment:manage",
+	"account:read", "account:create", "account:update", "account:delete", "account:test",
+	"proxy:read", "proxy:manage",
+	"price:read",
+	"balance:all:read",
+	"usage:all:read",
+	"node:read",
+	"audit:read",
+	"task:read", "task:run",
+}, supplierPermissions, userRolePermissions)
 
 type builtinRole struct {
 	key         string
 	name        core.LocalizedText
 	description core.LocalizedText
 	superuser   bool
-	// grants reports whether a core permission is in the role's defaults;
-	// nil means none. New core permissions are granted to the role when
-	// grants accepts them, and a reset restores exactly this set.
-	grants func(module, key string) bool
+	// grants reports whether a core permission is in the role's defaults,
+	// superOnly ones aside (accepts); nil means none. New core permissions
+	// are granted to the role when it accepts them, and a reset restores
+	// exactly this set.
+	grants func(p corePerm) bool
 	// assignable lists the built-in roles its holders may assign by
 	// default, and assignCustom adds every custom role (decision 5). A
 	// role created later is added to the lists naming it.
@@ -179,14 +224,31 @@ type builtinRole struct {
 	assignCustom bool
 }
 
+// oneOf is the grants of a role whose defaults are exactly keys.
+func oneOf(keys []string) func(corePerm) bool {
+	return func(p corePerm) bool { return slices.Contains(keys, p.key) }
+}
+
 var builtinRoles = []builtinRole{
-	{RoleSuperAdmin, lt("Super admin", "超级管理员"), lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), true, nil, nil, false},
-	{RoleAdmin, lt("Admin", "管理员"), lt("All core permissions by default", "默认拥有全部核心权限"), false,
-		func(string, string) bool { return true }, []string{RoleOperator, RoleUser}, true},
-	{RoleOperator, lt("Operator", "运维"), lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"), false,
-		func(module, _ string) bool { return !slices.Contains(operatorExcludedModules, module) }, []string{RoleUser}, false},
-	{RoleUser, lt("User", "普通用户"), lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"), false,
-		func(_, key string) bool { return slices.Contains(userRolePermissions, key) }, nil, false},
+	{key: RoleSuperAdmin, name: lt("Super admin", "超级管理员"), description: lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), superuser: true},
+	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default, except those reserved for the super admin", "默认拥有除超级管理员专属权限以外的全部核心权限"),
+		grants:     func(corePerm) bool { return true },
+		assignable: []string{RoleOperator, RoleSupplier, RoleUser}, assignCustom: true},
+	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Day-to-day users, groups, accounts and proxies; read-only billing and monitoring", "日常管理用户、分组、账号和代理，查看余额、用量、节点、审计和定时任务"),
+		grants:     oneOf(operatorPermissions),
+		assignable: []string{RoleSupplier, RoleUser}},
+	{key: RoleSupplier, name: lt("Supplier", "供应商"), description: lt("Add-on role: own accounts and proxies", "附加角色：管理自己创建的账号和代理"),
+		grants: oneOf(supplierPermissions)},
+	{key: RoleUser, name: lt("User", "普通用户"), description: lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"),
+		grants: oneOf(userRolePermissions)},
+}
+
+// reservedRoleKey reports whether key belongs to a built-in role, so that no
+// custom role may take it. A custom role holding one stops SyncCore
+// (builtinKeyConflict).
+func reservedRoleKey(key string) bool {
+	_, ok := builtinRoleByKey(key)
+	return ok
 }
 
 func builtinRoleByKey(key string) (builtinRole, bool) {
@@ -198,15 +260,17 @@ func builtinRoleByKey(key string) (builtinRole, bool) {
 	return builtinRole{}, false
 }
 
+// accepts reports whether p is in r's defaults: never a superOnly one.
+func (r builtinRole) accepts(p corePerm) bool {
+	return r.grants != nil && !p.superOnly && r.grants(p)
+}
+
 // defaultPermissions returns the core permissions r has by default.
 func (r builtinRole) defaultPermissions() []string {
 	var out []string
-	if r.grants == nil {
-		return out
-	}
 	for _, m := range coreModules {
 		for _, p := range m.perms {
-			if r.grants(m.key, p.key) {
+			if r.accepts(p) {
 				out = append(out, p.key)
 			}
 		}

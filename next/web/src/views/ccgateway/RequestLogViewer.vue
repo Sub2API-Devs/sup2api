@@ -401,7 +401,7 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
         <template v-else-if="tab === 'upstream'">
           <SEmpty v-if="!upstream" size="sm" :text="t('ccgateway.logViewer.upstream.none')" data-testid="request-log-upstream-none" />
           <template v-else>
-            <SHint size="xs">{{ t('ccgateway.logViewer.upstream.hint') }}</SHint>
+            <SHint size="xs">{{ t(detail.content ? 'ccgateway.logViewer.upstream.hint' : 'ccgateway.logViewer.upstream.hintSummary') }}</SHint>
             <SDescriptions dense :columns="2" label-width="9rem" data-testid="request-log-upstream">
               <SDescItem :label="t('ccgateway.logViewer.upstream.method')" mono :value="upstream.method" />
               <SDescItem :label="t('ccgateway.logViewer.upstream.attempts')" :value="upstream.attempts" />

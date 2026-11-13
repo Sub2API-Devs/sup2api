@@ -507,6 +507,7 @@ export default {
     },
     upstream: {
       hint: 'The request the CLI finally sent upstream; secret header values are masked.',
+      hintSummary: 'The request the CLI finally sent upstream: its host and summary headers only (the rest needs settings:manage).',
       none: 'No request sent upstream was recorded (an older log, the request never reached sending, or the CLI wrote no record).',
       body: 'Upstream request body',
       method: 'Method', url: 'URL', attempts: 'Sends', sentAt: 'Last sent', encoding: 'Body encoding',
@@ -521,7 +522,7 @@ export default {
     contentGone: "This log's content has expired or was deleted.",
     eventFilter: 'Filter by event name',
     eventsTruncated: 'Too many events; only the first part is shown.',
-    eventsBounded: 'Event texts show their first 256 bytes.',
+    eventsBounded: 'Events show their summary fields only; error texts, paths and identities need settings:manage.',
     contentNotice: "Content holds users' conversations; reading and downloading it is audited.",
     kind: { request: 'Request', build: 'Build', history: 'History', cli: 'CLI', upstream: 'Upstream', response: 'Response', other: 'Other' },
     content: {

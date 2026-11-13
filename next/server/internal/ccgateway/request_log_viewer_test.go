@@ -194,6 +194,70 @@ func TestRequestLogDetailProjectsMetadataWithoutContent(t *testing.T) {
 	}
 }
 
+// Without settings:manage the events, the upstream request and the headers
+// of a detail keep only their summary fields; settings:manage reads them as
+// the Worker sent them, secret headers masked (FU3).
+func TestRequestLogDetailProjectsEventsWithoutContent(t *testing.T) {
+	const events = `[{"time":"t1","event":"resource_identity_verified","detail":{"principal_id":"p-1","organization_uuid":"o-1"}},` +
+		`{"time":"t2","event":"resource_dispatch_failed","detail":{"error":"open /home/u/secret.txt: denied"}},` +
+		`{"time":"t3","event":"resource_received","detail":{"method":"POST","path":"/v1/files","query":"name=secret.txt","declared_bytes":5}},` +
+		`{"time":"t4","event":"resource_upload_spooled","detail":{"bytes":5,"sha256":"ab","parts":[{"filename":"secret.txt"}]}},` +
+		`{"time":"t5","event":"cli_error","detail":{"status":529,"code":"overloaded","source":"http","truncated":false,"future":"x"},"extra":"y"},` +
+		`{"time":"t6","event":"resource_issuer_mismatch","detail":null},"not an object"]`
+	const upstream = `{"schema":1,"mode":"build","method":"POST","url":"https://api.anthropic.com/v1/messages?beta=true","sent_at":"t",` +
+		`"headers":{"Authorization":"Bearer sk-secret","anthropic-beta":"b1","User-Agent":"claude-cli (device)","x-claude-code-session-id":"s1"},` +
+		`"body_bytes":12,"body_sha256":"ab","prompt":"secret prompt","future":{"x":1}}`
+	const headers = `"request_headers":{"X-Api-Key":["sk-live"],"Content-Type":["application/json"],"User-Agent":["device"]},` +
+		`"response_headers":{"Set-Cookie":["c"],"Request-Id":["rid"],"X-Internal-Path":["/srv/x"]}`
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"metadata":{"request_id":"rid"},"events":` + events + `,"events_truncated":false,` + headers +
+			`,"upstream_request":` + upstream + `,"files":[]}`))
+	})
+	read := func(keys viewerAuth) (string, requestLogDetail) {
+		t.Helper()
+		w := get(keys, "/"+viewerLogID)
+		var out struct {
+			Data requestLogDetail `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+			t.Fatalf("detail: %d %s", w.Code, w.Body)
+		}
+		return w.Body.String(), out.Data
+	}
+	body, d := read(viewerAuth{"account:read": true})
+	for _, leaked := range []string{"p-1", "o-1", "secret", "/v1/files", "future", "extra", "device", "sk-", "/srv/x", "api.anthropic.com/v1", "not an object"} {
+		if strings.Contains(body, leaked) {
+			t.Errorf("account:read reads %q: %s", leaked, body)
+		}
+	}
+	wantEvents := []any{
+		map[string]any{"time": "t1", "event": "resource_identity_verified", "detail": map[string]any{}},
+		map[string]any{"time": "t2", "event": "resource_dispatch_failed", "detail": map[string]any{}},
+		map[string]any{"time": "t3", "event": "resource_received", "detail": map[string]any{"method": "POST", "declared_bytes": float64(5)}},
+		map[string]any{"time": "t4", "event": "resource_upload_spooled", "detail": map[string]any{"bytes": float64(5), "sha256": "ab"}},
+		map[string]any{"time": "t5", "event": "cli_error", "detail": map[string]any{"status": float64(529), "code": "overloaded", "source": "http", "truncated": false}},
+		map[string]any{"time": "t6", "event": "resource_issuer_mismatch"},
+	}
+	wantUpstream := map[string]any{"schema": float64(1), "mode": "build", "method": "POST", "host": "api.anthropic.com", "sent_at": "t",
+		"body_bytes": float64(12), "body_sha256": "ab", "headers": map[string]any{"anthropic-beta": "b1", "x-claude-code-session-id": "s1"}}
+	if !reflect.DeepEqual(d.Events, wantEvents) || !reflect.DeepEqual(d.UpstreamRequest, wantUpstream) ||
+		!reflect.DeepEqual(d.RequestHeaders, map[string][]string{"Content-Type": {"application/json"}}) ||
+		!reflect.DeepEqual(d.ResponseHeaders, map[string][]string{"Request-Id": {"rid"}}) {
+		t.Fatalf("account:read detail:\n%v\n%v\n%v %v", d.Events, d.UpstreamRequest, d.RequestHeaders, d.ResponseHeaders)
+	}
+
+	body, d = read(viewerAuth{"settings:manage": true})
+	var whole []any
+	if json.Unmarshal([]byte(events), &whole) != nil || !reflect.DeepEqual(d.Events, whole) {
+		t.Fatalf("settings:manage events: %v", d.Events)
+	}
+	if strings.Contains(body, "sk-") || d.UpstreamRequest["url"] != "https://api.anthropic.com/v1/messages?beta=true" ||
+		d.UpstreamRequest["prompt"] != "secret prompt" || d.RequestHeaders["User-Agent"][0] != "device" ||
+		d.RequestHeaders["X-Api-Key"][0] != "[REDACTED]" || d.ResponseHeaders["X-Internal-Path"][0] != "/srv/x" {
+		t.Fatalf("settings:manage detail: %s", body)
+	}
+}
+
 // The list keeps the classified error for every reader and the upstream's
 // text for settings:manage only.
 func TestRequestLogListHidesErrorTextWithoutContent(t *testing.T) {
@@ -240,11 +304,16 @@ func TestRequestLogDetailContentFollowsPermission(t *testing.T) {
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
 	if out.Data.Content || len(out.Data.Files) != 1 || out.Data.Files[0].Name != "request.body" ||
-		out.Data.RequestHeaders["X-Api-Key"][0] != "[REDACTED]" || out.Data.RequestHeaders["X-Request-Id"][0] != "rid" || out.Data.ResponseHeaders["Set-Cookie"][0] != "[REDACTED]" {
+		!reflect.DeepEqual(out.Data.RequestHeaders, map[string][]string{"X-Request-Id": {"rid"}}) || len(out.Data.ResponseHeaders) != 0 {
 		t.Fatal("reader detail", out.Data)
 	}
-	if w := get(managers, "/"+viewerLogID); w.Code != 200 || worker.last("detail") != `{"content":true,"id":"`+viewerLogID+`"}` || !strings.Contains(w.Body.String(), `"content":true`) {
+	w = get(managers, "/"+viewerLogID)
+	if w.Code != 200 || worker.last("detail") != `{"content":true,"id":"`+viewerLogID+`"}` || !strings.Contains(w.Body.String(), `"content":true`) {
 		t.Fatalf("manager: %d %s", w.Code, worker.last("detail"))
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	if out.Data.RequestHeaders["X-Api-Key"][0] != "[REDACTED]" || out.Data.ResponseHeaders["Set-Cookie"][0] != "[REDACTED]" {
+		t.Fatal("manager detail", out.Data)
 	}
 	if w := get(readers, "/not-a-log"); w.Code != 400 {
 		t.Fatal("invalid id", w.Code)

@@ -56,7 +56,7 @@
 | 失败 | HTTP 状态码 + `{"error": {"code": "...", "message": "...", "details": {...}}}` |
 | 字段校验失败 | `invalid_argument`，`details.fields = [{"field","code","message"}]` |
 
-错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
+错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`too_many_drafts` 429（未完成的账号草稿或预备容器达到单用户上限，§49.9）、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
 
 ### 3.2 数据格式
 
@@ -75,7 +75,7 @@
 
 ## 4. 权限清单（核心）
 
-模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`session_only`）表示只能由登录会话使用，访问密钥不能带（§80）。
+模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`session_only`）表示只能由登录会话使用，访问密钥不能带（§80）。👑（`superOnly`，2026-11-12，决策 D2）表示超管专属：不在任何内置角色的默认权限里（新库、新增权限的自动授予、恢复默认都不给），默认只有超级管理员持有；授予检查只要求操作者自己持有（§43.6），所以委派总是从超级管理员开始（超管把它授给某个角色后，该角色的持有者若有 `role:define`、`role:assign` 也能继续授出，全程审计）；`GET /permissions` 不返回这个标记。存量库里内置 `admin`、`operator` 角色上的这 5 个权限由迁移 `0099_reclaim_super_only.sql` 回收一次（每条写审计 `authz.reclaim.super_only`，actor 为系统，`detail {role, key}`；自定义角色不动），之后超管可再显式授回。
 
 | 模块 | 权限 |
 |---|---|
@@ -83,19 +83,21 @@
 | role | `role:read` `role:define`🔐🔑 `role:assign`🔐🔑（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
 | group | `group:read` `group:manage`🔐 |
 | segment | `segment:read` `segment:manage`（用户组，§97.7） |
-| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
+| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐🔑；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
 | proxy | `proxy:read` `proxy:manage`🔐；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
 | price | `price:read` `price:manage`🔐 |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` |
 | sticky | `sticky:read` `sticky:manage` |
-| plugin | `plugin:read` `plugin:install`🔐 `plugin:manage`🔐 `plugin:uninstall`🔐 `plugin:grant:high`🔐 `plugin:grant:critical`🔐 `plugin:egress:read` `plugin:market:read` |
-| publisher | `publisher:read` `publisher:manage`🔐 |
+| plugin | `plugin:read` `plugin:install`🔐🔑 `plugin:manage`🔐 `plugin:uninstall`🔐🔑 `plugin:grant:high`🔐🔑 `plugin:grant:critical`🔐🔑👑 `plugin:grant:db_schema_unconfined`🔐🔑👑 `plugin:egress:read` `plugin:market:read` |
+| publisher | `publisher:read` `publisher:manage`🔐🔑👑 |
 | node | `node:read` |
+| audit | `audit:read`（2026-11-12 由 node 模块移出，key 不变） |
 | gateway | `gateway:use` |
 | settings | `settings:read` `settings:manage`🔐🔑 |
+| system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
-内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（全部核心权限）、`operator`（运维：除 `settings` `sticky` `plugin` `publisher` 模块以外的全部核心权限，即没有系统设置、插件、插件市场和发布者页面）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的权限可以编辑；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。
 
 ## 5. REST API（`/api/v1`）
 
@@ -119,16 +121,16 @@
 |---|---|
 | GET `/users`（`?q=&status=&role=&segment=`） | `user:read`；`segment` 是用户组 id 或 `personal`（§97.6） |
 | POST `/users` `{email, display_name, password, role_keys[], segment_id?}` | `user:create`；授予的 role_keys 按 PUT `/users/:id/roles` 的分配规则检查（默认角色 `user` 免可分配清单，仍须是操作者持有权限的子集）；指定非默认角色另需 `role:assign`；带 `segment_id`（命名用户组）另需 `segment:manage`，不带时进默认用户组（§97.6） |
-| GET/PATCH `/users/:id` | `user:read` / `user:update`；更新他人时目标用户权限集不得超出操作者；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
-| DELETE `/users/:id` | `user:delete`；目标用户权限集不得超出操作者 |
+| GET/PATCH `/users/:id` | `user:read` / `user:update`；更新须目标是操作者可管理的用户（可管理目标，§43.6），本人也按此判断（admin、operator 改自己走 `/me/*`）；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
+| DELETE `/users/:id` | `user:delete`；目标须是操作者可管理的用户（可管理目标，§43.6）；不能删除自己（安全约束） |
 | PUT `/users/:id/roles` `{role_keys[]}` | `role:assign`；新增和撤销的角色都必须在操作者的可分配清单内（否则 403 `details.role`）；新增角色所含权限与可分配角色必须在操作者之内（给自己分配也一样，否则 403 `details.missing`/`missing_assignable`）；`super_admin` 任何人都不能经此授予或撤销（403，只能移交）；有变化时记一条 `user.roles` 审计 `{added, removed}`（§43.6） |
 | POST `/system/super-admin/transfer` `{target_user_id, current_password, code}` → 204 | 仅超级管理员本人的登录会话（访问密钥 403，非超管 403 且不消耗登录限流）；先确认本人（密码 + 已开启的两步验证码，复用登录限流与 2FA 锁定，缺失 400）；目标须为未删除、启用中的其他用户（否则 400 `details.fields[{field:"target_user_id", code:"self"\|"not_found"\|"inactive"}]`）。同一事务内：目标获得 `super_admin`，原持有者全部降为 `admin`，双方全部会话立即失效（§43.2，需重新登录）；记一条 `superadmin.transfer` 审计 `{from:[id], to, via:"console"}`（§43.6） |
 | GET `/segments`（`?q=&kind=named\|personal`），GET `/segments/:id` | `segment:read`；用户组，对象与各接口的细节见 §97.6 |
 | POST `/segments` `{name, description, discount}`，PATCH/DELETE `/segments/:id` | `segment:manage`；默认用户组和个人专属不能用 DELETE 删除（409） |
 | GET `/segments/:id/members`（`?q=`） | `segment:read` 且 `user:read`；行同 GET `/users` |
-| POST `/segments/:id/members` `{user_ids[]}` → `{moved}` | `segment:manage`；把用户移入命名用户组；目标用户须通过 `core.ActOnOthers`（§97.6） |
+| POST `/segments/:id/members` `{user_ids[]}` → `{moved}` | `segment:manage`；把用户移入命名用户组；每个目标用户须是操作者可管理的用户（可管理目标，§43.6） |
 | GET `/segments/:id/groups`，PUT `/segments/:id/groups` `{items:[{group_id, granted?, rate_override?}]}` | `segment:read` / `segment:manage`；用户组在各分组的授权与专属倍率 |
-| POST `/users/:id/personal-segment` `{copy}`，DELETE `/users/:id/personal-segment`（`?to=`） | `segment:manage`；设为个人专属 / 移回命名用户组；目标用户须通过 `core.ActOnOthers`（§97.6） |
+| POST `/users/:id/personal-segment` `{copy}`，DELETE `/users/:id/personal-segment`（`?to=`） | `segment:manage`；设为个人专属 / 移回命名用户组；目标用户须是操作者可管理的用户（可管理目标，§43.6） |
 | GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:define`；POST 授予的 permission_keys 必须是操作者持有权限的子集，可分配清单必须在操作者可分配范围内 |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；新增的 permission_keys 必须是操作者持有权限的子集，角色当前的权限也不能超出操作者（§43.6） |
 | PUT `/roles/:id/assignable` `{role_keys[], assign_custom}` | `role:define`；新增的可分配角色必须在操作者可分配范围内，角色当前的清单也不能超出操作者（§43.6） |
@@ -178,7 +180,7 @@
 | GET `/prices/history/:expr_hash` | `price:read` |
 | GET `/me/balance` → `{balance}`；GET `/me/ledger`（`?kind=&from=&to=`） | `balance:self:read` |
 | GET `/ledger`（`?user_id=&kind=&from=&to=`） | `balance:all:read` |
-| POST `/users/:id/balance/adjust` `{amount, credit:bool, note}`，支持请求头 `Idempotency-Key` | `balance:adjust`；目标须通过 `core.ActOnOthers`：给自己调一律 409 `you cannot do this to yourself`（超管也不行），目标角色的权限超出操作者可授予范围或目标是超管而操作者不是 → 403 |
+| POST `/users/:id/balance/adjust` `{amount, credit:bool, note}`，支持请求头 `Idempotency-Key` | `balance:adjust`（访问密钥须显式带它）；目标须是操作者可管理的用户（可管理目标，§43.6），本人也按此判断：超管可以给自己和任何人调，admin 不能给自己、其他 admin、超管调；不可管理 → 403 `details.reason = not_manageable` |
 | GET `/me/usage`，GET `/me/usage/:id`，GET `/usage`，GET `/usage/:id`（筛选参数见 §15.2；`/me/usage` 不支持 `user_id`、`account_id`、`account_type`） | `usage:self:read` / `usage:all:read` |
 | GET `/usage/summary`（`/usage` 的全部筛选参数，加 `group_by=day\|model\|user\|ip`）；GET `/me/usage/summary`（限定当前用户，`group_by=day\|model\|ip`） | `usage:all:read` / `usage:self:read` |
 | GET/PUT `/settings/billing` `{missing_price_policy: reject\|free, min_balance, big_cost_warning_usd}` | `settings:read` / `settings:manage` |
@@ -219,7 +221,7 @@
 | PUT `/plugins/:key/resources` `{memory_mb, cpu, max_threads, max_open_files}` | `plugin:manage` | |
 | PUT `/plugins/:key/egress-policy` `{policy}` | `plugin:manage` | |
 | GET `/plugins/:key/egress`（`?from=&to=`） | `plugin:egress:read` | 按域名汇总 + 明细 |
-| GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `plugin:manage` | |
+| GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `task:run`🔐 | 手动运行与 POST `/system/tasks/:name/run` 同口径（2026-11-12 权限加固 W4-A4，此前为 `plugin:manage`）；审计动作仍是 `plugin.job.run` |
 | GET `/plugins/:key/events` | `plugin:read` | 游标、积压、死信 |
 | GET `/ui/plugins` | auth | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
 | GET `/nodes` | `node:read` | |
@@ -480,7 +482,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 - **SSRF 拨号时校验**：`proxy` 模块给**直连**（不经代理）的上游 HTTP 客户端设置拨号检查，拒绝回环、私有、链路本地、未指定地址，防 DNS 重绑定；`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行（`proxy.Options.AllowPrivate`）。经代理的连接不检查（由代理解析）。
 - **插件新外部域名告警**：出口隧道每次连接 upsert `plugin_egress_domains`；首次出现的 host 记 WARN 日志并写事件 `plugin.egress_new_domain`。`GET /plugins/:key/egress` 增加 `domains:[{host, first_seen_at, last_seen_at, connections, new}]`（`new` = 24 小时内首次出现）。
 - **出口日志长连接**：连接建立时即写一行（`result='open'`），关闭时更新 `result/duration_ms/bytes/closed_at`，控制台立即可见。
-- **操作员路由上改自己的登录方式要二次验证（SEC-H3，2026-11-08 审计）**：`PATCH /users/:id` 改**自己**的 `password` 或 `email`、`DELETE /users/:id/security` 重置**自己**的因子时，请求体必须带 `current_password`（走登录限速），已启用两步验证的用户还要带 `code`（TOTP 或备份码，错码计入 TOTP 锁定），与 `/me/password`、`/me/two-factor/disable` 要求一致；缺少时 400 `invalid_argument`，`details.fields[{field:"current_password"|"code", code:"required"}]`。此前这两条路由对本人不做任何校验，只持 `user:update` 的访问密钥或被盗的 access token 可以借此改密码、清两步验证，换成完整会话。改别人仍不需要（操作员没有对方的密码），`display_name`、`status` 也不需要。经访问密钥改密钥主人时先过 `CanActOnUser`（主人按其角色比较，2026-11-12 期 1 验证），所以密钥收窄于主人时 403，二次验证之前就拒绝。2026-11-12 起 `DELETE /users/:id/security` 需要只认会话的 `user:password:reset`（§79.2），访问密钥到不了这条路由（403 `details.permission`），上面关于密钥的说明只对 `PATCH /users/:id` 仍然适用。
+- **操作员路由上改自己的登录方式要二次验证（SEC-H3，2026-11-08 审计）**：`PATCH /users/:id` 改**自己**的 `password` 或 `email`、`DELETE /users/:id/security` 重置**自己**的因子时，请求体必须带 `current_password`（走登录限速），已启用两步验证的用户还要带 `code`（TOTP 或备份码，错码计入 TOTP 锁定），与 `/me/password`、`/me/two-factor/disable` 要求一致；缺少时 400 `invalid_argument`，`details.fields[{field:"current_password"|"code", code:"required"}]`。此前这两条路由对本人不做任何校验，只持 `user:update` 的访问密钥或被盗的 access token 可以借此改密码、清两步验证，换成完整会话。改别人仍不需要（操作员没有对方的密码），`display_name`、`status` 也不需要。2026-11-12 FU6 起本人也要过可管理目标检查（§43.6）：admin、operator 等不在自己可分配清单里的角色经这条路由改自己一律 403，改自己的资料、密码、两步验证请走 `/me/*`；只有超管仍可用这条路由改自己（仍要二次验证）。超管的访问密钥改超管账号本身 403（会话专属，§43.6）。2026-11-12 起 `DELETE /users/:id/security` 需要只认会话的 `user:password:reset`（§79.2），访问密钥到不了这条路由（403 `details.permission`），上面关于密钥的说明只对 `PATCH /users/:id` 仍然适用。
 - **SEC-H2 以角色衡量目标，而不是生效权限（2026-11-08 审计）**：`CanActOnUser` 及 `PATCH /users/:id`（含 `status` 由 disabled 改回 active）、`DELETE /users/:id`、`PUT /users/:id/roles`、`DELETE /users/:id/security` 比较的是目标**角色所授予**的权限。此前用的是生效权限：被禁用用户的生效权限为空集，任何持 `user:update`（+ `user:password:reset`）的人都能给一个被禁用的管理员设密码再启用，接管该账号。`DELETE /users/:id/security` 此前也缺这项检查。
 - **客户端在 usage 事件前断开按预扣估算计费（§25.8，2026-11-08 审计）**：见 §25.8 末尾。
 
@@ -689,14 +691,14 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 |---|---|---|---|
 | GET `/roles` | `role:read` | | 不分页，内置在前 |
 | GET `/roles/:id` | `role:read` | | 不存在 404 |
-| POST `/roles` | `role:define` | `{key, name, description?, permission_keys?, assignable_role_keys?, assign_custom?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；已移除的权限忽略；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`）；可分配清单同 PUT `/roles/:id/assignable` 校验（字段错误记在 `role_keys` 下） |
-| PATCH `/roles/:id` | `role:define` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
-| DELETE `/roles/:id` | `role:define` | | 内置角色 409；用户的该角色随之删除，所以角色仍有持有者时它须在操作者的可分配清单内（否则 403 `details.role`） |
+| POST `/roles` | `role:define` | `{key, name, description?, permission_keys?, assignable_role_keys?, assign_custom?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`，且不能是内置角色保留的 key（`super_admin`、`admin`、`operator`、`user`、`supplier`；400 `details.fields[{field:"key", code:"reserved"}]`）；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；已移除的权限忽略；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`）；可分配清单同 PUT `/roles/:id/assignable` 校验（字段错误记在 `role_keys` 下） |
+| PATCH `/roles/:id` | `role:define` | `{name?, description?}` | 内置角色也可改名称和描述（只有超级管理员，否则 403，§43.6）；给了 `name` 时 `name.en` 不能为空 |
+| DELETE `/roles/:id` | `role:define` | | 内置角色：非超管 403，超管 409；用户的该角色随之删除，所以角色仍有持有者时它须在操作者的可分配清单内（否则 403 `details.role`） |
 | PUT `/roles/:id/permissions` | `role:define` | `{permission_keys}` | 整体替换；操作者须持有**新增**的权限（否则 403 `details.missing`）；已移除（`status=removed`）的权限忽略，角色上已有的授权行保留（原样保存不报错）；完全不存在的 key 仍按未知报错 |
 | PUT `/roles/:id/assignable` | `role:define` | `{role_keys, assign_custom}` | 整体替换可分配清单；未知角色 400 `details.fields[{field:"role_keys", code:"unknown"}]`，含 `super_admin` 400（`code:"superuser"`）；操作者须能分配**新增**的角色，新开 `assign_custom` 时自己也须有它（否则 403 `details.missing_assignable` / `missing_assign_custom`） |
-| POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述、核心权限（§4）和默认可分配清单（admin = operator、user 与全部自定义角色；operator = user；尚未建出的内置角色跳过）；角色上的插件权限不动；自定义角色 409；操作者须持有全部默认权限并能分配默认清单（同上，否则 403） |
+| POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述、核心权限（§4）和默认可分配清单（admin = operator、supplier、user 与全部自定义角色；operator = supplier、user；supplier、user 为空；尚未建出的内置角色跳过）；角色上的插件权限不动；自定义角色 409；操作者须持有全部默认权限并能分配默认清单（同上，否则 403） |
 
-以上 PATCH、DELETE、PUT permissions、PUT assignable、reset 共用一个入口（§43.6 角色写入口）：超级管理员角色一律 409；角色当前授予的权限或可分配角色超出操作者时 403。每次写入记一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.assignable`、`role.reset`，目标为该角色）。
+以上 PATCH、DELETE、PUT permissions、PUT assignable、reset 共用一个入口（§43.6 角色写入口）：超级管理员角色一律 409；其余内置角色只有超级管理员能做，否则 403 `details.superuser = true`（决策 6，表中“操作者须持有……”对内置角色因此恒成立）；角色当前授予的权限或可分配角色超出操作者时 403。每次写入记一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.assignable`、`role.reset`，目标为该角色）。
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 
@@ -747,7 +749,8 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `groups` | `[{id, name}]`，按 id 升序 |
 | `proxy_id` | 可为 `null`（直连） |
 | `status` | `active` \| `disabled` |
-| `status_reason` | 管理员禁用时为 `"disabled by administrator"`，重新启用时清空 |
+| `status_reason` | 手动禁用时，全量范围（`account:update`）写 `"disabled by administrator"`，own 范围（`account:own:update`）写 `"disabled by owner"`；重新启用时清空 |
+| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 0100）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`，其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
 | `schedulable`、`priority`、`max_concurrency` | `max_concurrency=0` 表示不限 |
 | `in_use` | 当前占用的并发槽位数（集群实时） |
 | `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
@@ -1057,7 +1060,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 模块 | 新增 key | 说明 |
 |---|---|---|
-| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
+| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
 | account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
@@ -1066,7 +1069,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 - 全部级 key 覆盖自己级 key：同时拥有时按全部处理。
 - `created_by` 为 `NULL` 的历史数据只有全部级 key 能看到/操作。
 - admin 角色按 `SyncCore` 规则自动获得全部新 key（含 `account:settings:custom`）；`user` 角色不变；已有自定义角色需要管理员手工勾选。
-- 典型角色：**供应商** = `account:own:*`（六个）+ `proxy:own:read` + `proxy:own:manage`，没有 `account:settings:custom`；**只读** = `account:read` + `proxy:read`，没有任何 `credential:view`。
+- 典型角色：**供应商** = `account:own:*`（六个）+ `proxy:own:read` + `proxy:own:manage`，没有 `account:settings:custom`（2026-11-12 起即内置角色 `supplier` 的默认权限，§4；没有 `account:relay` 与 `account:group:bind`，所以不能新建可自定义上游的账号、不能绑定分组）；**只读** = `account:read` + `proxy:read`，没有任何 `credential:view`。
 
 路由绑定改为**同一路由接受全部级或自己级任一 key**（`httpapi.Router.PermAny(method, path string, handler gin.HandlerFunc, keys ...string)`，现有 `Perm` 不变）：中间件对每个 key 调 `Authorizer.Can`，把命中的 key 集合按注册顺序放进 **request ctx**（`core.WithGranted` / `core.Granted(ctx) []string`；`httpapi.Granted(c *gin.Context)` 是取 `c.Request.Context()` 的便捷写法）（原"任一命中的 key 敏感就要求 step-up"已随二次验证删除，§3.3）；都不命中返回 403 `permission_denied`，`details.permission` 为 **第一个** key。`Perm` 也把它的单个 key 写进 `Granted`，所以 `OwnerScope` 在单 key 路由上同样可用。handler 用 `core.OwnerScope(ctx context.Context, allKey string) *int64` 取范围（ctx 为 `c.Request.Context()`，和 `core.UserID` 一致）：命中全部级 key 返回 `nil`，否则返回调用者 id 的指针；范围条件**落在 SQL 里**（列表 `WHERE ($n::bigint IS NULL OR created_by = $n)`，写操作 `UPDATE ... WHERE id=$1 AND ($2::bigint IS NULL OR created_by = $2)`，仿 `apikey.softDelete`），越权访问一律 404（不区分"不存在"和"不是你的"）。
 
@@ -1087,7 +1090,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | DELETE `/accounts/:id` | `account:delete`🔐 / `account:own:delete` | |
 | POST `/accounts/:id/test`、POST `/accounts/:id/models/fetch` | `account:test` / `account:own:test` | |
 | POST `/account-types/:plugin_key/:type/models/fetch` | `account:create` / `account:own:create` | 可带 `proxy_url`：只解析、临时用它发请求，**不查找不创建**代理、不需要代理权限；与 `proxy_id` 同时给出 400 `fields[{proxy_url, conflict}]`；`proxy_id` 的可见性规则同 POST `/accounts` |
-| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐 / `account:own:credential:view`🔐 | |
+| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐🔑 / `account:own:credential:view`🔐🔑 | |
 | GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
 | GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
@@ -1121,6 +1124,8 @@ own 级用户（只有 `account:own:create` / `account:own:update`，无全部�
    - `schedulable`：无限制（全部级和 own 级相同）
    超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
 3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`、用改过上游地址的凭证调用 `POST /accounts/:id/models/fetch`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
+
+4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9）时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
 
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 
@@ -2456,7 +2461,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **插件。** 内建与第三方插件均使用自身发布生命周期。核心升级预检当前启用及 rollout 中插件的 `hostCompat`；准备、准入和运行就绪检查本机是否加载已批准且兼容的插件。随包内建插件仅是首次安装来源，不覆盖已安装版本、不复活已删除插件。任务轮询、调度和记账仍由现有核心机制负责，更新主节点不独占业务任务。
 
-**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要 `system:update:execute`，暂停/恢复/取消需要 `system:update:recover`，沿用核心 RBAC（无二次验证，§3.3）。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
+**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要 `system:update:execute`，暂停/恢复/取消需要 `system:update:recover`，沿用核心 RBAC（无二次验证，§3.3）；execute 与 recover 只认登录会话，访问密钥不能带（§80）。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
 
 当前 v1 仅支持 schema/cluster/task/Host API 契约保持不变的滚动更新。维护迁移、跨协议转换、自动主节点选举、未经校验的任意目标强制回滚、网关自身更新不在此协议实现范围内。不能用新签名或更改声明绕过这些检查。
 
@@ -2693,7 +2698,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 只有持 `proxy:manage` 的用户能把代理保存在私网地址（存为 `allow_private = true`）。只持 `proxy:own:manage` 时：
   - 保存私网地址 → 403，`details.permission = "proxy:manage"`；
   - 保存账号时自动关联代理（§21.4）遇到私网地址同样拒绝。
-- `PATCH /proxies/:id` 改了地址（`protocol`、`host`、`port` 任一与现值不同；`host` 不分大小写比较，原样带回的字段不算）时按新建判断：只持 `proxy:own:manage` 时结果地址是私网地址 → 403；成功时 `allow_private` 跟随本次修改者（`proxy:manage` 为 `true`，否则 `false`）。地址没变时不变。
+- `PATCH /proxies/:id` 改了地址（`protocol`、`host`、`port` 任一与现值不同；`host` 不分大小写比较，原样带回的字段不算）时按新建判断：只持 `proxy:own:manage` 时结果地址是私网地址 → 403；成功时 `allow_private` 按下面的规则写：`host` 变了时跟随本次修改者（`proxy:manage` 为 `true`，否则 `false`）；只持 `proxy:own:manage` 只改 `port` / `protocol` 时同样置 `false`；持 `proxy:manage` 只改 `port` / `protocol` 时保留原值（2026-11-12 权限加固 FU1 起，此前置 `true`）。地址没变时不变。
 - `POST /proxies/probe`：只持 `proxy:own:manage` 探测私网地址 → 403；带 `save` 时按调用者的写范围查找或创建（`proxy:manage` 可复用他人的代理，新建的行 `allow_private = true`；复用的行不改 `allow_private`，探测成功不代表该行在使用时可达私网）。拨号被拒时 `attempts[].message` / 测试结果的 `message` 为固定文案，不带解析出的地址。
 - 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。字面私网地址在建客户端时拒绝；域名在**拨号时**按解析后的 IP 判断（`netguard.Dialer`，socks5 同样经过），指向私网、回环、链路本地地址的连接失败（`netguard.ErrPrivate`）。`proxy_url` 的临时客户端（`HTTPClientFor`）与 own 范围的探测同样在拨号时检查。
 - `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`（只用于测试）关闭以上检查。
@@ -2720,19 +2725,29 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 - 把账号绑定到分组需要 `group:manage` 或 `account:group:bind`；
 - `priority` 只能 0–100，`weight` 只能 1–100，`max_concurrency` 只能 1–1000，超出返回字段错误 `restricted`；
+- 管理员禁用的账号（`admin_locked`，§15.9、§21.3.1）不能自行启用或重置状态，403 `account_locked_by_admin`；
 - 账号类型**没有声明 `guardedSettings`** 时（relay、ccgateway 这类可以自填上游地址的类型；核心内置类型同样算），创建或修改需要 `account:relay`，否则 403，`details.required_permission = "account:relay"`。注意判断条件是"没有声明受限设置"，不是"类型叫 relay"：上游地址固定、不需要受限设置的类型（如 `claude_oauth`）目前也要求这个权限。
 
 ### 43.6 授予与操作他人的权限检查
 
 - 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。覆盖 POST `/roles`、PUT `/roles/:id/permissions`（只检查**新增**的权限，见下文角色写入口）、POST `/roles/:id/reset`、POST `/users`（带 role_keys）和 PUT `/users/:id/roles`；后者只检查**新增**的角色所含权限，用户已有的角色不算授予，给自己分配角色同样检查（2026-11-05 修正：之前 POST `/roles` 和 PUT `/users/:id/roles` 没有做这项检查，持 `role:manage` 的运维可以建一个带 `plugin:install` 的角色再分配给自己）。
-- 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
+- 修改、禁用、删除用户（`CanActOnUser`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing`，`details.reason = not_manageable`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。FU6 起本人也是目标，见下文可管理目标。
+- 同级保护（2026-11-12，T56）：作用于用户时，目标持有的每个角色（默认角色 `user` 除外）还必须在操作者的可分配清单内（超管全部可分配），否则 403 `you cannot modify a user holding a role you cannot assign`（`details.role` 为该角色）。按默认清单，admin 不能动其他 admin，operator 不能动其他 operator 和自定义角色的持有者；没有可分配清单的角色（如只有 `user:update` 的客服类自定义角色）只能作用于只有 `user` 角色或没有角色的用户。先比较权限（`details.missing`），再比较角色。FU6 起它与下条合为“可管理目标”。
+- **可管理目标**（2026-11-12 权限加固 FU6，产品性收紧）：所有“作用于某个用户”的入口——PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles`、POST `/users`（带角色）、余额调整、用户组成员变更与个人专属——分两层判断：
+  1. 能不能做：接口的操作权限（`user:update`、`user:delete`、`user:password:reset`、`role:assign`、`balance:adjust`、`segment:manage` 等），由路由检查；访问密钥按“用户权限 ∩ 密钥权限”。
+  2. 能对谁做：`core.UserGuard`（`authz.CanActOnUsers`，唯一一处）。操作者的可分配角色清单就是它“可管理的角色”：目标持有的每个非默认角色（`user` 除外，同 T56）都要在清单里，且目标角色授予的权限、可分配角色、超管标志都在操作者之内（SEC-H2 防提权）；超管管理所有人。**本人也按同一规则判断**，不再有“作用于自己直接放行”或“作用于自己一律 409”的特判：按默认清单 admin、operator 不能经这些入口动自己（403 `details.reason = not_manageable`，同级时还带 `details.role`），超管可以。注意：带“全部自定义角色”（`assign_custom`）或清单里列了自己的自定义角色，同样能管理自己与同角色的持有者（含给自己调余额、改自己用户组的定价）；建这类角色时需要明白这一点。操作者一侧按**操作者这个用户的角色**计算，不被访问密钥收窄：admin 带 `balance:adjust` 的密钥可以给 supplier、user 调余额，超管带 `balance:adjust` 的密钥可以给自己和任何人调。
+  - 保留（决策 1，期 3 过渡）：修改超管账号本身的身份类操作（`core.ActOnIdentity`：改资料、邮箱、密码，清两步验证与通行密钥，禁用、删除，分配或撤销角色）在目标是超管时只接受超管本人的登录会话，访问密钥 403 `a superuser's account changes only through the superuser's own session`（`details.reason = session_only`）；调余额、用户组成员这类数据类操作（`core.ActOnData`）不在此列。期 4 计划改为“密钥勾了权限可操作，但须当场二次验证”，`UserAction` 参数为此保留。
+  - 审计：作用于自己的成功检查（按默认清单只有超管）由 `CanActOnUsers` 记一条 `user.act_on_self`（`target_type = user`，`target_id` 为本人，`detail = {self: true, via: "session" | "access_key", access_key_id?, request_id}`），在检查处写一次，不在各入口写；与操作本身的审计各写各的。
+  - **安全约束（不是权限规则，不并入可管理目标）**：任何人（含超管）不能禁用或删除自己（409 `you cannot disable or delete yourself`，防止把自己锁在外面）；超级管理员角色不能撤销（含超管本人），只能移交（§43.7）。
+  - 用户自助接口（`/me/*`）不经 `UserGuard`，不受影响。
 - 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
-- 两类检查也比较可分配角色（2026-11-12，决策 4、5）：角色可以带一份可分配角色清单（`role_assignable_roles`，永不含超管角色）和“以及全部自定义角色”标志（`roles.assign_custom`）。新增角色或目标用户的角色能分配的角色必须在操作者的可分配范围内，否则 403，`details.missing_assignable` 列出缺的角色、`details.missing_assign_custom = true` 表示缺“全部自定义角色”，与 `details.missing` 分开。因此能分配 admin 的委派者不会被 admin 改动。访问密钥收窄后没有可分配角色。内置默认清单：admin = operator、user 与全部自定义角色；operator = user。
-- 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、改可分配清单、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余角色当前授予的权限（授予视角，不含已移除的）与可分配角色必须在操作者之内，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限、改可分配清单（PUT `/roles/:id/assignable`）因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限与可分配角色同样已在操作者之内（C-L2）。
-- 分配角色（PUT `/users/:id/roles`、POST `/users`，2026-11-12，决策 1、4）：只比较新增与撤销的角色，无变化直接成功。`super_admin` 任何人（含超管本人、超管的访问密钥）都不能授予或撤销，403 `the super admin role cannot be assigned or revoked; transfer it instead`；系统（actor 0）只能授予初始超管（引导），不能撤销。其余每个新增或撤销的角色都必须在操作者的可分配清单内（超管可分配全部），否则 403 `details.role`；唯一例外是给当前没有任何角色的用户授予默认角色 `user`，所以只有 `user:create` 的人仍能建默认用户。然后检查操作者能作用于目标（给自己分配除外），再检查新增角色所含权限与可分配角色都在操作者之内（`Missing`）。访问密钥没有可分配角色，不能分配任何角色。
+- 两类检查也比较可分配角色（2026-11-12，决策 4、5）：角色可以带一份可分配角色清单（`role_assignable_roles`，永不含超管角色）和“以及全部自定义角色”标志（`roles.assign_custom`）。新增角色或目标用户的角色能分配的角色必须在操作者的可分配范围内，否则 403，`details.missing_assignable` 列出缺的角色、`details.missing_assign_custom = true` 表示缺“全部自定义角色”，与 `details.missing` 分开。因此能分配 admin 的委派者不会被 admin 改动。访问密钥收窄后没有可分配角色（只影响授予与分配；可管理目标按操作者的角色计算，FU6）。内置默认清单（决策 5）：admin = operator、supplier、user 与全部自定义角色；operator = supplier、user；supplier、user 没有。存量库里内置 operator 的清单由迁移 `0101_operator_assignable.sql` 纠正一次为 supplier、user 且不含自定义角色（0097 曾按旧 `role:manage` 等价生成 {operator, user} 与全部自定义角色；审计 `role.assignable`，actor 为系统，`detail.via = "migration 0101"`）。升级时新建出的内置角色（如 supplier）由 `SyncCore` 追加到默认清单含它的已有内置角色上（审计 `authz.sync.grant`，via=`assignable`），已有清单的其他项不动。
+- 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、改可分配清单、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余内置角色（`admin`、`operator`、`user` 等）只有超级管理员能改（2026-11-12，决策 6），其他人即使权限覆盖该角色也 403 `only the super admin can change built-in roles`（`details.superuser = true`；访问密钥不是超管，同样 403）；自定义角色当前授予的权限（授予视角，不含已移除的）与可分配角色必须在操作者之内，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限、改可分配清单（PUT `/roles/:id/assignable`）因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限与可分配角色同样已在操作者之内（C-L2）。
+- 分配角色（PUT `/users/:id/roles`、POST `/users`，2026-11-12，决策 1、4）：只比较新增与撤销的角色，无变化直接成功。`super_admin` 任何人（含超管本人、超管的访问密钥）都不能授予或撤销，403 `the super admin role cannot be assigned or revoked; transfer it instead`；系统（actor 0）只能授予初始超管（引导），不能撤销。其余每个新增或撤销的角色都必须在操作者的可分配清单内（超管可分配全部），否则 403 `details.role`；唯一例外是给当前没有任何角色的用户授予默认角色 `user`，所以只有 `user:create` 的人仍能建默认用户。然后检查操作者能作用于目标（可管理目标，本人也按此判断，FU6），再检查新增角色所含权限与可分配角色都在操作者之内（`Missing`）。访问密钥没有可分配角色，不能分配任何角色。
 - 超管移交（POST `/system/super-admin/transfer`，2026-11-12，决策 1）：`super_admin` 换人的唯一路径，`authz.TransferSuperAdmin` 一处实现，控制台与服务器 CLI 共用。`Bump` 之后锁住超管持有行，操作者须是当前持有者（系统 actor 0 = CLI 不受此限，同时修复无超管或多超管）；目标须未删除、启用中、不是操作者本人；其余持有者先删超管行，未删除的补 `admin`（已软删除的不补，恢复该用户不会带回管理权限），再给目标加超管行；记 `superadmin.transfer` 审计（`via` 为 `console` 或 `cli`）。iam 在同一事务里让降级者与目标的全部会话失效，提交后广播。是否要求目标已开启两步验证：不强制，只由前端提示。
 - 服务器 CLI 恢复（`sub2api admin recover-superadmin --email <已有用户> [--reset-password] [--reset-2fa]`，2026-11-12，决策 2）：在服务器上直连配置的数据库，不跑迁移、不连 Redis、不广播，没有对应的 HTTP 入口。`iam.RecoverSuperAdmin` 只组合系统（actor 0）路径：目标被禁用时先启用，再经 `authz.TransferSuperAdmin(actor 0)` 成为唯一超管（其余未删除的持有者降为 `admin`，已软删除的只去掉超管角色，双方会话失效），`--reset-password` 设 24 位随机密码并只在 stdout 打印一次，`--reset-2fa` 清除两步验证与通行密钥；审计 actor 为 0。其他节点最长 30 秒后经版本轮询与状态缓存 TTL 生效（旧会话的访问令牌在此之前仍可能被接受）；重新登录立即可用：令牌携带的 `token_version` 比节点状态缓存里的新时，该缓存项视为过期、当场重读，不会出现登录成功后下一个请求 401。只读写 `roles`、`user_roles`、`users`、`refresh_tokens`、`login_sessions`、`user_totp`、`user_passkeys`、`audit_logs`，因此超管唯一迁移因多超管失败、服务起不来时可用它处理。
 - 超管全局唯一（迁移 0098，2026-11-12，决策 1、2）：`roles_one_superuser` 部分唯一索引保证最多一个超管角色；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser` 在提交时检查最多一个持有者（advisory 锁串行化并发），违反时 23505。迁移先删掉软删除用户的超管行；未删除的持有者（不论启用、禁用）多于一个时报错并列出 user id 与邮箱，服务不启动，用上面的 CLI 保留一个后重启。除超管本人的登录会话外没人能改超管：PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles` 对超管目标只经 `CanActOnUser` 判断，非超管（含超管的访问密钥）缺超管标志，403 `you cannot modify a superuser`（`details.superuser = true`）。其中 DELETE `/users/:id/security` 自 T48 起只限登录会话（`user:password:reset`），访问密钥在权限阶段即 403，不到这一判断。`CanActOnUser` 只对本人的登录会话免检“作用于自己”，经访问密钥时密钥主人和其他目标一样比较，所以超管自己的访问密钥也不能改超管（2026-11-12 期 1 验证）。
+- 内置角色的 key 是保留的（2026-11-12，决策 D5）：POST `/roles` 用它们 400 `reserved`（§15.7）。启动时 `SyncCore` 发现自定义角色占用了内置角色的 key（升级带来新内置角色时才可能出现）就报错、服务不启动，错误信息列出角色 id、key 和改名 SQL（`UPDATE roles SET key = '<key>_custom' WHERE id = <id>;`）；它不会把该自定义角色变成内置角色（持有者会凭空得到内置角色的默认权限），也不会跳过不建。
 - 所有授权写操作（角色写入、POST `/roles`、PUT `/users/:id/roles`）的授权检查都放在同一事务的 `Bump` 之后、用该事务读库：`Bump` 串行化了授权变更，检查看到的是最新且不会被并发改动的状态，不读本节点可能落后的缓存。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制（超级管理员角色冻结除外）。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
 - 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:define` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。
@@ -2839,7 +2854,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
-**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：
+**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：own 范围遇到 `admin_locked` 的账号返回 403 `account_locked_by_admin`；全量范围重置时清除该锁（2026-11-12，见 §15.9 账号字段 `admin_locked`）。
 
 1. 在事务内按所属权限锁定账号，删除 Redis 冷却键 `cooldown:account:<id>`；
 2. 将账号 `status` 恢复为 `active`，清空 `status_reason`，包括 §42 自动禁用、管理员禁用及错误状态；**保留 `schedulable` 开关**，不会把手动关闭调度的账号重新放入请求池；
@@ -3321,7 +3336,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
-| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick |
+| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick。每个用户最多 3 个未完成的草稿（`account_id`、`retired_at` 都为空），超出返回 429 `too_many_drafts`；持有 `settings:manage` 不受限。计数与插入是一条语句、不加锁，并发时可能多出 1 个（2026-11-12 权限加固 W1-F13）。预备容器 `POST /account-types/:plugin_key/:type/preparations` 同理：每个用户最多 3 个未完成的（未被账号采用、`state` 为 `pending`/`ready`、未过期），重复的 `idempotency_key` 不算新的，首次准备就失败的不占名额（核心随即撤销并删行），全量 `account:create` 不受限。两个上限各算各的：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行，会占草稿名额，反过来草稿不占预备容器名额 |
 | PUT | `/system/ccgateway/drafts/:key` | `{proxy_id}` → `{key}`；重新 Kick |
 | DELETE | `/system/ccgateway/drafts/:key` | → 204；在控制器上删除运行环境并删行。控制器删不掉时行保留并标记为过期（`last_seen_at` 提前一天），返回 503 + reason，清理任务下一分钟重试 |
 | GET | `/system/ccgateway/drafts/:key/status` | `{key, status: creating\|ready\|blocked, reason?, container}` |
@@ -4702,6 +4717,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - 新字段 `upstream_request`（对象，可省略）= Worker 返回的 `upstream-request.json` 内容，原样透传，只对其中 `headers` 再遮蔽一次：名字（不区分大小写）在 `requestLogSecretHeaders`（`authorization`、`proxy-authorization`、`x-api-key`、`cookie`、`set-cookie`、`x-ccg-revision`）里的值改成 `"[REDACTED]"`（字符串值直接替换，数组逐项替换，其他类型整体替换）；`headers` 不是对象时删掉该键。`upstream_request` 不是对象时整个详情 503（与其他字段一致）。
 - `metadata` 按白名单投影（2026-11-12 权限加固 T43，D22）：调用者命中 `settings:manage`（即 `content: true`）时原样返回；否则只保留 `requestLogSummaryKeys` 里的摘要字段（请求标识、状态与阶段、模型、耗时、`http_status`、`error_type` / `error_code` / `error_source`、日志级别与用量、正文大小与摘要值、会话标识、上游请求类别与 betas、响应捕获状态等），其余一律删除，包括上游错误原文 `error`、`messages`、`log_directory`，可能出现的身份字段（如 `device_id`、`account_uuid`），以及 Worker 以后新增的任何字段（默认只给 `settings:manage`，要放开须加入白名单）；白名单内的值必须是标量或字符串数组，否则同样删除。列表（§64.1）每行的 `error` 同理：只有命中 `settings:manage` 时给出，其余调用者为空（`error_type` 保留）；为此列表路由的 key 增加 `settings:manage`。
+- `events`、`upstream_request`、`request_headers` / `response_headers` 同样按白名单投影（2026-11-12 权限加固 FU3，补齐 D22），未命中 `settings:manage` 时（`settings:manage` 原样，只遮蔽密钥头）：
+  - `events` 每条只留 `time`、`event`；`detail` 是对象时只留 `requestLogEventDetailKeys` 的摘要字段（状态、阶段、错误码与来源、原因码、模式、计数与字节数、耗时 `ms`、摘要值 `sha256`、方法、存储后端与操作、各类布尔状态等），错误原文 `error`、路径 `path`、查询串 `query`、客户端头 `client_headers`、上传的 `parts`（文件名）、资源身份（如 `principal_id`）与以后新增的字段一律删除；`detail` 不是对象时删去，不是对象的事件整条删去。
+  - `upstream_request` 只留 `requestLogUpstreamKeys`（`schema`、`mode`、`attempts`、`method`、`host`、`sent_at`、`body_encoding`、`body_bytes`、`body_sha256`、`content_sha256`、`model`、`stream`）；`url` 删除，改给其中的 `host`；`headers` 只留 `requestLogSummaryHeaders` 里的头名。
+  - 请求、响应头只留 `requestLogSummaryHeaders`（不分大小写）：`content-type`、`content-length`、`content-encoding`、`transfer-encoding`、`accept`、`accept-encoding`、`cache-control`、`date`、`retry-after`、`request-id`、`x-request-id`、`anthropic-version`、`anthropic-beta`、`x-claude-code-session-id`、`x-claude-code-request-class`、`x-ccgateway-error-source`、`x-ccgateway-error-reason`。
+  - 白名单内的值都必须是标量或字符串数组。投影只有 `keepSummary` 一个函数（`metadata` 也用它），默认拒绝：要放开新字段须加入相应白名单。事件 detail 的 `code`（`cli_error`）与 `error_code` 一样可能取自上游响应（≤512 字符），按 T43 的口径保留。控制台的“上游请求”在只有 `host` 时显示 `host`，事件与上游请求的提示改为“只显示摘要字段”。
 - `upstream-request.json` 加入摘要文件集合：不出现在 `files`，`…/files/upstream-request.json` 读取一律 400。`upstream-request.body` 是正文文件，照常出现在 `files`、仅 `settings:manage` 可读并审计。
 
 ### 64.3 状态 `GET …/request-logs`
@@ -6879,6 +6899,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`CanActOnUser` 看到的也是这个限制后的集合；`CanActOnUser` 对密钥不免检密钥主人本身（主人按其角色比较）。只限制密钥所属用户，查询其他用户的权限不受影响。
 - **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。这些自身只读接口都按密钥收窄后的权限计算，只返回调用者自己能看到的东西，所以接受任意访问密钥（C-T1，按此口径不改）：`/me` 与菜单用收窄后的 `PermissionSet`，lookup 用 `CanAny` 和 `OwnerScope`，`/me/assignable-roles` 在密钥下为 `[]`（收窄后没有可分配角色）。
 - **只认会话的权限**（2026-11-12，`session_only`）：`user:password:reset`、`role:define`、`role:assign`、`settings:manage` 不能选给访问密钥，超级管理员也不行。判断只有 `authz.KeyAllowed` 一处：可选列表不显示，创建、修改时选了回 403（选了不持有的权限时先按 `details.missing` 拒绝；都持有时，只认会话的列在 `details.session_only`），已存的密钥在校验时丢掉它们（`GET /me/access-keys` 的 `lost` 含它们），所以以这些权限注册的路由（`settings:manage` 下 30 来条、`/roles` 写操作、`PUT /users/:id/roles`、改他人密码、清除他人两步验证 `DELETE /users/:id/security` 等）一律拒绝密钥（403 `permission_denied`）。`PermAny` 组合路由仍按其他 key 放行。
+- **只认会话的权限扩展**（2026-11-12，T57，决策 D4：代码执行、信任根、明文凭证）：`plugin:install`、`plugin:uninstall`、`plugin:grant:high`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`、`account:credential:view`、`account:own:credential:view` 同样不能选给访问密钥，规则与上一条相同（存量密钥里的列为 `lost`，运行时丢弃）。因此访问密钥不能上传、从市场安装、审批、卸载插件（`/plugins/upload` 等 403），不能管理发布者与公钥，不能执行或恢复核心升级；凭证明文回显本来就只认会话（上文）。访问密钥在 `PATCH /accounts/:id` 与 `POST /accounts/:id/models/fetch` 上按“不能查看凭证”处理：保留掩码密钥同时改上游地址时 400 `fields[{credentials.<f>, reenter_required}]`，重新输入该密钥即可。
 - **明文回显只认登录会话**（2026-11-12）：回显已有密文的接口用 `SessionOnly()` 视图注册，有权限也拒绝密钥（403 `access keys cannot use this endpoint`）：`POST /me/api-keys/:id/reveal`、`POST /proxies/:id/reveal-url`、`POST /accounts/:id/credentials/reveal`。泄露的密钥因此拿不到 API Key、代理密码和账号凭证的明文。`/me/api-keys` 的创建与轮换返回的是新密钥，属于自动化的正当用途，照常接受密钥。`settings:manage` 下的 `remote-fingerprint` 会拨号到任意 host:port，但 SSH 安装控制器到内网主机是正当用途，不接 netguard；它靠 `settings:manage` 只认会话来防止被泄露的密钥利用（wontfix）。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
@@ -7437,7 +7458,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 校验（SDK `check`）：只有 `type: "native"` 的页面能声明；至少一组；组和项的 `key` 符合 `^[a-z][a-z0-9_-]{0,31}$`，组 key 不重复，项 key 在整个页面内不重复（`?tab=` 不带组名）；标签不能为空；`icon` 必须是控制台图标集里的名字；`permission` 必须是 `userPermissions` 里声明的插件权限；`corePermission` 是核心权限 key，SDK 不认识核心权限，只检查不能是空白。
 - 权限过滤由核心做：`GET /ui/plugins` 返回页面前去掉调用者看不到的项。一项同时声明 `permission` 和 `corePermission` 时，持有任意一个就显示；两个都没有的项对能看到这个页面的人都显示。去掉后空的组不返回，一项都不剩时整个 `nav` 不返回。共享的清单不被改动。
 - 混跑：UI 3.13 及更早的控制台忽略 `nav`，所以插件页面自己要保留页内的分区切换（标签页等）作为回退；声明 `nav` 不提高插件要求的核心版本，`hostCompat` 不必因此改到 0.1.284 以上。UI 3.14 从核心 0.1.284 开始（0.1.283 是最后一个带 UI 3.13 的核心），`hostUICompat` 写 `^3.14` 时 `hostCompat` 要排除 0.1.283 及更早的核心。
-- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`server/internal/plugin/api/ui.go`（`visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
+- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`sdk/manifest/visible_ui.go`（`FilterUI` 的 `visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
 
 ## 91. 插件经账号代理发请求、CLEAR 清冷却（2026-11-10，codex 官方重置次数需要；核心 0.1.269）
 
@@ -8045,25 +8066,25 @@ kind: users | groups | api-keys | accounts | models | proxies
 | GET `/segments?q=&kind=named\|personal` | `segment:read` | 分页，`Segment[]`，默认用户组排最前。`kind` 缺省 `named`。`q` 匹配名称和说明；调用者有 `user:read` 时，个人专属还匹配成员的邮箱和显示名（没有 `user:read` 时不匹配这两项，否则可以用搜索试出邮箱） |
 | GET `/segments/:id` | `segment:read` | `Segment` |
 | POST `/segments` `{name, description, discount}` | `segment:manage` | 建命名用户组，201，返回 `Segment`。`name` 必填，去首尾空格后 1–100 字符，不区分大小写唯一（字段 `name`）；`description` 最多 2000 字符（字段 `description`）；`discount` 缺省 `"1"`，必须大于 0、小于 1000000、最多 4 位小数（字段 `discount`） |
-| PATCH `/segments/:id` | `segment:manage` | 字段都可选，校验同上。个人专属只能改 `discount`，带 `name` 或 `description` 回 400（字段 `name`） |
-| DELETE `/segments/:id` | `segment:manage` | 204。成员回默认用户组，它的授权、专属倍率、专属价一并删除；以它为 `origin` 的个人专属 `origin` 变成 `null`。默认用户组 409；个人专属 409（用下面的移回接口），只有一个例外：唯一成员已被软删除的个人专属可以经此删除（升级窗口里旧节点软删除用户会留下这种行，97.8） |
+| PATCH `/segments/:id` | `segment:manage` | 字段都可选，校验同上。个人专属只能改 `discount`，带 `name` 或 `description` 回 400（字段 `name`）；调用者本人在该用户组内（默认用户组除外）409，超管例外（见表后“自己所在用户组的设置”） |
+| DELETE `/segments/:id` | `segment:manage` | 204。成员回默认用户组，它的授权、专属倍率、专属价一并删除；以它为 `origin` 的个人专属 `origin` 变成 `null`。默认用户组 409；个人专属 409（用下面的移回接口），只有一个例外：唯一成员已被软删除的个人专属可以经此删除（升级窗口里旧节点软删除用户会留下这种行，97.8）；调用者本人在该用户组内（默认用户组除外）409，超管例外（见表后“自己所在用户组的设置”） |
 | GET `/segments/:id/members?q=` | `segment:read` 且 `user:read` | 分页，行同 GET `/users`；`q` 匹配邮箱或显示名。这个接口在 `iam` 包里，它就是带用户组条件的用户列表 |
-| POST `/segments/:id/members` `{user_ids}` | `segment:manage` | 把用户移入这个用户组，返回 `{moved}`（实际移动的人数，已在组内的不算）。目标只能是命名用户组，个人专属 409；不存在的用户 400（字段 `user_ids`）。原来是个人专属的用户，个人专属随之删除。`user_ids` 里有调用者本人 409，有调用者不能操作的用户 403（见表后“目标用户检查”），都在事务之前判断，整批不动 |
+| POST `/segments/:id/members` `{user_ids}` | `segment:manage` | 把用户移入这个用户组，返回 `{moved}`（实际移动的人数，已在组内的不算）。目标只能是命名用户组，个人专属 409；不存在的用户 400（字段 `user_ids`）。原来是个人专属的用户，个人专属随之删除。`user_ids` 里有调用者不可管理的用户（按默认清单含非超管的调用者本人）403（§43.6 可管理目标），都在事务之前判断，整批不动 |
 | GET `/segments/:id/groups` | `segment:read` | `SegmentGroupSetting[]`，每个分组一行，不分页 |
-| PUT `/segments/:id/groups` `{items: [{group_id, granted?, rate_override?}]}` | `segment:manage` | 只改列出的分组，整批一个事务，返回最新的列表。`granted` 没传 = 不动。`rate_override` 区分三种：没传 = 不动，`null` = 跟随，值 = 专属倍率，校验同分组倍率（不小于 0、小于 1000000、最多 4 位小数；字段 `items.<i>.rate_override`）。分组不存在 400（字段 `items.<i>`）。字段错误里的 `<i>` 是该项在请求 `items` 里的原始位置。同一个分组出现多条时按请求里的顺序应用，后面的生效。任何一项不合法，整批不改 |
+| PUT `/segments/:id/groups` `{items: [{group_id, granted?, rate_override?}]}` | `segment:manage` | 只改列出的分组，整批一个事务，返回最新的列表。`granted` 没传 = 不动。`rate_override` 区分三种：没传 = 不动，`null` = 跟随，值 = 专属倍率，校验同分组倍率（不小于 0、小于 1000000、最多 4 位小数；字段 `items.<i>.rate_override`）。分组不存在 400（字段 `items.<i>`）。字段错误里的 `<i>` 是该项在请求 `items` 里的原始位置。同一个分组出现多条时按请求里的顺序应用，后面的生效。任何一项不合法，整批不改；调用者本人在该用户组内（默认用户组除外）409，超管例外（见表后“自己所在用户组的设置”） |
 | GET `/groups/:id/segments?include=` | `group:read` | 同一种行，从分组一侧看，不分页：全部命名用户组，后面跟在本分组有授权、专属倍率或专属价的个人专属，以及 `include`（逗号分隔的 id）点名的个人专属 |
-| PUT `/groups/:id/segments?include=` `{items: [{segment_id, granted?, rate_override?}]}` | `group:manage` | 同 PUT `/segments/:id/groups`，另一个方向（`<i>` 同样是原始位置，同一个用户组出现多条时后面的生效）；用户组不存在 400（字段 `items.<i>`） |
-| POST `/users/:id/personal-segment` `{copy}` | `segment:manage` | 把用户设为个人专属，201，返回 `Segment`。`copy` 为真时复制原用户组的全场折扣、各分组的授权与专属倍率、专属价；否则从空白开始（折扣 1，没有授权，原用户组带来的私有分组不再可用）。用户不存在（含已软删除）404；已是个人专属 409；目标是本人 409、是不能操作的用户 403（“目标用户检查”） |
-| DELETE `/users/:id/personal-segment?to=` | `segment:manage` | 把用户移回命名用户组，个人专属及其设置删除，204。`to` 缺省是默认用户组，必须是命名用户组（否则 400，字段 `to`）。用户不是个人专属时 404；请求处理期间用户已被别的请求移出个人专属的，同样回 404，不会把他再移一次；目标是本人 409、是不能操作的用户 403（“目标用户检查”） |
+| PUT `/groups/:id/segments?include=` `{items: [{segment_id, granted?, rate_override?}]}` | `group:manage` | 同 PUT `/segments/:id/groups`，另一个方向（`<i>` 同样是原始位置，同一个用户组出现多条时后面的生效）；用户组不存在 400（字段 `items.<i>`）；调用者本人在该用户组内（默认用户组除外）409，超管例外（见表后“自己所在用户组的设置”） |
+| POST `/users/:id/personal-segment` `{copy}` | `segment:manage` | 把用户设为个人专属，201，返回 `Segment`。`copy` 为真时复制原用户组的全场折扣、各分组的授权与专属倍率、专属价；否则从空白开始（折扣 1，没有授权，原用户组带来的私有分组不再可用）。用户不存在（含已软删除）404；已是个人专属 409；目标不可管理（含非超管的本人）403（§43.6 可管理目标） |
+| DELETE `/users/:id/personal-segment?to=` | `segment:manage` | 把用户移回命名用户组，个人专属及其设置删除，204。`to` 缺省是默认用户组，必须是命名用户组（否则 400，字段 `to`）。用户不是个人专属时 404；请求处理期间用户已被别的请求移出个人专属的，同样回 404，不会把他再移一次；目标不可管理（含非超管的本人）403（§43.6 可管理目标） |
 
-**目标用户检查**（2026-11-12，M7、C-L7）：选择某个用户所属的用户组（POST `/segments/:id/members`、POST/DELETE `/users/:id/personal-segment`）和调整余额（POST `/users/:id/balance/adjust`）都经 `core.ActOnOthers`：目标里有调用者本人 → 409 `you cannot do this to yourself`（超管也不例外，访问密钥同样）；目标的角色所授予的权限超出调用者可授予的范围、或目标是超管而调用者不是 → 403（`authz.CanActOnUsers`，一条 SQL 判断整批）。未注入 `core.UserGuard` 时一律拒绝（`core.GuardOrDeny`）。不在此列（wontfix）：作用于用户组本身的写入——PATCH/DELETE `/segments/:id`（改折扣；删除时成员全部回默认用户组）、PUT `/segments/:id/groups`、PUT `/groups/:id/segments` 与分组的专属价（PUT `/groups/:id/model-prices?segment_id=`）——不做目标用户检查，调用者自己或权限更高的用户是组内成员时也照常执行，由 `segment:manage` / `group:manage` 把关。个人专属只有一个成员，这些接口对它实际上就是改那一个用户的折扣、授权与价格，同样不检查（已知，按用户组处理）：检查拦的是“选择某个用户属于哪个用户组”，不是“修改用户组的设置”。POST `/usage/:id/refund` 的目标检查延后。
+**目标用户检查**（2026-11-12，M7、C-L7；FU6 改写）：选择某个用户所属的用户组（POST `/segments/:id/members`、POST/DELETE `/users/:id/personal-segment`）和调整余额（POST `/users/:id/balance/adjust`）的目标须是调用者可管理的用户，本人也按同一规则判断（§43.6 可管理目标；`core.UserGuard`，`core.ActOnData`，一条 SQL 判断整批）。期 2 T33 的“作用于自己 409”与 FU5 的超管豁免已由 FU6 取代：非超管作用于自己现在是 403 `not_manageable`，超管照常，经访问密钥也按操作者的角色判断；作用于自己的成功检查记 `user.act_on_self` 审计。未注入 `core.UserGuard` 时一律拒绝（`core.GuardOrDeny`）。**自己所在用户组的设置**（2026-11-12 权限加固 FU2，产品性收紧）：作用于用户组本身、改变它的定价或授权的写入——PATCH `/segments/:id` 带 `discount`、DELETE `/segments/:id`（成员全部回默认用户组）、PUT `/segments/:id/groups`、PUT `/groups/:id/segments`（`items` 里任一用户组）与分组的专属价（PUT `/groups/:id/model-prices`，`items` 里 `segment_id` 非空的项）——调用者本人是其中任一用户组的成员（含自己的个人专属）时 409 `you cannot change the terms of a user group you are in`，整批不写；能管理自己的调用者例外（`UserGuard` 对本人，`core.ActOnData`：按默认清单只有超管，带 `assign_custom` 或清单列了自己的自定义角色也算，会话或带该接口权限的密钥均可，记 `user.act_on_self` 审计）。判断只有 `segment.GuardOwnSegments` 一处（DELETE、PUT 与专属价在写事务里读成员关系，PATCH 无事务，写前读）。**默认用户组不做成员检查**：所有用户默认都在默认用户组，改它等同于改全平台的定价，与 `price:manage`、`group:manage` 改全局价格同一性质，不算给自己定价；如需收紧，只要去掉 `GuardOwnSegments` 里的 `NOT s.is_default` 条件。只读接口、只改 `name` / `description` 的 PATCH、新建用户组、分组自身的定价（`segment_id` 为 `null`）不受影响。组内其他成员（含权限更高的用户）不做目标用户检查，由 `segment:manage` / `group:manage` 把关：这些写入作用于用户组，不是“选择某个用户属于哪个用户组”。POST `/usage/:id/refund` 的目标检查延后。
 
 **分组内定价与试算**
 
 | 接口 | 权限 | 说明 |
 |---|---|---|
 | GET `/groups/:id/model-prices?segment_id=` | `group:read` | `GroupModelPrices`。行是分组提供的模型（97.1）；分组已不提供的模型上留下的旧规则不并入。不带 `segment_id` 时每行给 `segment_rule_count`，带时给该用户组的 `segment_rule`，`list_price`、`source`、`rate` 也按该用户组算。`segment_id` 不是正整数 400（字段 `segment_id`），指的用户组不存在 404 |
-| PUT `/groups/:id/model-prices?segment_id=` `{items: [{segment_id, model, rule}]}` | `group:manage` | 每项写一条规则：`segment_id` 为 `null` 是分组内定价，否则是该用户组的专属价；`rule` 为 `null` 删除这条规则。整批一个事务，任何一项不合法整批不改（400，字段 `items.<i>`）；返回最新的 `GroupModelPrices`（查询串的 `segment_id` 只决定返回哪个视图）。校验见下 |
+| PUT `/groups/:id/model-prices?segment_id=` `{items: [{segment_id, model, rule}]}` | `group:manage` | 每项写一条规则：`segment_id` 为 `null` 是分组内定价，否则是该用户组的专属价；`rule` 为 `null` 删除这条规则。整批一个事务，任何一项不合法整批不改（400，字段 `items.<i>`）；返回最新的 `GroupModelPrices`（查询串的 `segment_id` 只决定返回哪个视图）。校验见下；调用者本人在该用户组内（默认用户组除外）409，超管例外（见表后“自己所在用户组的设置”） |
 | POST `/pricing/quote` | `price:read` 且 `group:read`；带 `user_id` 还要 `user:read`，带 `segment_id` 还要 `segment:read` | 试算一个用户（或一个用户组的任何成员）在某个分组调用某个模型要付多少，见下。响应里有分组和用户组的规则与倍率、用户所在的用户组，所以接口要求的权限与控制台试算入口的相同（选分组、选用户、选用户组各自的权限）；缺哪一项回 403 `permission_denied`，`details.permission` 是缺的那一项。这个检查在请求体的其它校验之前：没有 `user:read` 的调用者分不出某个用户 id 存不存在 |
 
 规则的校验（删除规则总是允许）：用户组必须存在；分组必须提供这个模型；模型必须有启用的全局价；`rule.kind` 是 `multiplier` 或 `custom`；倍数不小于 0、小于 1000000、最多 4 位小数；自定义价不能设在表达式计费的模型上，`mode` 必须与全局价相同，价格字段必须是非负数，按 token 必须有 `p` 和 `c`，按次必须有 `price`。保存自定义价时，核心由 `mode` 和 `config` 生成表达式存下，并写进 `model_price_history`（97.4）。

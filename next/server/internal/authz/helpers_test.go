@@ -187,7 +187,7 @@ func TestCanActOn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := s.CanActOnUser(context.Background(), tt.actorID, tt.targetID)
+			err := s.CanActOnUser(context.Background(), tt.actorID, core.ActOnIdentity, tt.targetID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CanActOnUser() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -211,30 +211,40 @@ func TestCanActOnUsers(t *testing.T) {
 	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"users:read"}})
 	ownKey := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 1, Permissions: []string{"users:read"}})
 	bg := context.Background()
+	const sessionOnly = "a superuser's account changes only through the superuser's own session"
+	data, identity := core.ActOnData, core.ActOnIdentity
+	// Without a database there are no role keys: these cases judge only what
+	// the roles grant and the access key rule (FU6), so a non-superuser on
+	// itself passes here. Roles, peers and oneself as they really are:
+	// TestCanActOnUsersPeerProtection.
 	tests := []struct {
 		name    string
 		ctx     context.Context
 		actorID int64
+		action  core.UserAction
 		targets []int64
 		wantErr string // "" = allowed, else the message
 	}{
-		{"no targets", bg, 1, nil, ""},
-		{"only itself", bg, 3, []int64{3, 3}, ""},
-		{"system acts on a superuser", bg, 0, []int64{2, 4}, ""},
-		{"all within, duplicates and itself ignored", bg, 1, []int64{3, 1, 3}, ""},
-		{"one beyond rejects the batch", bg, 1, []int64{3, 4}, "you cannot modify a user with higher privileges"},
-		{"superuser target", bg, 1, []int64{3, 2}, "you cannot modify a superuser"},
-		{"superuser acts on anyone", bg, 2, []int64{1, 4}, ""},
-		{"superuser's key within its keys", keyed, 2, []int64{3}, ""},
-		{"superuser's key on a wider user", keyed, 2, []int64{1}, "you cannot modify a user with higher privileges"},
-		{"superuser's key on another superuser", keyed, 2, []int64{2, 5}, "you cannot modify a superuser"},
-		{"superuser's key on its owner", keyed, 2, []int64{2}, "you cannot modify a superuser"},
-		{"another user's key leaves the actor itself", keyed, 3, []int64{3}, ""},
-		{"a narrower key on its owner", ownKey, 1, []int64{1}, "you cannot modify a user with higher privileges"},
+		{"no targets", bg, 1, data, nil, ""},
+		{"only itself, within its own grants", bg, 3, data, []int64{3, 3}, ""},
+		{"system acts on a superuser", bg, 0, identity, []int64{2, 4}, ""},
+		{"all within, duplicates ignored", bg, 1, data, []int64{3, 1, 3}, ""},
+		{"one beyond rejects the batch", bg, 1, data, []int64{3, 4}, "you cannot modify a user with higher privileges"},
+		{"superuser target", bg, 1, data, []int64{3, 2}, "you cannot modify a superuser"},
+		{"superuser acts on anyone", bg, 2, identity, []int64{1, 4, 2}, ""},
+		// An access key narrows what its owner may do (the route), not whom.
+		{"superuser's key within its keys", keyed, 2, identity, []int64{3}, ""},
+		{"superuser's key on a wider user", keyed, 2, identity, []int64{1}, ""},
+		{"superuser's key on its owner's data", keyed, 2, data, []int64{2}, ""},
+		{"superuser's key on its owner's account", keyed, 2, identity, []int64{2}, sessionOnly},
+		{"superuser's key on another superuser's account", keyed, 2, identity, []int64{3, 5}, sessionOnly},
+		{"another user's key leaves the actor alone", keyed, 3, data, []int64{3}, ""},
+		{"a narrower key on its owner", ownKey, 1, identity, []int64{1}, ""},
+		{"a narrower key still within its owner's roles", ownKey, 1, data, []int64{4}, "you cannot modify a user with higher privileges"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := s.CanActOnUsers(tt.ctx, tt.actorID, tt.targets...)
+			err := s.CanActOnUsers(tt.ctx, tt.actorID, tt.action, tt.targets...)
 			var e *core.Error
 			switch {
 			case tt.wantErr == "" && err != nil:

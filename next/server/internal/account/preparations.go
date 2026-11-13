@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"time"
@@ -18,6 +19,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
+
+// maxOpenDrafts is how many open preparations one user may hold (W1-F13);
+// a caller with the full account:create is not limited. A preparation takes
+// its resource (a runtime container) until it is adopted, cancelled or
+// expires.
+const maxOpenDrafts = 3
 
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
 	permissions := []string{"account:create", "account:own:create"}
@@ -100,13 +107,28 @@ func (s *Service) createPreparation(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	limit := maxOpenDrafts
+	if core.OwnerScope(ctx, "account:create") == nil {
+		limit = 0 // no limit
+	}
+	var fresh bool // this request inserted the row
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var matches, active bool
-		if err := tx.QueryRow(ctx, `INSERT INTO account_preparations(key,plugin_key,account_type,proxy_id,settings,created_by,idempotency_key)
-			VALUES($1,$2,$3,$4,$5::jsonb,$6,NULLIF($7,''))
+		// The count and the insert are one statement, without a lock: two
+		// concurrent requests may leave one preparation over the limit. A
+		// repeated idempotency key is not a new preparation and passes.
+		err := tx.QueryRow(ctx, `INSERT INTO account_preparations(key,plugin_key,account_type,proxy_id,settings,created_by,idempotency_key)
+			SELECT $1,$2::text,$3::text,$4,$5::jsonb,$6::bigint,NULLIF($7::text,'')
+			WHERE $8::int = 0
+				OR (SELECT count(*) FROM account_preparations WHERE created_by=$6::bigint AND account_id IS NULL AND state IN ('pending','ready') AND expires_at>now()) < $8::int
+				OR EXISTS (SELECT 1 FROM account_preparations WHERE created_by=$6::bigint AND plugin_key=$2::text AND account_type=$3::text AND idempotency_key=NULLIF($7::text,''))
 			ON CONFLICT (created_by,plugin_key,account_type,idempotency_key) DO UPDATE SET last_seen_at=now()
-			RETURNING key,settings=$5::jsonb AND proxy_id IS NOT DISTINCT FROM $4::bigint,account_id IS NULL AND state IN ('pending','ready') AND expires_at>now()`,
-			p.Key, p.PluginKey, p.Type, p.ProxyID, p.Settings, uid, in.IdempotencyKey).Scan(&p.Key, &matches, &active); err != nil {
+			RETURNING key,settings=$5::jsonb AND proxy_id IS NOT DISTINCT FROM $4::bigint,account_id IS NULL AND state IN ('pending','ready') AND expires_at>now(),xmax=0`,
+			p.Key, p.PluginKey, p.Type, p.ProxyID, p.Settings, uid, in.IdempotencyKey, limit).Scan(&p.Key, &matches, &active, &fresh)
+		if store.IsNoRows(err) {
+			return core.ErrTooManyDrafts
+		}
+		if err != nil {
 			return err
 		}
 		if !matches || !active {
@@ -124,18 +146,43 @@ func (s *Service) createPreparation(c *gin.Context) {
 		return
 	}
 	defer release()
-	p, err = s.loadPreparation(ctx, p.Key)
-	if err == nil {
+	if loaded, e := s.loadPreparation(ctx, p.Key); e != nil {
+		err = e
+	} else {
+		p = loaded
 		err = s.preparationCallback(ctx, p, "prepare", "")
 	}
 	if err == nil {
 		err = resource.PrepareAccount(ctx, p)
 	}
 	if err != nil {
+		if fresh {
+			s.abandonPreparation(ctx, resource, p)
+		}
 		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.Created(c, gin.H{"key": p.Key})
+}
+
+// abandonPreparation gives back the slot of a preparation whose first
+// prepare failed (the caller holds its lock): the key was never returned, so
+// nobody could cancel it and it would count against maxOpenDrafts until the
+// sweep. The row goes once the resource dropped what it may have started;
+// otherwise it stays cancelling, which no longer counts, for the sweep.
+func (s *Service) abandonPreparation(ctx context.Context, resource core.AccountLifecycleResource, p core.AccountPreparation) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	_, err := s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelling' WHERE key=$1 AND account_id IS NULL AND state='pending'`, p.Key)
+	if err == nil {
+		err = resource.CancelAccountPreparation(ctx, p)
+	}
+	if err == nil {
+		_, err = s.d.DB.Pool.Exec(ctx, `DELETE FROM account_preparations WHERE key=$1 AND account_id IS NULL AND state='cancelling'`, p.Key)
+	}
+	if err != nil {
+		slog.WarnContext(ctx, "account: abandon failed preparation", "key", p.Key, "err", err)
+	}
 }
 
 func (s *Service) loadPreparation(ctx context.Context, key string) (core.AccountPreparation, error) {

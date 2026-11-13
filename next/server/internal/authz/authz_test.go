@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
@@ -167,6 +168,46 @@ func isCode(err error, code string) bool {
 	return errors.As(err, &e) && e.Code == code
 }
 
+// fieldCode is the code of field's error in an invalid_argument err, "" when
+// it has none.
+func fieldCode(err error, field string) string {
+	var e *core.Error
+	if !errors.As(err, &e) {
+		return ""
+	}
+	fields, _ := e.Details["fields"].([]core.FieldError)
+	for _, f := range fields {
+		if f.Field == field {
+			return f.Code
+		}
+	}
+	return ""
+}
+
+// operatorDefaults pins the built-in operator role's default permissions
+// (decision D3), in catalog order: users without delete or password reset,
+// assigning roles without defining them, groups, user groups, accounts
+// without other people's credentials or the guarded settings, proxies, and
+// read access to prices, balances, usage, nodes, audit logs and tasks (which
+// it may also run), next to what a user and a supplier have.
+var operatorDefaults = []string{
+	"user:read", "user:create", "user:update",
+	"role:read", "role:assign",
+	"apikey:self:manage",
+	"group:read", "group:manage",
+	"segment:read", "segment:manage",
+	"account:read", "account:create", "account:update", "account:delete", "account:test",
+	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
+	"proxy:read", "proxy:manage", "proxy:own:read", "proxy:own:manage",
+	"price:read",
+	"balance:self:read", "balance:all:read",
+	"usage:self:read", "usage:all:read",
+	"node:read",
+	"audit:read",
+	"task:read", "task:run",
+	"gateway:use",
+}
+
 // ------------------------------------------------------------ tests
 
 func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
@@ -193,23 +234,35 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if !byKey[RoleSuperAdmin].Superuser || !byKey[RoleSuperAdmin].Builtin {
 		t.Fatalf("super_admin: %+v", byKey[RoleSuperAdmin])
 	}
-	if len(byKey[RoleAdmin].PermissionKeys) != n {
-		t.Fatalf("admin perms = %d, want %d", len(byKey[RoleAdmin].PermissionKeys), n)
+	// The admin holds every core permission but the five reserved for the
+	// super admin (decision D2).
+	superOnly := superOnlyKeys()
+	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
+		t.Fatalf("admin perms = %d of %d: %v", len(got), n, got)
 	}
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
 		t.Fatalf("user perms = %v", byKey[RoleUser].PermissionKeys)
 	}
-	op := byKey[RoleOperator]
-	if op == nil || !op.Builtin || op.Superuser || len(op.PermissionKeys) == 0 || len(op.PermissionKeys) >= n {
-		t.Fatalf("operator: %+v", op)
+	// The supplier role: its own accounts and proxies, nothing of plugins,
+	// no group binding (decision 7), and nothing to assign.
+	sup := byKey[RoleSupplier]
+	wantSup := []string{
+		"account:own:create", "account:own:credential:view", "account:own:delete", "account:own:read", "account:own:test", "account:own:update",
+		"proxy:own:manage", "proxy:own:read",
 	}
-	for _, k := range op.PermissionKeys {
-		if strings.HasPrefix(k, "settings:") || strings.HasPrefix(k, "sticky:") || strings.HasPrefix(k, "plugin:") || strings.HasPrefix(k, "publisher:") {
-			t.Fatalf("operator has %s", k)
+	if sup == nil || !sup.Builtin || sup.Superuser || !slices.Equal(slices.Sorted(slices.Values(sup.PermissionKeys)), wantSup) ||
+		len(sup.AssignableRoleKeys) != 0 || sup.AssignCustom {
+		t.Fatalf("supplier: %+v", sup)
+	}
+	for role, want := range map[string][]string{RoleAdmin: {RoleOperator, RoleSupplier, RoleUser}, RoleOperator: {RoleSupplier, RoleUser}} {
+		if got := byKey[role].AssignableRoleKeys; !slices.Equal(got, want) {
+			t.Fatalf("%s assigns %v, want %v", role, got, want)
 		}
 	}
-	if !slices.Contains(op.PermissionKeys, "account:update") || !slices.Contains(op.PermissionKeys, "system:update:execute") {
-		t.Fatalf("operator perms = %v", op.PermissionKeys)
+	// The operator holds exactly its whitelist (decision D3), in catalog order.
+	op := byKey[RoleOperator]
+	if op == nil || !op.Builtin || op.Superuser || !slices.Equal(op.PermissionKeys, operatorDefaults) {
+		t.Fatalf("operator: %+v\nwant %v", op, operatorDefaults)
 	}
 
 	// Idempotent: a second sync does not bump the version.
@@ -327,13 +380,13 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, a, "u@x.com", RoleUser)
-	admin := addUser(t, a, "admin@x.com", RoleAdmin)
+	root := addUser(t, a, "root@x.com", RoleSuperAdmin)
 	mustCan(t, a, uid, "gateway:use", true)
 	mustCan(t, b, uid, "gateway:use", true)
 	mustCan(t, b, uid, "user:read", false) // cached on b
 
 	// Mutation on node a is visible on node b through the bus.
-	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
+	if _, err := a.SetRolePermissions(ctx, root, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", true)
@@ -349,7 +402,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 		t.Fatalf("version poll spec: %+v", poll)
 	}
 	mustCan(t, c, uid, "user:read", true)
-	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), userRolePermissions); err != nil {
+	if _, err := a.SetRolePermissions(ctx, root, roleID(t, a, RoleUser), userRolePermissions); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := poll.Handler(ctx, core.TaskRun{Name: poll.Name}); err != nil {
@@ -358,7 +411,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	mustCan(t, c, uid, "user:read", false)
 
 	// Disabled users have no permissions.
-	su := addUser(t, a, "s@x.com", RoleSuperAdmin)
+	su := root
 	mustCan(t, a, su, "anything:at:all", true)
 	v := bump(t, a)
 	if _, err := db.Pool.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, su); err != nil {
@@ -424,9 +477,9 @@ func TestBumpDropsStaleCache(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, b, "u@x.com", RoleUser)
-	admin := addUser(t, b, "admin@x.com", RoleAdmin)
+	root := addUser(t, b, "root@x.com", RoleSuperAdmin)
 	mustCan(t, a, uid, "user:read", false) // cached on a
-	if _, err := b.SetRolePermissions(ctx, admin, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
+	if _, err := b.SetRolePermissions(ctx, root, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", false) // stale on a
@@ -471,6 +524,13 @@ func TestRoleManagement(t *testing.T) {
 	}
 	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "Bad Key", Name: lt("x", "x")}); !isCode(err, "invalid_argument") {
 		t.Fatalf("bad key: %v", err)
+	}
+	// Built-in role keys are reserved, supplier included.
+	for _, key := range []string{RoleSuperAdmin, RoleAdmin, RoleOperator, RoleSupplier, RoleUser} {
+		_, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x")})
+		if !isCode(err, "invalid_argument") || fieldCode(err, "key") != "reserved" {
+			t.Fatalf("create role %q: %v", key, err)
+		}
 	}
 	r, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"account:read", "account:test"}})
 	if err != nil {
@@ -536,13 +596,14 @@ func TestRoleGrantEscalation(t *testing.T) {
 		PermissionKeys: []string{"user:read", "account:read"}}); err != nil {
 		t.Fatalf("operator creates role: %v", err)
 	}
-	// The super admin is not limited; the admin holds every core permission.
+	// The super admin is not limited; the admin holds every core permission
+	// but those reserved for the super admin.
 	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "installer", Name: lt("Installer", "安装"),
-		PermissionKeys: []string{"plugin:install", "settings:manage", "system:update:execute"}}); err != nil {
+		PermissionKeys: []string{"plugin:install", "settings:manage"}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "updater", Name: lt("Updater", "升级"),
-		PermissionKeys: []string{"system:update:execute"}}); err != nil {
+		PermissionKeys: []string{"system:update:read", "price:manage"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -562,12 +623,13 @@ func TestRoleGrantEscalation(t *testing.T) {
 		t.Fatalf("operator assigns installer: %v", err)
 	}
 	mustCan(t, s, alice, "plugin:install", false)
-	// Roles within its permissions are fine, for itself and for others.
+	// Roles within its permissions are fine for others; not for itself,
+	// which it does not manage (operator is not on its list, FU6).
 	if err := setRoles(s, operator, alice, RoleUser, "readers"); err != nil {
 		t.Fatalf("operator assigns readers: %v", err)
 	}
 	mustCan(t, s, alice, "account:read", true)
-	if err := setRoles(s, operator, operator, RoleOperator, "readers"); err != nil {
+	if err := setRoles(s, operator, operator, RoleOperator, "readers"); !isCode(err, "permission_denied") || detail(err, "role") != RoleOperator {
 		t.Fatalf("operator self-assigns readers: %v", err)
 	}
 	// Once the admin gives alice "installer", she holds more than the
@@ -694,7 +756,7 @@ func TestGrantViewCountsDisabledPermissions(t *testing.T) {
 		t.Fatalf("admin assigns guardian: %v", err)
 	}
 	// Alice now holds what the operator lacks, so it cannot act on her.
-	if err := s.CanActOnUser(ctx, operator, alice); !isCode(err, "permission_denied") {
+	if err := s.CanActOnUser(ctx, operator, core.ActOnIdentity, alice); !isCode(err, "permission_denied") {
 		t.Fatalf("operator acts on a holder of a disabled permission: %v", err)
 	}
 }
@@ -775,7 +837,19 @@ func TestPluginCatalog(t *testing.T) {
 		{Key: "stats:read", Label: lt("View stats", "查看统计")},
 		{Key: "rules:manage", Label: lt("Manage rules", "管理规则"), Sensitive: true},
 	}
+	// First install: the plugin is not running, so its keys start disabled
+	// and enabling turns them on.
 	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", defs, []string{RoleAdmin}) })
+	if got := permissionStatus(t, db, "plugin.guard:stats:read"); got != "disabled" {
+		t.Fatalf("permission of an installed plugin: %s", got)
+	}
+	mustCan(t, s, admin, "plugin.guard:stats:read", false)
+	tx(func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE plugins SET status = 'enabled' WHERE key = 'guard'`); err != nil {
+			return err
+		}
+		return s.SetPluginActive(ctx, tx, "guard", true)
+	})
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return ok })
 	mustCan(t, s, user, "plugin.guard:stats:read", false)
 
@@ -810,6 +884,106 @@ func TestPluginCatalog(t *testing.T) {
 
 	tx(func(tx pgx.Tx) error { return s.DeletePlugin(ctx, tx, "guard") })
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return !ok })
+}
+
+func permissionStatus(t *testing.T, db *store.DB, key string) string {
+	t.Helper()
+	var status string
+	if err := db.Pool.QueryRow(context.Background(), `SELECT status FROM permissions WHERE key = $1`, key).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	return status
+}
+
+// A new plugin permission is active only while the plugin runs; a row which
+// already exists keeps its status. The statuses come from the install package
+// so the SQL list in SyncPlugin cannot drift from them.
+func TestSyncPluginNewPermissionFollowsPluginStatus(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	running := []string{install.StatusEnabled, install.StatusUpgrading}
+	sync := func(key string, defs ...core.PermissionDef) {
+		t.Helper()
+		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, key, defs, nil) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, st := range []string{install.StatusAwaitingConsent, install.StatusInstalled, install.StatusEnabling,
+		install.StatusEnabled, install.StatusUpgrading, install.StatusDisabled} {
+		key := "st" + string(rune('a'+i))
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ($1, '{"en":"P"}', $2)`, key, st); err != nil {
+			t.Fatal(err)
+		}
+		sync(key, core.PermissionDef{Key: "a:read"})
+		want := "disabled"
+		if slices.Contains(running, st) {
+			want = "active"
+		}
+		if got := permissionStatus(t, db, manifest.PermissionKey(key, "a:read")); got != want {
+			t.Errorf("plugin status %s: new permission %s, want %s", st, got, want)
+		}
+	}
+
+	// A version approved while the plugin is disabled: the new key waits for
+	// the next enable, the existing one is left as it is.
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	sync("guard", core.PermissionDef{Key: "a:read"})
+	if _, err := db.Pool.Exec(ctx, `UPDATE plugins SET status = 'disabled' WHERE key = 'guard'`); err != nil {
+		t.Fatal(err)
+	}
+	sync("guard", core.PermissionDef{Key: "a:read"}, core.PermissionDef{Key: "b:read"})
+	if a, b := permissionStatus(t, db, "plugin.guard:a:read"), permissionStatus(t, db, "plugin.guard:b:read"); a != "active" || b != "disabled" {
+		t.Fatalf("sync while disabled: existing %s, new %s", a, b)
+	}
+	// An upgrade of a running plugin: the new key works at once.
+	if _, err := db.Pool.Exec(ctx, `UPDATE plugins SET status = 'upgrading' WHERE key = 'guard'`); err != nil {
+		t.Fatal(err)
+	}
+	sync("guard", core.PermissionDef{Key: "a:read"}, core.PermissionDef{Key: "b:read"}, core.PermissionDef{Key: "c:read"})
+	if b, c := permissionStatus(t, db, "plugin.guard:b:read"), permissionStatus(t, db, "plugin.guard:c:read"); b != "disabled" || c != "active" {
+		t.Fatalf("sync while upgrading: existing %s, new %s", b, c)
+	}
+}
+
+// SyncPlugin stores the sort it is given (the manifest order install.
+// PermissionDefs numbers from 10) and corrects rows synced before.
+func TestSyncPluginSort(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	m := &manifest.Manifest{Key: "guard", UserPermissions: []manifest.UserPermission{{Key: "stats:read"}, {Key: "rules:manage"}}}
+	sorts := func() string {
+		t.Helper()
+		var got string
+		if err := db.Pool.QueryRow(ctx, `SELECT string_agg(key || '=' || sort, ',' ORDER BY sort, key) FROM permissions WHERE plugin_key = 'guard'`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	// Rows as the old numbering left them: the first permission at 0 was
+	// taken for unset and given 10, the second kept its 1.
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Sort: 10}, {Key: "rules:manage", Sort: 1}}, nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := sorts(); got != "plugin.guard:rules:manage=1,plugin.guard:stats:read=10" {
+		t.Fatalf("old numbering: %s", got)
+	}
+	if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", install.PermissionDefs(m), nil) }); err != nil {
+		t.Fatal(err)
+	}
+	if got := sorts(); got != "plugin.guard:stats:read=10,plugin.guard:rules:manage=20" {
+		t.Fatalf("after the next sync: %s", got)
+	}
 }
 
 func TestMenus(t *testing.T) {
@@ -852,11 +1026,41 @@ func TestMenus(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The sidebar shows exactly the plugin menus manifest.FilterUI leaves,
+	// the rule GET /ui/plugins answers by, with the same permission check.
+	sameAsUI := func(userID int64, menus []MenuSection) {
+		t.Helper()
+		set, err := s.PermissionSet(ctx, userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want, got []string
+		for _, p := range plugins {
+			allowed := func(perm string) bool { return perm == "" || set.Has(manifest.PermissionKey(p.Key, perm)) }
+			for _, m := range manifest.FilterUI(p.Manifest.UI, allowed, set.Has).Menus {
+				want = append(want, p.Key+":"+m.ID)
+			}
+		}
+		for _, sec := range menus {
+			for _, it := range sec.Items {
+				if it.PluginKey != "" {
+					got = append(got, it.ID)
+				}
+			}
+		}
+		slices.Sort(want)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Fatalf("user %d: sidebar plugin menus %v, FilterUI menus %v", userID, got, want)
+		}
+	}
+
 	user := addUser(t, s, "u@x.com", RoleUser)
 	menus, err := s.Menus(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameAsUI(user, menus)
 	var sections []string
 	for _, m := range menus {
 		sections = append(sections, m.Section)
@@ -884,6 +1088,7 @@ func TestMenus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameAsUI(admin, menus)
 	sections = nil
 	for _, m := range menus {
 		sections = append(sections, m.Section)

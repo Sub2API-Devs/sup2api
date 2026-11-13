@@ -3,7 +3,9 @@ package authz
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -18,8 +20,65 @@ func TestKeyAllowed(t *testing.T) {
 	}
 }
 
+// superOnlyKeys are the catalog's super-only permissions, sorted.
+func superOnlyKeys() []string {
+	var keys []string
+	for _, m := range coreModules {
+		for _, p := range m.perms {
+			if p.superOnly {
+				keys = append(keys, p.key)
+			}
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// The module order is the order of the role editor; audit logs have a module
+// of their own (U8).
+func TestCatalogModuleOrder(t *testing.T) {
+	t.Parallel()
+	var got []string
+	for _, m := range coreModules {
+		got = append(got, m.key)
+		if m.label.Get("en") == "" || m.label.Get("zh") == "" {
+			t.Errorf("module %s has no label", m.key)
+		}
+	}
+	want := []string{"user", "role", "apikey", "group", "segment", "account", "proxy", "price", "balance", "usage", "sticky",
+		"plugin", "publisher", "node", "audit", "task", "gateway", "settings", "system_update"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("modules = %v\nwant %v", got, want)
+	}
+	for _, d := range CorePermissions() {
+		if (d.Key == "audit:read") != (d.Module == "audit") {
+			t.Errorf("%s is in module %s", d.Key, d.Module)
+		}
+	}
+}
+
+// Every key of a built-in role's whitelist is a catalog permission, listed
+// once.
+func TestBuiltinWhitelistsAreCatalogKeys(t *testing.T) {
+	t.Parallel()
+	known := map[string]bool{}
+	for _, d := range CorePermissions() {
+		known[d.Key] = true
+	}
+	for name, keys := range map[string][]string{"operator": operatorPermissions, "supplier": supplierPermissions, "user": userRolePermissions} {
+		seen := map[string]bool{}
+		for _, k := range keys {
+			if !known[k] || seen[k] {
+				t.Errorf("%s whitelist: %s is unknown or listed twice", name, k)
+			}
+			seen[k] = true
+		}
+	}
+}
+
 // Catalog invariants: a session-only permission is one worth flagging, and a
-// super-only one reaches no built-in role by default.
+// super-only one reaches no built-in role by default nor by inheriting from
+// a permission that is not super-only itself.
 func TestCatalogFlagInvariants(t *testing.T) {
 	t.Parallel()
 	for _, m := range coreModules {
@@ -34,8 +93,13 @@ func TestCatalogFlagInvariants(t *testing.T) {
 				continue
 			}
 			for _, r := range builtinRoles {
-				if r.grants != nil && r.grants(m.key, p.key) {
+				if slices.Contains(r.defaultPermissions(), p.key) {
 					t.Errorf("%s is superOnly but in the defaults of %s", p.key, r.key)
+				}
+			}
+			for _, from := range p.inherits {
+				if !slices.Contains(superOnlyKeys(), from) {
+					t.Errorf("%s is superOnly but inherits from %s, which is not", p.key, from)
 				}
 			}
 		}
@@ -68,9 +132,20 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"system:update:execute", "system:update:recover",
 		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
 	}
-	wantSession := []string{"role:assign", "role:define", "settings:manage", "user:password:reset"}
+	wantSession := []string{
+		"account:credential:view", "account:own:credential:view",
+		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
+		"plugin:install", "plugin:uninstall", "publisher:manage",
+		"role:assign", "role:define", "settings:manage",
+		"system:update:execute", "system:update:recover", "user:password:reset",
+	}
+	// Decision D2: what only the super admin holds by default.
+	wantSuper := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
 	slices.Sort(sensitive)
 	slices.Sort(session)
+	if super := superOnlyKeys(); !slices.Equal(super, wantSuper) {
+		t.Errorf("superOnly = %v, want %v", super, wantSuper)
+	}
 	if !slices.Equal(sensitive, wantSensitive) {
 		t.Errorf("sensitive = %v\nwant %v", sensitive, wantSensitive)
 	}
@@ -102,9 +177,8 @@ func TestSyncCoreInheritsAndAuditsGrants(t *testing.T) {
 	defer func() { coreModules = saved }()
 	coreModules = slices.Clone(coreModules)
 	i := coreModuleOrder["role"]
-	coreModules[i].perms = append(slices.Clone(coreModules[i].perms), corePerm{
-		key: "role:probe", en: "Probe", zh: "探针", sensitive: true, sessionOnly: true, inherits: []string{"legacy:split"},
-	})
+	probe := corePerm{key: "role:probe", en: "Probe", zh: "探针", sensitive: true, sessionOnly: true, inherits: []string{"legacy:split"}}
+	coreModules[i].perms = append(slices.Clone(coreModules[i].perms), probe)
 
 	type grant struct {
 		role int64
@@ -135,7 +209,7 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 
 	want := map[grant]int{{custom, "inherit"}: 1}
 	for _, r := range builtinRoles {
-		if r.grants != nil && r.grants("role", "role:probe") {
+		if r.accepts(probe) {
 			want[grant{roleID(t, s, r.key), "default"}] = 1
 		}
 	}
@@ -217,4 +291,52 @@ func TestSyncCoreSplitsRoleManage(t *testing.T) {
 	mustCan(t, s, uid, "role:define", true)
 	mustCan(t, s, uid, "role:assign", true)
 	mustCan(t, s, uid, "role:manage", false)
+}
+
+// A custom role holding a built-in role key stops the sync (decision D5): it
+// is neither turned into the built-in role nor skipped, and the error names
+// the row and how to rename it. Once renamed, the sync creates the built-in
+// role. The first sync runs before the service starts here, as on an upgrade
+// that brings the supplier role to a database with a custom one of that key.
+func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	ctx := context.Background()
+	const key = RoleSupplier
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name) VALUES ($1, '{"en":"x"}')`, key); err != nil {
+		t.Fatal(err)
+	}
+	s := New(Deps{DB: db})
+	id := roleID(t, s, key)
+	v1, err := s.currentVersion(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.Start(ctx)
+	fix := fmt.Sprintf("UPDATE roles SET key = 'supplier_custom' WHERE id = %d;", id)
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("role id %d key %q", id, key)) || !strings.Contains(err.Error(), fix) {
+		t.Fatalf("start with a custom role on a built-in key: %v", err)
+	}
+	var builtin bool
+	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {
+		t.Fatalf("custom role became built-in: %v, %v", builtin, err)
+	}
+	if v2, err := s.currentVersion(ctx); err != nil || v2 != v1 {
+		t.Fatalf("a refused sync bumped the version: %d -> %d", v1, v2)
+	}
+
+	if _, err := db.Pool.Exec(ctx, fix); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	if err := db.Pool.QueryRow(ctx, `SELECT array_agg(key ORDER BY key) FROM roles WHERE key LIKE 'supplier%' AND builtin`).Scan(&keys); err != nil || !slices.Equal(keys, []string{key}) {
+		t.Fatalf("built-in roles after the rename: %v, %v", keys, err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {
+		t.Fatalf("renamed custom role: built-in %v, %v", builtin, err)
+	}
 }

@@ -680,9 +680,11 @@ func (s *Service) update(c *gin.Context) {
 		if in.Host != nil && strings.EqualFold(*in.Host, cur.Host) {
 			in.Host = nil
 		}
-		// A new address (protocol, host or port) is judged like a new proxy,
-		// and allow_private follows whoever set the address last. The
-		// console sends every field, so only a value that differs counts.
+		// A new address (protocol, host or port) is judged like a new proxy.
+		// allow_private follows whoever set the host last, and an owner's
+		// address edit clears it; proxy:manage moving only the port or
+		// protocol keeps it (CONTRACTS §43.3). The console sends every
+		// field, so only a value that differs counts.
 		var allowPriv *bool
 		if in.addressChanged(&cur) {
 			host := cur.Host
@@ -693,7 +695,9 @@ func (s *Service) update(c *gin.Context) {
 			if err != nil {
 				return err
 			}
-			allowPriv = &allow
+			if in.Host != nil || scope != nil {
+				allowPriv = &allow
+			}
 		}
 		// Accounts of other users go through this proxy too: where they
 		// connect is not the owner's to change (the full key may).

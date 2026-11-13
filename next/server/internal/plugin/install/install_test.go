@@ -232,9 +232,11 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if fieldCode(err, "permission:db.schema") != "required" {
 		t.Fatalf("deny required: %v", err)
 	}
-	// Operator without plugin:grant:critical.
+	// A caller with plugin:grant:high and no plugin:grant:critical, as the
+	// built-in admin is by default (super-only, decision D2): the guard
+	// package needs ui.native.
 	_, err = e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: explicitGuardGrants()}, e.limited)
-	if core.AsError(err).Code != "permission_denied" {
+	if core.AsError(err).Code != "permission_denied" || core.AsError(err).Details["permission"] != PermGrantCritical {
 		t.Fatalf("limited operator: %v", err)
 	}
 

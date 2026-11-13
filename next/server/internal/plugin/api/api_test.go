@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"mime/multipart"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
@@ -42,12 +44,16 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 		return 2, nil
 	case "nobody":
 		return 3, nil
+	case "manager":
+		return 4, nil
+	case "runner":
+		return 5, nil
 	}
 	return 0, errors.New("bad token")
 }
 
 // authz: user 1 is superuser; user 2 only has plugin.guard:stats:read;
-// user 3 has nothing.
+// user 3 has nothing; user 4 manages plugins; user 5 only runs tasks.
 type authz struct{}
 
 func (a authz) Can(ctx context.Context, uid int64, p string) (bool, error) {
@@ -60,6 +66,10 @@ func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, er
 		return core.PermissionSet{Superuser: true}, nil
 	case 2:
 		return core.PermissionSet{Keys: map[string]struct{}{"plugin.guard:stats:read": {}}}, nil
+	case 4:
+		return core.PermissionSet{Keys: map[string]struct{}{PermRead: {}, PermManage: {}}}, nil
+	case 5:
+		return core.PermissionSet{Keys: map[string]struct{}{task.PermRun: {}}}, nil
 	}
 	return core.PermissionSet{}, nil
 }
@@ -158,6 +168,15 @@ type harness struct {
 	engine *gin.Engine
 	db     *store.DB
 	guard  *manifest.Manifest // the registry's copy; tests mutate it in place
+	api    *API
+}
+
+// jobRuns records manual job runs as "plugin/job by actor".
+type jobRuns []string
+
+func (j *jobRuns) RunNow(_ context.Context, pluginKey, jobID string, actorID int64) error {
+	*j = append(*j, fmt.Sprintf("%s/%s by %d", pluginKey, jobID, actorID))
+	return nil
 }
 
 func (h *harness) do(method, path, token string, body any) (int, map[string]any) {
@@ -231,7 +250,7 @@ func newHarness(t *testing.T, guardConflicts ...core.ResourceConflict) (*harness
 	engine := gin.New()
 	r := httpapi.NewRouter(engine, tokens{}, authz{})
 	a.RegisterRoutes(r)
-	return &harness{t: t, engine: engine, db: db, guard: m}, root
+	return &harness{t: t, engine: engine, db: db, guard: m, api: a}, root
 }
 
 func data(out map[string]any) map[string]any {
@@ -406,6 +425,22 @@ func TestAPIFlow(t *testing.T) {
 	}
 	if code, _ = h.do("POST", "/plugins/guard/jobs/rollup/run", "admin", nil); code != http.StatusServiceUnavailable {
 		t.Fatalf("run job without runner = %d", code)
+	}
+	// A manual run is a task run: it needs task:run as POST
+	// /system/tasks/:name/run does, plugin:manage alone is not enough.
+	var runs jobRuns
+	h.api.d.Jobs = &runs
+	code, out = h.do("POST", "/plugins/guard/jobs/rollup/run", "manager", nil)
+	if code != http.StatusForbidden || out["error"].(map[string]any)["details"].(map[string]any)["permission"] != task.PermRun {
+		t.Fatalf("run job with plugin:manage only = %d %v", code, out)
+	}
+	if code, out = h.do("POST", "/plugins/guard/jobs/rollup/run", "runner", nil); code != http.StatusNoContent {
+		t.Fatalf("run job with task:run = %d %v", code, out)
+	}
+	var auditAction string
+	_ = h.db.Pool.QueryRow(ctx, `SELECT action FROM audit_logs WHERE user_id = 5 ORDER BY id DESC LIMIT 1`).Scan(&auditAction)
+	if len(runs) != 1 || runs[0] != "guard/rollup by 5" || auditAction != "plugin.job.run" {
+		t.Fatalf("job runs = %v, audit action = %q", runs, auditAction)
 	}
 
 	// UI extensions filtered by permission.

@@ -1197,7 +1197,7 @@ sequenceDiagram
 | 调度 | 0.1.237 起走定时任务框架（CONTRACTS §77.8）：`cluster` 任务（默认）是 River 全集群任务 `plugin.<key>.<id>`，每个时段全集群只跑一次；`node` 任务每个加载了插件的节点各跑一次。执行节点调用本机插件的 `AppService.RunJob`。插件还可以经 Host API 9 在运行时登记任务 |
 | 保证 | 同一时段只跑一次（River 唯一键 + `scheduled_tasks` 租约 + `plugin_job_runs_slot_uniq`）；错过的触发不补跑。超时上限全集群 1 小时、每节点 10 分钟，更长的工作分段续跑 |
 | 记录 | `plugin_job_runs(id, plugin_key, job_id, node_id, scheduled_at, started_at, finished_at, status, error)`，保留最近 1000 条 |
-| 手动触发 | 插件详情页"立即执行"，需要 `plugin:manage` |
+| 手动触发 | 插件详情页"立即执行"，需要 `task:run` |
 | 禁用 | 插件禁用时停止调度 |
 
 ---
@@ -1292,7 +1292,7 @@ cgroup 可以给每个插件单独设置硬性上限，超出直接被限制，�
 ```mermaid
 flowchart TD
   root["官方根公钥（编译进核心二进制）"] --> official["official：官方发布者"]
-  admin["管理员（publisher:manage 🔴）"] --> verified["verified：管理员确认过的发布者"]
+  admin["持有 publisher:manage 🔴 的人（默认只有超级管理员）"] --> verified["verified：管理员确认过的发布者"]
   admin --> community["community：已登记但未验证的发布者"]
   unsigned["未签名"] -.->|"仅 plugins.allow_unsigned=true 时"| devonly["仅开发环境"]
 ```
@@ -1399,7 +1399,7 @@ flowchart TD
 | 角色 | 说明 |
 |---|---|
 | `super_admin` | superuser，至少保留一个用户，不能删除 |
-| `admin` | 默认拥有全部核心权限，可修改 |
+| `admin` | 默认拥有除超管专属权限（CONTRACTS §4 标 👑 的 5 项）以外的全部核心权限，可修改（内置角色只有超级管理员能改） |
 | `user` | 管理自己的 API Key、查看自己的用量和余额流水、调用网关 |
 
 | 模块 | 权限 |
