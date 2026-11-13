@@ -229,3 +229,66 @@ VALUES ('plugin.guard:stats:export', 'plugin.guard', '{"en":"x"}', 'plugin', 'gu
 		t.Fatalf("after reject: %+v, granted %v, %v", pending, e.perms.granted, err)
 	}
 }
+
+// Two built-in upgrades withholding the same grant list it once (under the
+// earlier version); rejecting it there rejects it for both, while a grant
+// only the later one withheld stays listed. A later upgrade withholding it
+// again after the reject lists it again.
+func TestRejectWithheldGrantAcrossVersions(t *testing.T) {
+	e, ctx := roleGrantsEnv(t)
+	e.authz.perms[e.admin]["role:define"] = true
+	dir := t.TempDir()
+	upgrade := func(version string, ups ...manifest.UserPermission) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, "guard-"+version+".s2plugin"), pkgtest.Build(guardWith(version, ups...), e.root), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_ = e.svc.EnsureBuiltin(ctx, dir, testLogger(t)) // the fake rollout cannot upgrade
+	}
+	pending := func() []RoleGrant {
+		t.Helper()
+		gs, err := PendingRoleGrants(ctx, e.db.Pool, "guard", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return gs
+	}
+	upgrade("0.1.1", newPerm("rules:view", false, "admin", "user"))
+	upgrade("0.1.2", newPerm("rules:view", false, "admin", "user"), newPerm("stats:export", false, "user"))
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO permissions (key, module, label, source, plugin_key, status)
+SELECT 'plugin.guard:' || k, 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'active' FROM unnest(ARRAY['rules:view','stats:export']) k`); err != nil {
+		t.Fatal(err)
+	}
+	want := []RoleGrant{
+		{Version: "0.1.1", Permission: "plugin.guard:rules:view", Role: "user", Via: "default", NeedsConsent: true},
+		{Version: "0.1.2", Permission: "plugin.guard:stats:export", Role: "user", Via: "default", NeedsConsent: true},
+	}
+	if got := pending(); !slices.Equal(got, want) {
+		t.Fatalf("pending %+v", got)
+	}
+	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.1", false, e.admin); err != nil {
+		t.Fatal(err)
+	}
+	if got := pending(); !slices.Equal(got, want[1:]) {
+		t.Fatalf("after rejecting 0.1.1: %+v", got)
+	}
+	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.2", false, e.admin); err != nil {
+		t.Fatal(err)
+	}
+	if got := pending(); len(got) != 0 || len(e.perms.granted) != 0 {
+		t.Fatalf("after rejecting 0.1.2: %+v, granted %v", got, e.perms.granted)
+	}
+	// rules:view new again (gone from the catalog meanwhile): 0.1.3
+	// withholds it after the reject, so it is listed again.
+	if _, err := e.db.Pool.Exec(ctx, `DELETE FROM permissions WHERE key = 'plugin.guard:rules:view'`); err != nil {
+		t.Fatal(err)
+	}
+	upgrade("0.1.3", newPerm("rules:view", false, "admin", "user"), newPerm("stats:export", false, "user"))
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO permissions (key, module, label, source, plugin_key, status)
+VALUES ('plugin.guard:rules:view', 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'active')`); err != nil {
+		t.Fatal(err)
+	}
+	if got := pending(); len(got) != 1 || got[0].Version != "0.1.3" || got[0].Permission != "plugin.guard:rules:view" {
+		t.Fatalf("withheld again by 0.1.3: %+v", got)
+	}
+}

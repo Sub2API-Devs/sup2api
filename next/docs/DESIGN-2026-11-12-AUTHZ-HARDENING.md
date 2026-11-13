@@ -860,3 +860,10 @@
 - 访问密钥页（合并期 4 前端分支时补做）：`lost` 按新语义显示为“暂不可用”，说明原因（被收回或所属插件停用）、重新获得后自动恢复、保存修改会移除；选中带 `step_up` 的权限时提示用密钥调用要先 `POST /me/verify` 取 proof（`X-Verify-Proof`），密钥只能用两步验证或密码。不再有“你已经没有这些权限”的旧 sessionOnly 口径。中文合并时把 S5 新增文案里指 TOTP 的“二次验证”改为“两步验证”。
 - 测试：`RolesView.spec`（reserved 中文提示）、新增 `UpgradesView.spec`（warnings 显示且不阻断）；`AccessKeysCard.spec`（lost 恢复说明、选中 step_up 权限才显示 proof 提示）。
 - 回滚：revert 提交即可，纯前端与 mock。
+
+## 期 4 P4CFIX：拒绝暂缓授予对所有版本生效
+
+- 问题：待确认清单（`PendingRoleGrants(key, "")`）按 (permission, role) 跨版本去重，只显示最早版本；前端按清单里的版本逐个 POST `…/role-grants/reject`，后来版本也暂缓的同一授予在重新加载后又出现。
+- 改动：`reject` 记下的每个 (permission, role) 同时清除该插件在这次拒绝之前所有版本里暂缓的同一授予（`PendingRoleGrants` 的 NOT EXISTS 增加按 `grants` 包含匹配的条件）；版本自身的清单照旧整体清除。之后的升级再次暂缓同一授予时重新列出。confirm 行为不变（确认后角色已持有，本就不再列出）。前端不改。
+- 测试：install `TestRejectWithheldGrantAcrossVersions`（两个版本暂缓同一授予只列一次；拒一次后只剩后一版本独有的项；全部拒绝后为空且无写入；之后的升级再暂缓时重新列出）。
+- 回滚：revert 提交即可；不涉及迁移与数据。

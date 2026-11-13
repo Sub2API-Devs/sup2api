@@ -191,7 +191,9 @@ func auditAutoGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version
 // PendingRoleGrants lists the role grants consents of key withheld for review
 // (version "" for every version) since it was installed, that nobody
 // confirmed or rejected since and that still mean something: the permission and the role exist and the role
-// does not hold it.
+// does not hold it. A confirm or reject clears its version's list; a reject
+// also clears the same (permission, role) any version withheld before it,
+// since the list shows each pair once (under its earliest version).
 func PendingRoleGrants(ctx context.Context, q store.Querier, key, version string) ([]RoleGrant, error) {
 	rows, err := q.Query(ctx, `
 SELECT a.detail->>'version', g->>'permission', g->>'role', COALESCE((g->>'sensitive')::boolean, false), COALESCE(g->>'via', '')
@@ -201,12 +203,14 @@ WHERE a.action = $3 AND a.target_type = 'plugin' AND a.target_id = $1
   AND a.created_at >= (SELECT installed_at FROM plugins WHERE key = $1)
   AND ($2 = '' OR a.detail->>'version' = $2)
   AND NOT EXISTS (SELECT 1 FROM audit_logs b WHERE b.target_type = 'plugin' AND b.target_id = a.target_id
-      AND b.action = ANY($4) AND b.id > a.id AND b.detail->>'version' = a.detail->>'version')
+      AND b.action = ANY($4) AND b.id > a.id
+      AND (b.detail->>'version' = a.detail->>'version'
+        OR (b.action = $5 AND b.detail->'grants' @> jsonb_build_array(jsonb_build_object('permission', g->>'permission', 'role', g->>'role')))))
   AND EXISTS (SELECT 1 FROM permissions p WHERE p.key = g->>'permission')
   AND EXISTS (SELECT 1 FROM roles r WHERE r.key = g->>'role' AND NOT r.superuser)
   AND NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
       WHERE r.key = g->>'role' AND p.key = g->>'permission')
-ORDER BY a.id, 2, 3`, key, version, AuditConsentAuto, []string{AuditRoleGrantsConfirm, AuditRoleGrantsReject})
+ORDER BY a.id, 2, 3`, key, version, AuditConsentAuto, []string{AuditRoleGrantsConfirm, AuditRoleGrantsReject}, AuditRoleGrantsReject)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +235,8 @@ ORDER BY a.id, 2, 3`, key, version, AuditConsentAuto, []string{AuditRoleGrantsCo
 // of version withheld for review. Either needs what naming those roles on
 // the consent page needs (checkRolesGrantable: role:define and
 // CanGrantToRoles), and clears the version's list, audited; rejecting
-// grants nothing.
+// grants nothing and also clears the rejected grants other versions
+// withheld (PendingRoleGrants).
 func (s *Service) ReviewRoleGrants(ctx context.Context, key, version string, confirm bool, actorID int64) ([]RoleGrant, error) {
 	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
 	if guardErr != nil {
