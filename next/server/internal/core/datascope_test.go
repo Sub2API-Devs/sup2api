@@ -81,10 +81,10 @@ func TestAllowsRow(t *testing.T) {
 // numbered from the given placeholder.
 func TestScopeTableSQL(t *testing.T) {
 	t.Parallel()
-	if got, want := ProxyRows.SQL(2), "($2::boolean OR p.created_by = $3::bigint OR p.id = ANY($4::bigint[]))"; got != want {
+	if got, want := ProxyRows.SQL(2), "($2::boolean OR COALESCE(p.created_by = $3::bigint, false) OR p.id = ANY($4::bigint[]))"; got != want {
 		t.Fatalf("proxy SQL = %s", got)
 	}
-	want := "($3::boolean OR a.created_by = $4::bigint OR a.id = ANY($5::bigint[])" +
+	want := "($3::boolean OR COALESCE(a.created_by = $4::bigint, false) OR a.id = ANY($5::bigint[])" +
 		" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest($6::bigint[]) sg(g) ON sg.g = 0 OR sg.g = ag.group_id WHERE ag.account_id = a.id)" +
 		" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest($7::bigint[], $8::bigint[]) sp(g, x) ON sp.x = ag.account_id AND (sp.g = 0 OR sp.g = ag.group_id) WHERE ag.account_id = a.id))"
 	if got := AccountRows.SQL(3); got != want {

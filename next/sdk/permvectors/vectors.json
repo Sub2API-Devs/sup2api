@@ -187,6 +187,66 @@
   {
    "in": "plugin.x:y:own",
    "invalid": true
+  },
+  {
+   "in": "account:own:read",
+   "out": "account:read:own"
+  },
+  {
+   "in": "account:own:create",
+   "out": "account:create:own"
+  },
+  {
+   "in": "account:own:delete",
+   "out": "account:delete:own"
+  },
+  {
+   "in": "account:own:test",
+   "out": "account:test:own"
+  },
+  {
+   "in": "account:create:group/12/account/*",
+   "out": "account:create:group/12"
+  },
+  {
+   "in": "proxy:read:proxy/*/*",
+   "out": "proxy:read"
+  },
+  {
+   "in": "account:update:group/12/account/*/*",
+   "out": "account:update:group/12"
+  },
+  {
+   "in": "account:read:foo/*",
+   "invalid": true
+  },
+  {
+   "in": "account:read:proxy/*",
+   "invalid": true
+  },
+  {
+   "in": "proxy:read:account/*",
+   "invalid": true
+  },
+  {
+   "in": "account:read:x/*/y/*",
+   "invalid": true
+  },
+  {
+   "in": "account:read:*/*",
+   "invalid": true
+  },
+  {
+   "in": "account:update:group//account/1",
+   "invalid": true
+  },
+  {
+   "in": "account:update:account/9223372036854775808",
+   "invalid": true
+  },
+  {
+   "in": "proxy:manage:group/*",
+   "invalid": true
   }
  ],
  "implies": [
@@ -514,6 +574,31 @@
    "have": "account:update:group/12/*",
    "want": "account:update:group/12/account/7",
    "ok": true
+  },
+  {
+   "have": "account:update:group/12/account/125",
+   "want": "account:update:group/12/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/*/account/125",
+   "want": "account:update:group/12/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:account/125",
+   "want": "account:update:group/12/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/*",
+   "want": "account:update:group/13/account/7",
+   "ok": false
+  },
+  {
+   "have": "account:update:group/12/*",
+   "want": "account:update:own",
+   "ok": false
   }
  ]
 }

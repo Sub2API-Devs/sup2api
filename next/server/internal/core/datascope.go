@@ -110,10 +110,12 @@ var (
 )
 
 // Cond is the predicate of t with ? placeholders, one per Args value, for
-// store.Filter.And. Its text does not depend on the scope, so the plan of
+// store.Filter.And. It is never NULL (a NULL creator is no match), so it
+// also reads right under NOT or as a selected flag; an Owner of 0 matches
+// no row, creators being user ids. Its text does not depend on the scope, so the plan of
 // a query is reused whatever ids the scope holds.
 func (t ScopeTable) Cond() string {
-	c := "(?::boolean OR " + t.Owner + " = ?::bigint OR " + t.ID + " = ANY(?::bigint[])"
+	c := "(?::boolean OR COALESCE(" + t.Owner + " = ?::bigint, false) OR " + t.ID + " = ANY(?::bigint[])"
 	if t.Grouped {
 		c += " OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest(?::bigint[]) sg(g) ON sg.g = 0 OR sg.g = ag.group_id WHERE ag.account_id = " + t.ID + ")" +
 			" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest(?::bigint[], ?::bigint[]) sp(g, x) ON sp.x = ag.account_id AND (sp.g = 0 OR sp.g = ag.group_id) WHERE ag.account_id = " + t.ID + ")"

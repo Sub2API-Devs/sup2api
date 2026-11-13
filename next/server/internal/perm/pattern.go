@@ -93,10 +93,8 @@ type Scope struct {
 	Group, ID int64
 }
 
-// Grouped reports whether s names a group (group/... ).
-func (s Scope) Grouped() bool { return s.Group != 0 }
-
-// Pattern is a canonical permission key split into action and scope.
+// Pattern is a canonical permission key split into action and scope; build
+// it with Parse (a zero Scope is not a valid one).
 // Unscoped keys (every action that takes no scope, plugin keys) have
 // Scope.All set.
 type Pattern struct {
@@ -146,7 +144,7 @@ func parseScope(res Resource, create bool, raw string) (Scope, error) {
 	case "own":
 		return Scope{Own: true}, nil
 	}
-	parts := trimWildcards(strings.Split(raw, "/"))
+	parts := trimWildcards(res, strings.Split(raw, "/"))
 	if len(parts)%2 != 0 {
 		return Scope{}, ErrInvalidKey
 	}
@@ -176,19 +174,19 @@ func parseScope(res Resource, create bool, raw string) (Scope, error) {
 	return s, nil
 }
 
-// trimWildcards drops the trailing "/*" of a scope path: a lone "*"
-// ("group/12/*") and a row type with "*" ("group/12/account/*",
+// trimWildcards drops the trailing "/*" of a scope path of res: a lone
+// "*" ("group/12/*") and the row type of res with "*" ("group/12/account/*",
 // "account/*"), but not a group's "*" ("group/*" is any group, not
-// everything).
-func trimWildcards(parts []string) []string {
+// everything) and nothing else ("foo/*" stays, and fails to parse).
+func trimWildcards(res Resource, parts []string) []string {
 	for n := len(parts); n > 0 && parts[n-1] == "*"; n = len(parts) {
 		switch {
 		case n%2 == 1:
 			parts = parts[:n-1]
-		case parts[n-2] == "group":
-			return parts
-		default:
+		case parts[n-2] == string(res):
 			parts = parts[:n-2]
+		default:
+			return parts
 		}
 	}
 	return parts
