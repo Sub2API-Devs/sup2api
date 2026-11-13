@@ -14,7 +14,7 @@ import (
 // routes of the caller's own account (httpapi.Router.Self) they open.
 var selfModule = coreModule{"self", lt("My account", "我的账户"), []corePerm{
 	{key: "self:profile", en: "Edit own profile", zh: "修改自己的资料"},
-	{key: "self:security", en: "Own password, two-factor and passkeys", zh: "自己的密码、两步验证与通行密钥", sensitive: true, stepUp: true},
+	{key: "self:security", en: "Own password, two-factor and passkeys (and the super admin transfer)", zh: "自己的密码、两步验证与通行密钥（及超管移交）", sensitive: true, stepUp: true},
 	{key: "self:plugin_ui", en: "Open plugin pages and settings", zh: "打开插件页面与设置"},
 }}
 

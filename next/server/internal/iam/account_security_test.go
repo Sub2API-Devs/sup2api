@@ -1053,7 +1053,7 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 }
 
 // H1: a superuser's access key cannot hand out the super admin role, not even
-// one stored with role:assign (sessionOnly, dropped at verification); nor can
+// one with role:assign (a key is never a superuser); nor can
 // the superuser's own session, since the role only changes hands by transfer.
 func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	k := newKeyEnv(t)

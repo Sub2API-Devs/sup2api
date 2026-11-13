@@ -213,7 +213,7 @@ func TestCanActOnUsers(t *testing.T) {
 	bg := context.Background()
 	// No step-up verifier is set: a superuser's account through a key is
 	// refused for want of a proof; one the request already spent passes.
-	const sessionOnly = "verify it's you to continue"
+	const needsProof = "verify it's you to continue"
 	spent := core.WithStepUp(keyed, "p", "op")
 	core.MarkStepUpSpent(spent, core.StepUpUserSecurityReset)
 	data, identity := core.ActOnData, core.ActOnIdentity
@@ -240,8 +240,8 @@ func TestCanActOnUsers(t *testing.T) {
 		{"superuser's key within its keys", keyed, 2, identity, []int64{3}, ""},
 		{"superuser's key on a wider user", keyed, 2, identity, []int64{1}, ""},
 		{"superuser's key on its owner's data", keyed, 2, data, []int64{2}, ""},
-		{"superuser's key on its owner's account", keyed, 2, identity, []int64{2}, sessionOnly},
-		{"superuser's key on another superuser's account", keyed, 2, identity, []int64{3, 5}, sessionOnly},
+		{"superuser's key on its owner's account", keyed, 2, identity, []int64{2}, needsProof},
+		{"superuser's key on another superuser's account", keyed, 2, identity, []int64{3, 5}, needsProof},
 		{"superuser's key on its account after a proof", spent, 2, identity, []int64{2}, ""},
 		{"another user's key leaves the actor alone", keyed, 3, data, []int64{3}, ""},
 		{"a narrower key on its owner", ownKey, 1, identity, []int64{1}, ""},

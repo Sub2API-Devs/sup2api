@@ -345,3 +345,23 @@ func TestStepUpMatrix(t *testing.T) {
 		t.Errorf("proof for another user: %d %v", code, out)
 	}
 }
+
+// The super admin's own roles through an access key: the proof is spent
+// before the role transaction (review fix).
+func TestSuperAdminKeyOnItsOwnRolesNeedsAProof(t *testing.T) {
+	t.Parallel()
+	k := newKeyEnv(t)
+	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
+	path := "/users/" + strconv.FormatInt(root, 10) + "/roles"
+	// A key assigns no roles (it has no assignable list): the same roles.
+	body := map[string]any{"role_keys": []string{"super_admin"}}
+	key := k.createKey(t, root, adminPassword, "user:read", "role:assign")
+	code, out := k.call(key.Key, "PUT", path, body)
+	if code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("key without a proof: %d %v", code, out)
+	}
+	proof := k.proof(t, key.Key, core.StepUpSuperAdminIdentity, "PUT", path, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(key.Key, proof, "PUT", path, body); code != 200 {
+		t.Fatalf("key with a proof: %d %v", code, out)
+	}
+}

@@ -295,10 +295,12 @@ func CorePermissions() []core.PermissionDef {
 
 // stepUpFlag reports whether key is marked stepUp (core or self module).
 func stepUpFlag(key string) bool {
-	for _, m := range slices.Concat(coreModules, []coreModule{selfModule}) {
-		for _, p := range m.perms {
-			if p.key == key {
-				return p.stepUp
+	for _, mods := range [][]coreModule{coreModules, {selfModule}} {
+		for _, m := range mods {
+			for _, p := range m.perms {
+				if p.key == key {
+					return p.stepUp
+				}
 			}
 		}
 	}
@@ -315,4 +317,5 @@ func init() {
 		coreModuleLabels[m.key] = m.label
 		coreModuleOrder[m.key] = i
 	}
+
 }

@@ -169,7 +169,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/:id/test", s.test, "account:test", "account:own:test")
 	r.PermAny("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, "account:test", "account:own:test")
 	r.PermAny("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, "account:create", "account:own:create")
-	// Plain-text credentials: sessions only (CONTRACTS §80).
+	// Plain-text credentials: a step-up proof each time (CONTRACTS §80.2).
 	r.StepUp(core.StepUpCredentialReveal).PermAny("POST", "/accounts/:id/credentials/reveal", s.reveal, "account:credential:view", "account:own:credential:view")
 	// Subscription quota and balance (CONTRACTS §44, §51).
 	r.PermAny("GET", "/accounts/:id/quota", s.getQuota, "account:read", "account:own:read")

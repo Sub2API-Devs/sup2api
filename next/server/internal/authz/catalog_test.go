@@ -100,14 +100,14 @@ func TestCatalogFlagInvariants(t *testing.T) {
 // (CONTRACTS §80.2, display only).
 func TestCatalogFlaggedSets(t *testing.T) {
 	t.Parallel()
-	var sensitive, session []string
+	var sensitive, stepUp []string
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if p.sensitive {
 				sensitive = append(sensitive, p.key)
 			}
 			if p.stepUp {
-				session = append(session, p.key)
+				stepUp = append(stepUp, p.key)
 			}
 		}
 	}
@@ -121,7 +121,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"system:update:execute", "system:update:recover",
 		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
 	}
-	wantSession := []string{
+	wantStepUp := []string{
 		"account:credential:view", "account:own:credential:view",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
 		"plugin:install", "proxy:manage", "publisher:manage",
@@ -130,15 +130,15 @@ func TestCatalogFlaggedSets(t *testing.T) {
 	// Decision D2: what only the super admin holds by default.
 	wantSuper := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
 	slices.Sort(sensitive)
-	slices.Sort(session)
+	slices.Sort(stepUp)
 	if super := superOnlyKeys(); !slices.Equal(super, wantSuper) {
 		t.Errorf("superOnly = %v, want %v", super, wantSuper)
 	}
 	if !slices.Equal(sensitive, wantSensitive) {
 		t.Errorf("sensitive = %v\nwant %v", sensitive, wantSensitive)
 	}
-	if !slices.Equal(session, wantSession) {
-		t.Errorf("stepUp = %v, want %v", session, wantSession)
+	if !slices.Equal(stepUp, wantStepUp) {
+		t.Errorf("stepUp = %v, want %v", stepUp, wantStepUp)
 	}
 }
 
