@@ -34,10 +34,12 @@ func TestScopedGrantsAndManagement(t *testing.T) {
 	role("ops_b", "account:update:group/13")
 	role("own_ops", append(manage, "account:update:own")...)
 	role("own_sub", "account:update:own")
+	role("star", "account:update:group/*")
 	letAssign(t, s, "ops_a", "sub_a", "ops_b")
 	letAssign(t, s, "own_ops", "own_sub")
 	a := addUser(t, s, "a@x.com", "ops_a")
 	own := addUser(t, s, "own@x.com", "own_ops")
+	star := addUser(t, s, "star@x.com", "star")
 
 	for _, tc := range []struct {
 		actor   int64
@@ -52,6 +54,8 @@ func TestScopedGrantsAndManagement(t *testing.T) {
 		{a, []string{"account:update:group/*"}, []string{"account:update:group/*"}},
 		{a, []string{"account:update:own"}, []string{"account:update:own"}},
 		{a, []string{"account:delete:group/12"}, []string{"account:delete:group/12"}},
+		{star, []string{"account:update:group/12", "account:update:group/*/account/5"}, nil},
+		{star, []string{"account:update:account/5"}, []string{"account:update:account/5"}},
 		{own, []string{"account:own:update"}, nil},
 		{own, []string{"account:update:own"}, nil},
 		{own, []string{"account:update:group/1"}, []string{"account:update:group/1"}},

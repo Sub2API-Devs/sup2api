@@ -1068,7 +1068,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 - **匹配**：`PermissionSet.Has(k)` = 持有的某个模式蕴含 k，所以只持有 `account:read:own` 时 `Has("account:read")` 为 false（“全量才能做”的判断保持全量语义）；`HasAction(a)` = 持有 a 的任意范围。路由 `Router.PermScoped(method, path, h, actions...)` 要求任一动作的任意范围，并把每个动作的 `core.DataScope` 放进 ctx（`core.Scope(ctx, az, action)` 取用）；全部范围的动作也记入 `Granted`。
 - **数据范围**：`core.DataScope{All, Owner, Groups, IDs, PairG, PairID}` 由用户在该动作上的全部模式编译（`Compile`），谓词 `core.AccountRows` / `core.ProxyRows` 的 `SQL(n)` / `Cond()` / `Args(scope)`：文本固定，id 只是数组参数；分组成员关系实时读 `account_groups`（任一分组匹配即在范围内），不进缓存。
 - **存储**：`permissions.scope_type`（`''`/`account`/`proxy`）；全部范围的授予在 `role_permissions`，带范围的在 `role_permission_scopes(role_id, permission_id, scope)`。访问密钥仍是 `text[]`，存规范 key。
-- **两步升级（滚动发布）**：R2a（本版本）旧 own key 保持 active，作为别名被读取；写入带 own 范围的授予时同时写旧 own key 行（`mirrorLegacyOwn`），访问密钥同时存两种写法，旧节点照常工作；`GET /permissions` 不再列出旧 own key，每项新增 `scope_type`；`GET /me` 的 `permissions` 输出规范 key 并附带旧 own 别名（兼容一个小版本）。R2b（下一版本，所有节点升级后）：把 8 个旧 key 标 removed、删除镜像行与密钥里的旧写法。
+- **两步升级（滚动发布）**：R2a（本版本）旧 own key 保持 active，作为别名被读取；写入带 own 范围的授予时同时写旧 own key 行（`mirrorLegacyOwn`），访问密钥同时存两种写法，旧节点照常工作；`GET /permissions` 不再列出旧 own key，每项新增 `scope_type`；`GET /me` 的 `permissions` 输出规范 key 并附带旧 own 别名（兼容一个小版本）。R2a 期间，旧 own key 仍为 active 时，以旧行为准（`ownShadowed`）：旧节点撤销 own 授予（只删旧行）后所有节点一致。R2b（下一版本，所有节点升级后）：先按旧行重新同步新表的 own 行（写审计），再把 8 个旧 key 标 removed，最后删除镜像、密钥里的旧写法与 `/me` 别名。
 - **迁移 0103**：建表加列；每个未 removed 的旧 own 授予若角色未持有对应全量 key，则写入 `(动作, 'own')`（审计 `authz.scope.migrate`，`via: migration 0103`、`from`、`key`；冗余的只记一次 `redundant: true`）；访问密钥在旧写法旁补上 `<动作>:own`（审计 `user.access_key.migrate`，含 before/after）；有写入才推进 authz 版本；可重复执行；不删除也不修改 `role_permissions`。
 - **访问密钥取交集**：创建/修改时每个 key 须被用户蕴含；运行时 `Restrict` 逐模式取较窄者（存量不带后缀的 key 遇到只有 own 的用户收窄为 own），不可比（如 `group/12` 与 `own`）丢弃。
 - **内置角色默认**：supplier = 8 个 `…:own`；operator 去掉冗余 own key，加 `account:credential:view:own`。
@@ -1191,7 +1191,7 @@ type ProxyResolver interface {
 }
 ```
 
-- 权限：调用者须有 `proxy:manage` 或 `proxy:own:manage`，否则 403 `permission_denied`（`details.permission = "proxy:own:manage"`）。由账号模块用 `core.ScopeOf` 判断（`FindOrCreate` 不查权限）；权限、解析都在调用插件校验凭证之前做，`account.Deps.Resolver` 为空时 `proxy_url` 返回 501 `unsupported`。
+- 权限：调用者须有 `proxy:manage` 或 `proxy:own:manage`，否则 403 `permission_denied`（`details.permission = "proxy:own:manage"`）。由账号模块按 `proxy:manage` 的范围判断（期 4 R4 起 `details.permission = "proxy:manage:own"`；`FindOrCreate` 只在新建时要求全部或 own 范围）；权限、解析都在调用插件校验凭证之前做，`account.Deps.Resolver` 为空时 `proxy_url` 返回 501 `unsupported`。
 - 匹配范围 `scope`：代理的**写范围**（2026-11-12 权限加固 T30 起；此前按读范围）：有 `proxy:manage` 为全部（`nil`），只有 `proxy:own:manage` 为自己创建的（传 `&uid`）。由账号模块用 `core.ScopeOf` 与权限判断一次算好传入；`POST /proxies/probe` 带 `save` 时同样传写范围。新建的行 `allow_private = (scope == nil)`（§43.3）。校验 `proxy_id` 用的是另一套可见范围（自己级账号 key 时）：有 `proxy:read` 为全部，`proxy:own:read` 或 `proxy:own:manage` 为自己创建的；没有任何代理 key 的调用者给出任何 `proxy_id` 都是 `proxy_id/not_found`；全部级账号 key（`account:create` / `account:update`）的调用者 `proxy_id` 只要存在即可。
 - 匹配键 = `protocol, host（小写）, port, username, password` 全等；`name`、`status` 不参与。SQL 按 `protocol = $1 AND lower(host) = $2 AND port = $3 AND username = $4` 加 `(password_enc IS NULL) = <输入密码是否为空>` 与范围条件预筛，`ORDER BY id`，候选逐条解密后 `subtle.ConstantTimeCompare` 比密码（解不开的行跳过）。**跳过 `status=disabled` 的代理**。命中多条取 id 最小的。
 - 未命中则新建：`name` = `<protocol>://<host>:<port>`（IPv6 host 带方括号；超长按 rune 截断到 100），`status=active`，`created_by` = `ownerID`。

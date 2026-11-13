@@ -95,11 +95,10 @@ func (r *Router) Perm(method, path string, permission perm.Key, h ...gin.Handler
 	r.handle(method, path, r.require(string(permission)), h)
 }
 
-// PermAny registers a route the caller may use with any one of keys, e.g.
-// the "all" key and its "own" counterpart (CONTRACTS §21.1). Every key the
-// caller holds is recorded in the request context (Granted /
-// core.OwnerScope). Without a match the response is permission_denied with
-// details.permission = keys[0].
+// PermAny registers a route the caller may use with any one of keys, each
+// unscoped (scoped actions use PermScoped). Every key the caller holds is
+// recorded in the request context (Granted). Without a match the response
+// is permission_denied with details.permission = keys[0].
 func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...perm.Key) {
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")

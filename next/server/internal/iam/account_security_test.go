@@ -1424,6 +1424,19 @@ func TestAccessKeyScopes(t *testing.T) {
 	if fmt.Sprint(stored) != "[account:own:read account:read:own proxy:manage:own proxy:own:manage]" {
 		t.Fatalf("stored = %v", stored)
 	}
+	// A group-range user's key takes a subset of its groups.
+	k.grantRole(t, k.userID, "grouped", "user:read")
+	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO role_permission_scopes (role_id, permission_id, scope)
+		SELECT r.id, p.id, 'group/12' FROM roles r, permissions p WHERE r.key = 'grouped' AND p.key = 'account:test'`); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	if sub := k.createKey(t, k.userID, adminPassword, "account:test:group/12/account/5"); fmt.Sprint(sub.Permissions) != "[account:test:group/12/account/5]" {
+		t.Fatalf("subset key = %v", sub.Permissions)
+	}
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"account:test:account/5"}}, testIP); errCodeOf(err) != "permission_denied" {
+		t.Fatalf("id outside the group syntax: %v", err)
+	}
 	// A key from before: account:update and account:delete for every row.
 	old := core.AccessKeyIdentity{UserID: k.userID, KeyID: 99, Permissions: []string{"account:update", "account:delete", "proxy:read"}}
 	set, err := k.authz.PermissionSet(core.WithAccessKey(core.WithUserID(ctx, k.userID), old), k.userID)
