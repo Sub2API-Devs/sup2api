@@ -62,6 +62,22 @@ describe('access keys card', () => {
     w.unmount()
   })
 
+  it('explains lost permissions come back, and the proof a chosen step-up permission needs', async () => {
+    const stepUp = { key: 'user:password:reset', label: { zh: '重置密码', en: 'Reset' }, description: {}, sensitive: true, step_up: true, status: 'active' }
+    const withStepUp = [{ ...modules[0], permissions: [...modules[0].permissions, stepUp] }]
+    api.get.mockImplementation(async (path: string) => (path.endsWith('/permissions') ? withStepUp : [existing]))
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="access-key-edit"]').trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('重新获得后密钥会自动恢复')
+    expect(w.find('[data-testid="access-key-step-up"]').exists()).toBe(false)
+    const boxes = w.get('[data-testid="access-key-permissions"]').findAll('input[type="checkbox"]')
+    await boxes[boxes.length - 1].setValue(true)
+    expect(w.get('[data-testid="access-key-step-up"]').text()).toContain('X-Verify-Proof')
+    w.unmount()
+  })
+
   it('shows the refusal when a permission is not the user\'s', async () => {
     const { ApiError } = await import('@sub2api/host')
     api.post.mockRejectedValue(new ApiError(403, { code: 'permission_denied', message: '访问密钥只能拥有你自己的权限', details: { missing: ['user:delete'] } }))

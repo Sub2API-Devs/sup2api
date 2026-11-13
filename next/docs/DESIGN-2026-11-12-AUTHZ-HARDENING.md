@@ -856,6 +856,7 @@
 - web mock 默认角色集合按服务端更新：admin = 全部核心权限去掉超管专属（`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`）；operator 为 D3 显式白名单；新增内置 supplier；内置角色带默认可管理清单（D5），`PUT /roles/:id/assignable` 与 `GET /me/assignable-roles` 有 mock；权限目录补 `audit`、`system` 模块与 `user:password:reset`、`account:group:bind`、`account:relay`、`usage:settle`、`task:manage`、`plugin:grant:db_schema_unconfined`；保留 key 回 `reserved`。
 - 升级页（T45 跟进）：预检结果的 `warnings`（如 tokenless 管理开关仍开着）以“提醒（不阻断升级）”显示，不影响开始升级。
 - 用词：两步验证（TOTP）在中文界面统一为“两步验证”，“二次验证”留给高危操作前的再次确认（step-up）。
-- UsersView spec 已在 T78 补齐。未做：访问密钥页 sessionOnly 文案随 S 任务（删除 sessionOnly）由后端会话一并处理。
-- 测试：`RolesView.spec`（reserved 中文提示）、新增 `UpgradesView.spec`（warnings 显示且不阻断）。
+- UsersView spec 已在 T78 补齐。
+- 访问密钥页（合并期 4 前端分支时补做）：`lost` 按新语义显示为“暂不可用”，说明原因（被收回或所属插件停用）、重新获得后自动恢复、保存修改会移除；选中带 `step_up` 的权限时提示用密钥调用要先 `POST /me/verify` 取 proof（`X-Verify-Proof`），密钥只能用两步验证或密码。不再有“你已经没有这些权限”的旧 sessionOnly 口径。中文合并时把 S5 新增文案里指 TOTP 的“二次验证”改为“两步验证”。
+- 测试：`RolesView.spec`（reserved 中文提示）、新增 `UpgradesView.spec`（warnings 显示且不阻断）；`AccessKeysCard.spec`（lost 恢复说明、选中 step_up 权限才显示 proof 提示）。
 - 回滚：revert 提交即可，纯前端与 mock。

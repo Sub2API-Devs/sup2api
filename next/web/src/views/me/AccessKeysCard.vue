@@ -71,6 +71,9 @@ async function start(row: AccessKey | null) {
   }
 }
 
+// Chosen permissions whose high-risk endpoints ask the key for a proof on every call (§80.2).
+const stepUpChosen = computed(() => modules.value.some((m) => m.permissions.some((p) => p.step_up && granted.value.has(p.key))))
+
 const canSubmit = computed(() => !!name.value.trim() && !!password.value && granted.value.size > 0)
 
 async function submit() {
@@ -155,6 +158,7 @@ const columns: TableColumn[] = [
         </SField>
       </div>
       <p class="text-xs text-fg-muted">{{ t('me.accessKeys.subsetHint') }}</p>
+      <SAlert v-if="stepUpChosen" tone="info" dense data-testid="access-key-step-up">{{ t('me.accessKeys.stepUpHint') }}</SAlert>
       <div class="max-h-80 overflow-y-auto" data-testid="access-key-permissions">
         <PermissionTree v-model:granted="granted" :modules="modules" />
       </div>
