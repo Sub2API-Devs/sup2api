@@ -281,7 +281,7 @@ async function save() {
 }
 async function test() {
   output.value = ''
-  output.value = (await api.post<{ output: string }>('/system/ccgateway/remote-test', {}, { signal: AbortSignal.timeout(55000) })).output
+  output.value = (await api.post<{ output: string }>('/system/ccgateway/remote-test', {}, { timeoutMs: 55000 })).output
 }
 
 function onInstalled(config: InstallResult, late: boolean) {
