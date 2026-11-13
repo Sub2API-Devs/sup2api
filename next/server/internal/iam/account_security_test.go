@@ -410,19 +410,24 @@ func TestPeersCannotActOnEachOther(t *testing.T) {
 	plain := mk("plain@example.com", authz.RoleUser)
 
 	name, pw := "renamed", "taken-over-1"
-	acts := func(actor, target int64) map[string]error {
+	// roles drops the default role from the target, which every actor here
+	// may revoke, so only the target check can refuse it.
+	acts := func(actor, target int64, roles ...string) map[string]error {
 		out := map[string]error{}
 		_, out["rename"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{DisplayName: &name}, testIP)
 		_, out["password"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{Password: &pw}, testIP)
 		out["reset security"] = s.ResetSecurity(ctx, actor, target, SelfConfirmation{}, testIP)
-		_, out["roles"] = s.SetUserRoles(ctx, actor, target, []string{authz.RoleUser})
+		_, out["roles"] = s.SetUserRoles(ctx, actor, target, roles)
 		out["delete"] = s.DeleteUser(ctx, actor, target)
 		return out
 	}
-	for _, pair := range [][2]int64{{admin, admin2}, {op, op2}} {
-		for act, err := range acts(pair[0], pair[1]) {
-			if !isCode(err, "permission_denied") {
-				t.Errorf("user %d may %s its peer %d: %v", pair[0], act, pair[1], err)
+	for _, peer := range []struct {
+		actor, target int64
+		role          string
+	}{{admin, admin2, authz.RoleAdmin}, {op, op2, authz.RoleOperator}} {
+		for act, err := range acts(peer.actor, peer.target, peer.role) {
+			if !isCode(err, "permission_denied") || core.AsError(err).Details["role"] != peer.role {
+				t.Errorf("user %d may %s its peer %d: %v", peer.actor, act, peer.target, err)
 			}
 		}
 	}
@@ -431,8 +436,8 @@ func TestPeersCannotActOnEachOther(t *testing.T) {
 	if _, err := s.UpdateUser(ctx, op, plain, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
 		t.Fatalf("operator renames a user: %v", err)
 	}
-	for _, target := range []int64{op2, plain} {
-		for act, err := range acts(admin, target) {
+	for target, roles := range map[int64][]string{op2: {authz.RoleOperator}, plain: {authz.RoleUser, authz.RoleOperator}} {
+		for act, err := range acts(admin, target, roles...) {
 			if err != nil {
 				t.Errorf("admin may not %s user %d: %v", act, target, err)
 			}

@@ -186,10 +186,10 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 // an operator other operators; the user role is left out so that a role with
 // user:update and no assignable list still serves plain users). Each target
 // within the actor is the same as their union within it, so one query serves
-// any number of targets. The target's side is what its ROLES grant, not what it can do
-// right now: a disabled user can do nothing, and comparing against that
-// would let anyone with user:update re-enable a disabled admin or set its
-// password and take the account over (SEC-H2). The actor itself among the
+// any number of targets. The target's side is what its ROLES grant, not what
+// it can do right now: a disabled user can do nothing, and comparing against
+// that would let anyone with user:update re-enable a disabled admin or set
+// its password and take the account over (SEC-H2). The actor itself among the
 // targets and the system (actor 0) pass; ActOnOthers refuses the former. An
 // access key acts with less than its owner's roles, so its owner is a target
 // like any other: no access key changes a superuser, its own included
@@ -200,20 +200,41 @@ func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, targetIDs ..
 
 // canActOnUsers is CanActOnUsers reading through q.
 func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, targetIDs ...int64) error {
+	ids := otherTargets(ctx, actorID, targetIDs)
+	if len(ids) == 0 {
+		return nil
+	}
+	actor, err := s.grantSet(ctx, q, actorID)
+	if err != nil {
+		return err
+	}
+	return s.targetsWithin(ctx, q, actor, ids)
+}
+
+// otherTargets are the targets CanActOnUsers judges, sorted and distinct:
+// none for the system, and all but the actor itself unless it acts through
+// its access key.
+func otherTargets(ctx context.Context, actorID int64, targetIDs []int64) []int64 {
+	if actorID == 0 {
+		return nil
+	}
 	self := actorID
 	if core.ByAccessKey(ctx, actorID) {
 		self = 0
 	}
 	ids := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == self })
-	if actorID == 0 || len(ids) == 0 {
+	slices.Sort(ids)
+	return slices.Compact(ids)
+}
+
+// targetsWithin fails unless actor, a grantSet, may act on the users ids
+// (CanActOnUsers). Tests without a database have no role keys, so peer
+// protection is not checked there.
+func (s *Service) targetsWithin(ctx context.Context, q store.Querier, actor core.PermissionSet, ids []int64) error {
+	if len(ids) == 0 {
 		return nil
 	}
-	slices.Sort(ids)
-	target, roles, err := s.usersRoles(ctx, q, slices.Compact(ids))
-	if err != nil {
-		return err
-	}
-	actor, err := s.grantSet(ctx, q, actorID)
+	target, roles, err := s.usersRoles(ctx, q, ids)
 	if err != nil {
 		return err
 	}
