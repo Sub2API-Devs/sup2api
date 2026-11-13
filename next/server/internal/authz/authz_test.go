@@ -489,7 +489,11 @@ func TestRoleManagement(t *testing.T) {
 		t.Fatalf("bad key: %v", err)
 	}
 	// Built-in role keys are reserved, supplier included.
-	for _, key := range reservedRoleKeys {
+	reserved := []string{"supplier"}
+	for _, b := range builtinRoles {
+		reserved = append(reserved, b.key)
+	}
+	for _, key := range reserved {
 		_, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x")})
 		if !isCode(err, "invalid_argument") || fieldCode(err, "key") != "reserved" {
 			t.Fatalf("create role %q: %v", key, err)

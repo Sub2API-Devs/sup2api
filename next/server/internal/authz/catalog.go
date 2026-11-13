@@ -189,10 +189,14 @@ var builtinRoles = []builtinRole{
 		func(_, key string) bool { return slices.Contains(userRolePermissions, key) }, nil, false},
 }
 
-// reservedRoleKeys are the keys no custom role may take: every built-in role,
-// and supplier, a built-in role still to come. A custom role holding one
-// stops SyncCore (builtinKeyConflict).
-var reservedRoleKeys = []string{RoleSuperAdmin, RoleAdmin, RoleOperator, RoleUser, "supplier"}
+// reservedRoleKey reports whether key belongs to a built-in role, so that no
+// custom role may take it: every built-in role, and supplier, a built-in
+// role still to come. A custom role holding one stops SyncCore
+// (builtinKeyConflict).
+func reservedRoleKey(key string) bool {
+	_, ok := builtinRoleByKey(key)
+	return ok || key == "supplier"
+}
 
 func builtinRoleByKey(key string) (builtinRole, bool) {
 	for _, r := range builtinRoles {

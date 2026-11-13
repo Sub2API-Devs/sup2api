@@ -3,10 +3,10 @@ package authz
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -153,21 +153,15 @@ SELECT ins.role_id, a.key FROM ins JOIN roles a ON a.id = ins.assignable_role_id
 // holders that role's defaults, and never skipped, which would leave the
 // built-in role missing. The error stops startup and says how to rename it.
 func builtinKeyConflict(ctx context.Context, q store.Querier, builtinKeys []string) error {
-	rows, err := q.Query(ctx, `SELECT id, key FROM roles WHERE key = ANY($1) AND NOT builtin ORDER BY id`, builtinKeys)
-	if err != nil {
+	roles, err := queryRoles(ctx, q, `SELECT id, key, superuser FROM roles WHERE key = ANY($1) AND NOT builtin ORDER BY id`, builtinKeys)
+	if err != nil || len(roles) == 0 {
 		return err
 	}
-	var fixes []string
-	var id int64
-	var key string
-	_, err = pgx.ForEachRow(rows, []any{&id, &key}, func() error {
-		fixes = append(fixes, fmt.Sprintf("role id %d key %q: UPDATE roles SET key = '%s_custom' WHERE id = %d;", id, key, key, id))
-		return nil
-	})
-	if err != nil || len(fixes) == 0 {
-		return err
+	msg := "authz: custom roles hold keys reserved for built-in roles; rename each one (any free key will do) and start again:"
+	for _, r := range roles {
+		msg += fmt.Sprintf("\n  role id %d key %q: UPDATE roles SET key = '%s_custom' WHERE id = %d;", r.id, r.key, r.key, r.id)
 	}
-	return fmt.Errorf("authz: custom roles hold keys reserved for built-in roles; rename them and start again (%s)", strings.Join(fixes, " "))
+	return errors.New(msg)
 }
 
 // grantDefaults grants the built-in role roleKey its defaults through sql

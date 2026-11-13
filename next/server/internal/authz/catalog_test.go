@@ -242,9 +242,12 @@ func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := roleID(t, s, key)
-	v1, _ := s.currentVersion(ctx)
+	v1, err := s.currentVersion(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	err := s.SyncCore(ctx)
+	err = s.SyncCore(ctx)
 	fix := fmt.Sprintf("UPDATE roles SET key = 'supplier_custom' WHERE id = %d;", id)
 	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("role id %d key %q", id, key)) || !strings.Contains(err.Error(), fix) {
 		t.Fatalf("sync with a custom role on a built-in key: %v", err)
@@ -253,7 +256,7 @@ func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
 	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {
 		t.Fatalf("custom role became built-in: %v, %v", builtin, err)
 	}
-	if v2, _ := s.currentVersion(ctx); v2 != v1 {
+	if v2, err := s.currentVersion(ctx); err != nil || v2 != v1 {
 		t.Fatalf("a refused sync bumped the version: %d -> %d", v1, v2)
 	}
 

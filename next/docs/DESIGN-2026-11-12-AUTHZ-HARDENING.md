@@ -372,10 +372,11 @@
 
 ## T50 K、决策 D5：内置角色 key 被自定义角色占用时停止启动，新建角色不能用保留 key
 
-- 改动：`SyncCore` 在写入内置角色之前查询 `roles WHERE key = ANY(<内置 key>) AND NOT builtin`（`authz.builtinKeyConflict`），有结果就返回错误，服务不启动；错误信息逐行列出角色 id、key 和改名 SQL（`UPDATE roles SET key = '<key>_custom' WHERE id = <id>;`）。内置角色的 upsert 不再把同 key 的自定义角色改成内置角色（`ON CONFLICT` 只修正 `superuser`）。`CreateRole` 拒绝保留 key（`authz.reservedRoleKeys`：`super_admin`、`admin`、`operator`、`user`、`supplier`，其中 `supplier` 在 T52 建出）：400 `invalid_argument`，`details.fields[{field:"key", code:"reserved"}]`。CONTRACTS §15.7、§43.6 同步。无迁移。
+- 改动：`SyncCore` 在写入内置角色之前查询 `roles WHERE key = ANY(<内置 key>) AND NOT builtin`（`authz.builtinKeyConflict`），有结果就返回错误，服务不启动；错误信息逐行列出角色 id、key 和改名 SQL（`UPDATE roles SET key = '<key>_custom' WHERE id = <id>;`，`<key>_custom` 已被占用时换成任何未用的 key）。内置角色的 upsert 不再把同 key 的自定义角色改成内置角色（`ON CONFLICT` 只修正 `superuser`）。`CreateRole` 拒绝保留 key（`authz.reservedRoleKey`：`super_admin`、`admin`、`operator`、`user`、`supplier`，其中 `supplier` 在 T52 建出）：400 `invalid_argument`，`details.fields[{field:"key", code:"reserved"}]`。CONTRACTS §15.7、§43.6 同步。无迁移。
 - 影响对象：
   - 已有自定义角色的 key 等于某个内置角色 key 的部署（今后新增内置角色时才会出现，本期是 `supplier`）：升级后服务不启动，直到按错误信息里的 SQL 把该自定义角色改名（改 key 不影响它的权限、持有者和可分配清单；按 key 引用它的外部脚本需同步）。此前这种角色会被静默改成内置角色，其持有者因此得到内置角色的默认权限。生产库没有自定义角色，不受影响。
   - `POST /roles` 用上述 5 个 key 由 409（已存在）或 201（`supplier`）变为 400 `reserved`。
+  - 滚动升级：旧节点仍接受 `POST /roles` 用 `supplier` 建自定义角色；混跑期间建出的这种角色会让之后带内置 `supplier`（T52）的节点启动失败，按上面的 SQL 改名即可。
 - 回滚：revert 这个提交即可，无迁移、无数据变化（按提示改过的角色 key 保留）。
 
 ## T51 决策 6：内置角色的名称、权限、可分配清单只允许超管修改（产品性收紧）
