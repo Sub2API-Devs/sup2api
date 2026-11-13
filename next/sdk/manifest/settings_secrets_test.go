@@ -136,6 +136,10 @@ func TestSettingsSecrets(t *testing.T) {
 		{name: "local $ref below an embedded $id", schema: `{"properties":{"b":{"$id":"http://e/x","properties":{"c":{"$ref":"#/$defs/s"}}},
 			"d":{"$ref":"#/$defs/based"}},"$defs":{"s":{"writeOnly":true},"based":{"$id":"http://e/y","properties":{"e":{"$ref":"#/$defs/s"}}}}}`,
 			unreachable: []string{"/properties/b/properties/c/$ref", "/properties/d/$ref/properties/e/$ref"}},
+		{name: "names that would collide in a joined dedupe key", schema: `{"properties":{"x":{"$ref":"#/$defs/y\u0000$defs~1z"},
+			"x\u0000$defs":{"properties":{"y":{"$ref":"#/$defs/z"}}}},
+			"$defs":{"y\u0000$defs/z":{"properties":{"k1":{"writeOnly":true}}},"z":{"properties":{"k2":{"writeOnly":true}}}}}`,
+			fields: map[string]bool{"x/k1": true, "x\u0000$defs/y/k2": true}},
 		{name: "data keywords are not schemas", schema: `{"properties":{"a":{"type":"object","default":{"writeOnly":true},
 			"examples":[{"format":"password"}],"const":{"x-sensitive":true},"enum":[{"writeOnly":true}]}}}`},
 	}
@@ -244,5 +248,33 @@ func TestSettingsSecretsRefLimits(t *testing.T) {
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("took %s", d)
+	}
+}
+
+// Past the node budget, which references stay unreachable does not depend on
+// map order: the same schema always gives the same answer.
+func TestSettingsSecretsDeterministic(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"$defs":{"c":{"properties":{`)
+	for i := range 200 {
+		fmt.Fprintf(&b, `"f%d":{"properties":{"s":{"writeOnly":true}}},`, i)
+	}
+	b.WriteString(`"g":{"type":"string"}}}},"properties":{`)
+	for i := range 200 {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `"p%d":{"$ref":"#/$defs/c"}`, i)
+	}
+	b.WriteString(`}}`)
+	fields, unreachable := SettingsSecrets([]byte(b.String()))
+	if len(unreachable) == 0 {
+		t.Fatal("budget not reached")
+	}
+	for range 20 {
+		f, u := SettingsSecrets([]byte(b.String()))
+		if !reflect.DeepEqual(f, fields) || !reflect.DeepEqual(u, unreachable) {
+			t.Fatal("result depends on map order")
+		}
 	}
 }

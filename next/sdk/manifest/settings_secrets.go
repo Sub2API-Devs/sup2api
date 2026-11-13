@@ -80,8 +80,9 @@ const (
 // one that is already installed.
 //
 // The walk visits every schema node once, plus at most MaxSecretRefNodes
-// through references; each level copies its location path, so the cost also
-// grows with the nesting depth.
+// through references, in key order so that the result never depends on map
+// order (the node budget makes it matter); each level copies its location
+// path and sorts its keys, so the cost also grows with the nesting depth.
 func SettingsSecrets(schema []byte) (fields []SecretField, unreachable []string) {
 	var root map[string]any
 	if json.Unmarshal(schema, &root) != nil || root == nil {
@@ -129,7 +130,7 @@ type secretWalk struct {
 	// following are the targets being expanded; followed the (value path,
 	// target) pairs done; nodes counts the nodes expansions visited.
 	following map[string]bool
-	followed  map[string]bool
+	followed  map[[2]string]bool
 	nodes     int
 }
 
@@ -215,7 +216,7 @@ func hasID(node map[string]any) bool {
 
 func newSecretWalk(root map[string]any) *secretWalk {
 	w := &secretWalk{refsUnreachable: holdsMarker(root), defs: map[string]map[string]any{},
-		following: map[string]bool{}, followed: map[string]bool{}, fields: []SecretField{}}
+		following: map[string]bool{}, followed: map[[2]string]bool{}, fields: []SecretField{}}
 	for _, kw := range []string{"$defs", "definitions"} {
 		defs, _ := root[kw].(map[string]any)
 		for name, raw := range defs {
@@ -303,9 +304,10 @@ func (w *secretWalk) refs(node map[string]any, pos at) {
 			continue
 		}
 		key := localRef(ref)
+		local := kw == "$ref" && !pos.rebased && w.defs[key] != nil
 		switch {
-		case kw == "$ref" && !pos.rebased && w.defs[key] != nil && !w.marking[key]:
-		case kw == "$ref" && !pos.rebased && w.defs[key] != nil && pos.path != nil:
+		case local && !w.marking[key]: // leads to no marker
+		case local && pos.path != nil:
 			w.follow(key, pos)
 		case w.refsUnreachable:
 			w.unreachable = append(w.unreachable, pos.loc+"/"+kw)
@@ -316,7 +318,7 @@ func (w *secretWalk) refs(node map[string]any, pos at) {
 // follow walks the marking definition key where pos stands, as if written
 // there, within the expansion bounds.
 func (w *secretWalk) follow(key string, pos at) {
-	done := pointerOf(pos.path) + "\x00" + key
+	done := [2]string{pointerOf(pos.path), key}
 	if w.followed[done] {
 		return
 	}
@@ -351,14 +353,15 @@ func (w *secretWalk) object(node map[string]any, pos at) {
 		pos.path = []string{}
 	}
 	w.refs(node, pos)
-	for key, val := range node {
+	for _, key := range slices.Sorted(maps.Keys(node)) {
+		val := node[key]
 		if key != "properties" {
 			w.scan(key, val, at{loc: pos.loc + "/" + pointerEscaper.Replace(key), rebased: pos.rebased})
 			continue
 		}
 		props, _ := val.(map[string]any)
-		for name, raw := range props {
-			prop, ok := raw.(map[string]any)
+		for _, name := range slices.Sorted(maps.Keys(props)) {
+			prop, ok := props[name].(map[string]any)
 			if !ok {
 				continue
 			}
@@ -415,8 +418,8 @@ func (w *secretWalk) scan(key string, val any, pos at) {
 		}
 	case map[string]any:
 		if schemaMaps[key] {
-			for name, child := range v {
-				w.scan("", child, at{loc: pos.loc + "/" + pointerEscaper.Replace(name), rebased: pos.rebased})
+			for _, name := range slices.Sorted(maps.Keys(v)) {
+				w.scan("", v[name], at{loc: pos.loc + "/" + pointerEscaper.Replace(name), rebased: pos.rebased})
 			}
 			return
 		}
@@ -427,8 +430,8 @@ func (w *secretWalk) scan(key string, val any, pos at) {
 			return
 		}
 		w.refs(v, pos)
-		for k, child := range v {
-			w.scan(k, child, at{loc: pos.loc + "/" + pointerEscaper.Replace(k), rebased: pos.rebased})
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			w.scan(k, v[k], at{loc: pos.loc + "/" + pointerEscaper.Replace(k), rebased: pos.rebased})
 		}
 	}
 }
