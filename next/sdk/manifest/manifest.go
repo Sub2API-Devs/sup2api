@@ -882,12 +882,14 @@ type UserPermission struct {
 	Sensitive   bool          `json:"sensitive,omitempty"`
 	// DefaultRoles are the built-in roles (BuiltinRoleKeys) the permission
 	// is granted to when the catalog first creates it; omitted means
-	// DefaultPermissionRoles. The super admin role holds every permission
-	// and is never listed.
+	// DefaultPermissionRoles (an empty list counts as omitted). The super
+	// admin role holds every permission and is never listed.
 	DefaultRoles []string `json:"defaultRoles,omitempty"`
 	// InheritFrom are local keys of this plugin's permissions whose holders
 	// get this permission when the catalog first creates it: a renamed or
-	// split permission keeps its holders.
+	// split permission keeps its holders. Only grants that exist before the
+	// sync count, so a chain through another permission created in the same
+	// sync is not followed.
 	InheritFrom []string `json:"inheritFrom,omitempty"`
 }
 

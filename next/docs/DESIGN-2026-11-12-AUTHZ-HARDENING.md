@@ -528,6 +528,8 @@
     ```
     手工 SQL 不写审计，也不会递增 `authz_meta.version`，各节点的权限缓存要到下一次权限变更或重启才刷新；更推荐在角色页勾选（立即生效并带审计）。
   - 旧控制台（仍发 `role_keys_for_new_permissions: ["admin"]`）照旧只给 admin。
+  - 上传时自动沿用同意（`carryOverConsent`，升级没有新增宿主权限时）发的是空请求：新增的用户权限按 manifest 默认授予，无人审核；此前不授予任何角色（审查发现，接受：defaultRoles 本来就是系统目录默认，与核心升级自动授予一致）。
+  - 已知边界：`inheritFrom` 只看本次同步前已有的授予，同一次同步里新建的两个 key 之间不传递；`"defaultRoles": []` 等同省略（即 admin），没有“不授予任何角色”的 manifest 写法；协调器激活传 nil，激活时才重新建出的 key（例如升级失败后激活旧版本，旧版本里被新版本删掉的 key）只按 `inheritFrom` 继承、不按 `defaultRoles` 授予，此前同样不授予。
 - 回滚：revert 这个提交即可，无迁移；已按新默认授出的角色权限保留，需要时在角色页取消。
 
 ## T59 P1：新插件权限的授予资格（manifest 默认按系统目录默认，显式覆盖走 editableRole，产品性收紧）

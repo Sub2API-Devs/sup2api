@@ -52,10 +52,6 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 func PermissionDefs(m *manifest.Manifest, grants map[string][]string) []core.PermissionDef {
 	defs := make([]core.PermissionDef, 0, len(m.UserPermissions))
 	for i, up := range m.UserPermissions {
-		inherit := make([]string, 0, len(up.InheritFrom))
-		for _, k := range up.InheritFrom {
-			inherit = append(inherit, manifest.PermissionKey(m.Key, k))
-		}
 		defs = append(defs, core.PermissionDef{
 			Key:         manifest.PermissionKey(m.Key, up.Key),
 			Module:      manifest.PermissionModule(m.Key),
@@ -64,7 +60,7 @@ func PermissionDefs(m *manifest.Manifest, grants map[string][]string) []core.Per
 			Sensitive:   up.Sensitive,
 			Sort:        (i + 1) * 10,
 			GrantRoles:  grants[up.Key],
-			InheritFrom: inherit,
+			InheritFrom: up.InheritFrom,
 		})
 	}
 	return defs

@@ -22,7 +22,8 @@ type ConsentRequest struct {
 	Grants []GrantInput `json:"grants"`
 	Denied []string     `json:"denied"`
 	// NewPermissionRoles overrides, per local userPermission key, the roles
-	// a permission created now is granted to (an empty list grants none).
+	// a permission created now is granted to (an empty list names no role;
+	// inheritFrom still applies).
 	NewPermissionRoles map[string][]string `json:"new_permission_roles,omitempty"`
 	// RoleKeysForNewPermissions (older consoles) overrides the roles of
 	// every permission NewPermissionRoles does not name; empty keeps the

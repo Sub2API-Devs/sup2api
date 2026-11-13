@@ -234,8 +234,9 @@ type PermissionDef struct {
 	// GrantRoles are the roles a plugin permission is granted to when the
 	// catalog first creates it (super admin roles are skipped).
 	GrantRoles []string
-	// InheritFrom are permission keys whose holders get a plugin
-	// permission when the catalog first creates it.
+	// InheritFrom are keys of the same plugin's permissions (local or
+	// qualified) whose holders get a plugin permission when the catalog
+	// first creates it; only grants that exist before this sync count.
 	InheritFrom []string
 }
 

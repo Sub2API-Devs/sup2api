@@ -52,7 +52,7 @@ func TestRoleGrantsPriority(t *testing.T) {
 		}
 	}
 	defs := PermissionDefs(m, roleGrants(m, ConsentRequest{}))
-	if !slices.Equal(defs[0].GrantRoles, []string{"user", "admin"}) || !slices.Equal(defs[0].InheritFrom, []string{"plugin.growth:growth:read"}) {
+	if !slices.Equal(defs[0].GrantRoles, []string{"user", "admin"}) || !slices.Equal(defs[0].InheritFrom, []string{"growth:read"}) {
 		t.Fatalf("def = %+v", defs[0])
 	}
 	if defs := PermissionDefs(m, nil); defs[0].GrantRoles != nil || len(defs[0].InheritFrom) != 1 {
