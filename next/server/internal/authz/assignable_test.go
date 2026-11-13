@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -34,7 +35,8 @@ func assignableOf(t *testing.T, s *Service, roleKeys ...string) ([]string, bool)
 
 // A new database seeds the default lists of decision 5: admin assigns
 // operator, supplier, user and every custom role; operator assigns supplier
-// and user; nobody else anything. Seeding is not audited.
+// and user; nobody else anything. Each seeded entry is audited once, as
+// part of a role created now (P4F3).
 func TestBuiltinAssignableDefaults(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -60,9 +62,10 @@ func TestBuiltinAssignableDefaults(t *testing.T) {
 			t.Errorf("%s: assignable %v custom %v, want %v %v", tt.role, keys, custom, tt.keys, tt.custom)
 		}
 	}
-	var audited int
-	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'authz.sync.grant' AND detail->>'via' = 'assignable'`).Scan(&audited); err != nil || audited != 0 {
-		t.Fatalf("seeding audited %d rows: %v", audited, err)
+	var audited, created int
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE detail->>'role_created' = 'true') FROM audit_logs
+WHERE action = 'authz.sync.grant' AND user_id IS NULL AND detail->>'via' = 'assignable'`).Scan(&audited, &created); err != nil || audited != 5 || created != 5 {
+		t.Fatalf("seeding audited %d rows (%d as created): %v", audited, created, err)
 	}
 }
 
@@ -117,8 +120,10 @@ func TestSyncCoreAddsSupplierToExistingRoles(t *testing.T) {
 	db := testutil.DB(t)
 	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
-	// The database before the supplier role existed.
+	// The database before the supplier role existed (and without the audit
+	// of the first sync, which created every built-in role).
 	if _, err := db.Pool.Exec(ctx, `DELETE FROM roles WHERE key = 'supplier';
+DELETE FROM audit_logs;
 UPDATE roles SET assign_custom = true WHERE key = 'operator';
 INSERT INTO role_assignable_roles (role_id, assignable_role_id) SELECT r.id, r.id FROM roles r WHERE r.key = 'operator'`); err != nil {
 		t.Fatal(err)
@@ -146,6 +151,16 @@ WHERE action = 'authz.sync.grant' AND user_id IS NULL AND detail->>'via' = 'assi
 	slices.Sort(want)
 	if !slices.Equal(audited, want) {
 		t.Fatalf("audited roles %v, want admin and operator %v", audited, want)
+	}
+	// The supplier role's own defaults are audited too, once (P4F3).
+	var keys []string
+	if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(array_agg(detail->>'key' ORDER BY detail->>'key'), '{}') FROM audit_logs
+WHERE action = 'authz.sync.grant' AND user_id IS NULL AND target_type = 'role' AND target_id = $1
+  AND detail->>'via' = 'default' AND detail->>'role_created' = 'true'`, strconv.FormatInt(roleID(t, s, RoleSupplier), 10)).Scan(&keys); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(keys, slices.Sorted(slices.Values(supplierPermissions))) {
+		t.Fatalf("supplier grants audited %v, want %v", keys, supplierPermissions)
 	}
 }
 

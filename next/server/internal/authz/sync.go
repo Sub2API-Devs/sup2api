@@ -166,14 +166,16 @@ func builtinKeyConflict(ctx context.Context, q store.Querier, builtinKeys []stri
 
 // grantDefaults grants the built-in role roleKey its defaults through sql
 // ($1 the role key, $2 the defaults; returning what syncGrant reads). A role
-// created now (seed) gets all of them: it is seeded, not widened, so the
-// grants are not audited. An existing role gets only the defaults created
-// now, audited with via.
+// created now (seed) gets all of them, an existing role only the defaults
+// created now; every grant is audited with via (and role_created for a
+// seed), so a role the sync creates on an upgrade (supplier) shows what it
+// was given.
 func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, seed bool, defaults []string, created func(string) bool, via, sql string) error {
-	var detail map[string]any
-	if !seed {
+	detail := map[string]any{"via": via}
+	if seed {
+		detail["role_created"] = true
+	} else {
 		defaults = slices.DeleteFunc(slices.Clone(defaults), func(k string) bool { return !created(k) })
-		detail = map[string]any{"via": via}
 	}
 	if len(defaults) == 0 {
 		return nil

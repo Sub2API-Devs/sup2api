@@ -686,3 +686,9 @@
 - 测试：migrations `TestOneSuperAdminMigration` 断言错误列出两个 id、且不含 `@`。
 - 影响对象：无行为变化，仅错误信息。回滚：revert 这个提交（同样会改回 checksum，适用同一说明）。
 
+## 期 4 P4F3：SyncCore 新建内置角色的默认授予写审计
+
+- 改动：`authz/sync.go` `grantDefaults`（唯一一处）：新建的内置角色（新库的全部内置角色、升级带来的 supplier）得到的默认权限与可分配清单每一项都写 `authz.sync.grant`（actor 为系统，`detail.via` 为 `default` 或 `assignable`，另带 `role_created: true`）；已有角色只授予本次新建的默认，与之前相同。此前新建角色的授予不审计，生产验证时 supplier 的 8 项默认授权没有审计行。
+- 测试：authz `TestBuiltinAssignableDefaults`（新库可分配清单 5 项各一条、均标 `role_created`）、`TestSyncCoreAddsSupplierToExistingRoles`（supplier 的 8 项默认权限各一条）。
+- 影响对象：仅审计；新库首次启动多出一批 `authz.sync.grant` 行。回滚：revert 这个提交。
+
