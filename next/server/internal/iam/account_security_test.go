@@ -1282,7 +1282,13 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	ccgateway.New(k.s.db, cipher).RegisterRoutes(k.r)
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
 	root := login.User.ID
-	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset"}
+	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
+		// T57: code execution, trust roots and plaintext credentials.
+		"plugin:install", "plugin:uninstall", "plugin:grant:high", "plugin:grant:critical", "plugin:grant:db_schema_unconfined",
+		"publisher:manage", "system:update:execute", "system:update:recover",
+		"account:credential:view", "account:own:credential:view"}
+	// The plugin upload route as plugin/api registers it.
+	k.r.Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	mods, err := k.s.AccessKeyPermissions(ctx, root)
 	if err != nil {
@@ -1312,8 +1318,17 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	}
 
 	key := k.createKey(t, root, adminPassword, "settings:read")
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'settings:manage') WHERE id = $1`, key.ID); err != nil {
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = permissions || $2::text[] WHERE id = $1`, key.ID, sessionOnly); err != nil {
 		t.Fatal(err)
+	}
+	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"settings:read"}) {
+		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	}
+	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 {
+		t.Fatalf("stored plugin:install: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "POST", "/plugins/upload", nil); code != 204 {
+		t.Fatalf("session plugin:install: %d %v", code, out)
 	}
 	if code, out := k.call(key.Key, "GET", "/system/ccgateway/remote-config", nil); code != 200 {
 		t.Fatalf("settings:read: %d %v", code, out)
@@ -1329,7 +1344,13 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	if code != 200 || len(list) != 1 {
 		t.Fatalf("list: %d %v", code, out)
 	}
-	if lost, _ := list[0].(map[string]any)["lost"].([]any); !slices.Equal(lost, []any{"settings:manage"}) {
+	lost, _ := list[0].(map[string]any)["lost"].([]any)
+	if len(lost) != len(sessionOnly) {
 		t.Fatalf("lost = %v", lost)
+	}
+	for _, p := range sessionOnly {
+		if !slices.Contains(lost, any(p)) {
+			t.Fatalf("lost = %v, without %s", lost, p)
+		}
 	}
 }

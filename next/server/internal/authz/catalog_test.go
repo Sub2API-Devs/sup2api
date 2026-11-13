@@ -70,7 +70,13 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"system:update:execute", "system:update:recover",
 		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
 	}
-	wantSession := []string{"role:assign", "role:define", "settings:manage", "user:password:reset"}
+	wantSession := []string{
+		"account:credential:view", "account:own:credential:view",
+		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
+		"plugin:install", "plugin:uninstall", "publisher:manage",
+		"role:assign", "role:define", "settings:manage",
+		"system:update:execute", "system:update:recover", "user:password:reset",
+	}
 	slices.Sort(sensitive)
 	slices.Sort(session)
 	if !slices.Equal(sensitive, wantSensitive) {

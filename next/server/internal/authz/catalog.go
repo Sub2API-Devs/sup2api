@@ -32,7 +32,8 @@ type corePerm struct {
 	// (TestCatalogFlagInvariants); only a superuser grants it explicitly.
 	superOnly bool
 	// sessionOnly keeps the permission out of access keys (KeyAllowed):
-	// identity takeover and host-level control (CONTRACTS §80).
+	// identity takeover, host-level control, code execution, trust roots and
+	// plaintext credentials (CONTRACTS §80).
 	sessionOnly bool
 	// inherits: when the permission is first created, every role holding
 	// one of these keys gets it too (splitting a permission keeps its
@@ -77,7 +78,7 @@ var coreModules = []coreModule{
 		{key: "account:update", en: "Edit accounts", zh: "编辑账号"},
 		{key: "account:delete", en: "Delete accounts", zh: "删除账号", sensitive: true},
 		{key: "account:test", en: "Test accounts", zh: "测试账号"},
-		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true},
+		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true, sessionOnly: true},
 		// Ownership (CONTRACTS §21): "own" keys only reach accounts the caller
 		// created; a full key above overrides its own counterpart.
 		{key: "account:own:read", en: "Read own accounts", zh: "查看自己创建的账号"},
@@ -85,7 +86,7 @@ var coreModules = []coreModule{
 		{key: "account:own:update", en: "Edit own accounts", zh: "编辑自己创建的账号"},
 		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
 		{key: "account:own:test", en: "Test own accounts", zh: "测试自己创建的账号"},
-		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true},
+		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, sessionOnly: true},
 		{key: "account:settings:custom", en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
 		{key: "account:group:bind", en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
 		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true},
@@ -119,18 +120,18 @@ var coreModules = []coreModule{
 	}},
 	{"plugin", lt("Plugins", "插件"), []corePerm{
 		{key: "plugin:read", en: "View plugins", zh: "查看插件"},
-		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true},
+		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true, sessionOnly: true},
 		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件", sensitive: true},
-		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
-		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true},
-		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true},
-		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true},
+		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true, sessionOnly: true},
+		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, sessionOnly: true},
+		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, sessionOnly: true},
+		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, sessionOnly: true},
 		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
 		{key: "plugin:market:read", en: "Browse the plugin market", zh: "浏览插件市场"},
 	}},
 	{"publisher", lt("Publishers", "发布者"), []corePerm{
 		{key: "publisher:read", en: "View publishers", zh: "查看发布者"},
-		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true},
+		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, sessionOnly: true},
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
 		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
@@ -150,8 +151,8 @@ var coreModules = []coreModule{
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
 		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
-		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true},
-		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true},
+		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, sessionOnly: true},
+		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, sessionOnly: true},
 	}},
 }
 
