@@ -164,7 +164,7 @@ onMounted(load)
             {{ t('plugins.conflicts.short', { n: row.resource_conflicts.length }) }}
           </SHint>
           <SHint v-if="row.role_grants_to_review?.length" inline size="xs" tone="warning" data-testid="plugin-role-grants">
-            {{ t('plugins.roleGrants.short', { n: row.role_grants_to_review.length }) }}
+            {{ t('plugins.roleGrants.short', { n: row.role_grants_to_review.length }, row.role_grants_to_review.length) }}
           </SHint>
           <SHint v-if="row.status_reason" inline size="xs" tone="danger" class="max-w-[16rem] truncate" :title="row.status_reason">{{ row.status_reason }}</SHint>
         </div>

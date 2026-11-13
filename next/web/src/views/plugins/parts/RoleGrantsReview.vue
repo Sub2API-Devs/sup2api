@@ -5,8 +5,8 @@
 // also checks each role) confirms them or rejects them all, per version.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
-import { SButton, toast } from '@sub2api/ui'
+import { api, isApiError } from '@sub2api/host'
+import { SButton, confirm, toast } from '@sub2api/ui'
 import type { PluginRoleGrant } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -21,12 +21,20 @@ const canReview = computed(() => auth.has('plugin:install') && auth.has('role:de
 const versions = computed(() => [...new Set(props.grants.map((g) => g.version || ''))].filter(Boolean))
 const busy = ref<'' | 'confirm' | 'reject'>('')
 
+/** One version; a 404 means nothing of it awaits review any more (settled meanwhile). */
+async function post(version: string, action: 'confirm' | 'reject') {
+  try {
+    await api.post(`/plugins/${encodeURIComponent(props.pluginKey)}/versions/${encodeURIComponent(version)}/role-grants/${action}`)
+  } catch (e) {
+    if (!isApiError(e) || e.status !== 404) throw e
+  }
+}
+
 async function review(confirmed: boolean) {
+  if (!confirmed && !(await confirm({ message: t('plugins.roleGrants.rejectConfirm'), danger: true }))) return
   busy.value = confirmed ? 'confirm' : 'reject'
   try {
-    for (const v of versions.value) {
-      await api.post(`/plugins/${encodeURIComponent(props.pluginKey)}/versions/${encodeURIComponent(v)}/role-grants/${confirmed ? 'confirm' : 'reject'}`)
-    }
+    for (const v of versions.value) await post(v, confirmed ? 'confirm' : 'reject')
     toast(t(confirmed ? 'plugins.roleGrants.confirmed' : 'plugins.roleGrants.rejected'), 'success')
   } catch (e) {
     notifyError(e)
