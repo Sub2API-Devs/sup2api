@@ -1083,21 +1083,22 @@ func checkAdminLock(ctx context.Context, cur *row, status *string) error {
 		"该账号已被管理员禁用，只有管理员可以重新启用"))
 }
 
-// adminLockAfter is what a status change does to the lock, nil for no
+// adminLockAfter is what a requested status does to the lock, nil for no
 // change: the full scope locks when it disables an account somebody else
-// created and unlocks when it enables; an own-level caller never moves it
-// (checkAdminLock already refused enabling a locked account).
+// created and unlocks when it enables. An own-level caller only drops a
+// stale lock, one left on an account which is not disabled (a node older
+// than the lock enabled it), when disabling it: the disable is the owner's.
+// checkAdminLock already refused enabling a locked account.
 func adminLockAfter(scope *int64, uid int64, cur *row, status string) *bool {
-	if scope != nil {
-		return nil
-	}
-	switch status {
-	case "active":
-		return new(false)
-	case "disabled":
-		if cur.CreatedBy == nil || *cur.CreatedBy != uid {
-			return new(true)
+	switch {
+	case scope != nil:
+		if status == "disabled" && cur.Status != "disabled" {
+			return new(false)
 		}
+	case status == "active":
+		return new(false)
+	case status == "disabled" && (cur.CreatedBy == nil || *cur.CreatedBy != uid):
+		return new(true)
 	}
 	return nil
 }
@@ -1560,7 +1561,6 @@ func (s *Service) update(c *gin.Context) {
 		value := string(settings)
 		extensionSettings = &value
 	}
-	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)
 	setProxy, proxyCreated, usageLimitConverged := in.ProxyID.Set, false, false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
@@ -1568,6 +1568,7 @@ func (s *Service) update(c *gin.Context) {
 		if err != nil {
 			return err
 		}
+		statusChanged := in.Status != nil && *in.Status != locked.Status
 		// Judged against the locked row, in the transaction that saves the
 		// groups.
 		groups, err := loadGroupDiff(ctx, tx, id, groupIDs, uid)
@@ -1771,8 +1772,8 @@ func (s *Service) resetStatus(c *gin.Context) {
 		}
 		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
 		if statusReset {
-			// Only the full scope gets here with a locked account, and its
-			// reset unlocks.
+			// A reset unlocks: the full scope's, or an own-level one which
+			// got past checkAdminLock (a stale lock on an active account).
 			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL,
 				admin_locked = false, updated_at = clock_timestamp()
 				WHERE id = $1`, id); err != nil {

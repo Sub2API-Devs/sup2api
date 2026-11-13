@@ -1123,6 +1123,8 @@ own 级用户（只有 `account:own:create` / `account:own:update`，无全部�
    超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
 3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`、用改过上游地址的凭证调用 `POST /accounts/:id/models/fetch`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
 
+4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9）时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
+
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 
 ### 21.4 保存账号时自动关联代理
@@ -2721,6 +2723,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 - 把账号绑定到分组需要 `group:manage` 或 `account:group:bind`；
 - `priority` 只能 0–100，`weight` 只能 1–100，`max_concurrency` 只能 1–1000，超出返回字段错误 `restricted`；
+- 管理员禁用的账号（`admin_locked`，§15.9、§21.3.1）不能自行启用或重置状态，403 `account_locked_by_admin`；
 - 账号类型**没有声明 `guardedSettings`** 时（relay、ccgateway 这类可以自填上游地址的类型；核心内置类型同样算），创建或修改需要 `account:relay`，否则 403，`details.required_permission = "account:relay"`。注意判断条件是"没有声明受限设置"，不是"类型叫 relay"：上游地址固定、不需要受限设置的类型（如 `claude_oauth`）目前也要求这个权限。
 
 ### 43.6 授予与操作他人的权限检查
@@ -2840,7 +2843,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
-**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：own 范围遇到 `admin_locked` 的账号返回 403 `account_locked_by_admin`；全量范围重置时清除该锁（2026-11-12，见 §5 账号字段 `admin_locked`）。
+**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：own 范围遇到 `admin_locked` 的账号返回 403 `account_locked_by_admin`；全量范围重置时清除该锁（2026-11-12，见 §15.9 账号字段 `admin_locked`）。
 
 1. 在事务内按所属权限锁定账号，删除 Redis 冷却键 `cooldown:account:<id>`；
 2. 将账号 `status` 恢复为 `active`，清空 `status_reason`，包括 §42 自动禁用、管理员禁用及错误状态；**保留 `schedulable` 开关**，不会把手动关闭调度的账号重新放入请求池；

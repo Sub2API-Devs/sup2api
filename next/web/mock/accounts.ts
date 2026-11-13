@@ -791,6 +791,7 @@ on('GET', '/accounts', (req) => {
  * The account of :id within the caller's scope for `action`: 403 without any
  * key of the pair, 404 when missing or not the caller's (the two are not told apart).
  */
+const adminLocked = () => fail(403, 'account_locked_by_admin', 'this account was disabled by an administrator; only an administrator can enable it')
 function scopedAccount(req: MockRequest, action: 'read' | 'update' | 'delete' | 'test' | 'credential:view'): { a: any } | { __status: number; body: unknown } {
   const { who, scope } = accountScope(req, action)
   if (!scope) return fail(403, 'permission_denied', `account:${action} or account:own:${action} is required`, { permission: `account:own:${action}` })
@@ -917,7 +918,13 @@ on('PATCH', '/accounts/:id', (req) => {
   if ('__status' in proxy) return proxy
   // Enabling restores scheduling; a status change clears the release time and words the reason as the core does.
   if (rest.status === 'active' && rest.schedulable === undefined) rest.schedulable = true
-  if (rest.status !== undefined && rest.status !== a.status) Object.assign(a, { auto_disabled_until: null, status_reason: rest.status === 'disabled' ? 'disabled by administrator' : '' })
+  // The administrator lock (CONTRACTS §15.9 admin_locked): the full scope locks an account somebody else created when it
+  // disables it and unlocks when it enables; an own-level caller cannot enable a locked account.
+  const { who, scope } = accountScope(req, 'update')
+  if (scope === 'own' && a.admin_locked && rest.status === 'active' && a.status !== 'active') return adminLocked()
+  if (rest.status !== undefined && rest.status !== a.status) Object.assign(a, { auto_disabled_until: null, status_reason: rest.status !== 'disabled' ? '' : scope === 'own' ? 'disabled by owner' : 'disabled by administrator' })
+  if (scope === 'all' && rest.status === 'active') a.admin_locked = false
+  if (scope === 'all' && rest.status === 'disabled' && a.created_by !== who.id) Object.assign(a, { admin_locked: true, status_reason: 'disabled by administrator' })
   // `models` and `model_mapping` are replaced as a whole (§18.3).
   Object.assign(a, rest)
   if (proxy.proxy_id !== undefined) a.proxy_id = proxy.proxy_id
@@ -1105,6 +1112,8 @@ on('POST', '/accounts/:id/refresh-credentials', (req) => {
 on('POST', '/accounts/:id/reset-status', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
+  if (r.a.admin_locked && r.a.status !== 'active' && accountScope(req, 'update').scope === 'own') return adminLocked()
+  r.a.admin_locked = false
   // Releasing an account the usage limit disabled waives the limit for that period (§73.4).
   const l = usageLimits.get(r.a.id)
   if (l && usageOf(r.a).limit_disabled) l.waived = true

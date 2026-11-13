@@ -395,14 +395,15 @@
   - 迁移 `0100_account_admin_locked.sql`：`accounts.admin_locked boolean NOT NULL DEFAULT false`（常量默认值，不重写表；`lock_timeout` 10 秒；存量为 false，不追溯）。
   - `PATCH /accounts/:id`（`account/handlers.go`）：全量范围（`account:update`）把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 `admin_locked = true`，`status_reason` 仍是 `disabled by administrator`；own 范围（`account:own:update`）禁用写 `disabled by owner`，不动锁；全量范围设为 `active` 时清锁（`adminLockAfter`、`disabledReason`）。账号已被属主禁用时管理员再发一次 `disabled` 也上锁并把原因改成管理员的（按请求的状态判断，不要求状态发生变化）。
   - `checkAdminLock` 是 `checkOwnChange` 的最后一步：own 范围、账号已上锁且请求把 `status` 改为 `active` → 403 `account_locked_by_admin`；`POST /accounts/:id/reset-status` 在 own 范围遇到上锁账号返回同一错误，全量范围的重置清锁。
-  - 账号视图增加 `admin_locked`。控制台账号页：只有 own 级更新权限的人在上锁账号上“启用”按钮禁用并提示“已被管理员禁用，只有管理员可以重新启用”，“重置状态”入口与批量启用跳过这些账号（`AccountsView.vue` 的 `lockedByAdmin`）。CONTRACTS §5 账号字段表与 reset-status 一节同步。
+  - 账号视图增加 `admin_locked`。控制台账号页：只有 own 级更新权限的人在上锁账号上“启用”按钮禁用并提示“已被管理员禁用，只有管理员可以重新启用”，“重置状态”入口与批量启用跳过这些账号（`AccountsView.vue` 的 `lockedByAdmin`）。CONTRACTS §15.9 账号字段表、§21.3.1、§43.5 与 reset-status 一节同步；控制台 mock（`web/mock/accounts.ts`）同样处理。
 - 影响对象：
   - 只有 own 级权限的账号创建人（供应商）：账号被管理员禁用后不能再自行启用或重置状态，需要管理员启用；此前可以立刻自己改回 `active`。修改其它字段（名称、凭证、用量上限等）不受影响，供应商调高用量上限仍然允许（已评估，不修）。自己禁用的账号照旧可以自己恢复。
   - `status_reason` 文案：own 范围手动禁用由 `disabled by administrator` 变为 `disabled by owner`（依赖这个字符串的外部脚本需要注意；仓库内没有按它判断的代码）。
   - 持有 `account:update` 的人（admin、operator）之间不互锁：任何全量范围的调用者都能启用。全量范围禁用自己创建的账号不上锁。
   - 存量：迁移前已被管理员禁用的账号不上锁，需要锁住的由管理员重新禁用一次（对已禁用的账号再发一次 `status: disabled` 即可，控制台的按钮不会对已禁用账号发请求，需直接调接口或先启用再禁用）。
   - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
-- 回滚：revert 这个提交即可；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截。
+- 回滚：revert 这个提交即可；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截；旧节点启用过的上锁账号会留下一个“运行中但带锁”的残留，属主下次自己禁用时清掉（不会因此被锁住），全量范围的任何启用、重置也会清掉。
+- 已知边界（未处理，需要时另行决定）：锁只管启用与重置状态。有 `account:own:delete` 与 `account:own:create` 的属主可以删除被锁的账号再用同一凭证新建一个；审计里 `account.update` / `account.reset_status` 不单独记录上锁、解锁（可由操作者范围与状态变化推出）。
 
 ## T64 W1-F13：草稿与预备容器的单用户数量上限
 

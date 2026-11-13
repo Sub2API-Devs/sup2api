@@ -336,6 +336,7 @@ const picked = computed(() => ({
   test: selection.rows.value.filter(testable),
   edit: selection.rows.value.filter(editable),
   toggle: selection.rows.value.filter(toggleable),
+  enable: selection.rows.value.filter(canEnable),
   reset: selection.rows.value.filter(canResetStatus),
   remove: selection.rows.value.filter(canDelete)
 }))
@@ -348,7 +349,7 @@ const bulkBusy = computed(() => batchRunning.value || bulk.running.value || decl
 // Same request and same rows as the row switch: enable takes every account that is not enabled (an automatic
 // disable included), disable every one not disabled by hand.
 async function bulkToggle(enable: boolean) {
-  const rows = picked.value.toggle.filter((a) => (enable ? !accountEnabled(a) && canEnable(a) : a.status !== 'disabled'))
+  const rows = enable ? picked.value.enable.filter((a) => !accountEnabled(a)) : picked.value.toggle.filter((a) => a.status !== 'disabled')
   if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
   const out = await bulk.run(rows, async (a, signal) => {
     patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, enabledPatch(enable), { signal, query: todayQuery() }))
@@ -379,7 +380,7 @@ const retentionOf = (a: Account) => typeOf(a)?.lifecycle?.deletion?.retentionDay
 /** The selected rows a declared bulk action targets: the same rows its row-menu entry shows on (CONTRACTS §23.3). */
 const declaredTargets = (x: PluginAccountActionEntry) => selection.rows.value.filter((a) => actionAppliesTo(x, a, canUpdate))
 const moreBulkActions = computed(() => [
-  { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
+  { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.enable.length }), disabled: !picked.value.enable.length },
   { key: 'disable', label: t('accounts.bulk.disable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
   { key: 'reset', label: t('accounts.bulk.reset', { n: picked.value.reset.length }), disabled: !picked.value.reset.length },
   ...plugins.accountActions.filter((x) => x.bulk).map((x) => ({ key: pluginAccountActionKey(x), label: t('accounts.bulk.pluginAction', { name: lt(x.label) || x.id, n: declaredTargets(x).length }), icon: x.icon, danger: x.danger, disabled: !declaredTargets(x).length }))
