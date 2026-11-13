@@ -1304,7 +1304,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 错误提示：
   - `would_leave_scope` 与 `permission_denied{permission: proxy:manage:own}`（不能新建代理）在控制台按当前语言显示（`errorMessage` 的 `KNOWN_ERRORS`）。
   - `group_ids` 字段的 `not_in_scope` 由账号保存的字段码表翻译。
-- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名。`HOST_UI_VERSION` 升到 3.15.0（期 4 整合审查），moderation 0.12.0 的 `hostUICompat` 改为 `^3.15`（版本号不再升）；`sdk/manifest` 记 UI 3.15 → 核心 0.1.286 的下限。
+- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名（发布前去兼容层时删掉了这个回落：moderation 0.12.0 只跑在 UI 3.15 的控制台上）。`HOST_UI_VERSION` 升到 3.15.0（期 4 整合审查），moderation 0.12.0 的 `hostUICompat` 改为 `^3.15`（版本号不再升）；`sdk/manifest` 记 UI 3.15 → 核心 0.1.286 的下限。
 - mock：`hasPerm` 按蕴含判断，`ownerScope(who, action)` 返回范围，行过滤复用 `scopeAllowsRow`。
   - `/permissions` 带 `scope_type`，不再列 8 个 own key。
   - 内置 supplier 与 vendor 使用规范 key，vendor 的 `/me` 附带旧别名。
@@ -1463,6 +1463,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 | gateway 外壳 tokenless 管理开关（含 T45 指标与 preflight `warnings`，控制台升级页的提醒展示） | 删除：线上核心 0.1.284 已带令牌，本版本不换网关，以后的网关忽略旧配置键与环境变量 |
 | 管理员禁用锁的“残留锁”处理（旧节点启用过的上锁账号：`checkAdminLock` 只拦 disabled、受限档禁用时清锁、重置时清锁的特例） | 删除：上锁的账号总是 disabled；受限档从不改锁 |
 | 插件 `hostCompat`/UI 3.15 下限 0.1.286 | 改为 0.1.285 |
+| moderation 原生 UI 在没有 `hasAction` 时回落到 `account:own:read` | 删除：0.12.0 的 `hostCompat` 是 `>=0.1.285`，宿主都有 `hasAction` |
 
 保留：核心在 `SUB2API_UPDATER_TOKEN_FILE` 未设置时不带令牌（develop 既有，线上网关会设置）；`web/packages/ui/README.md` 给插件作者的 `hasAction?.() ?? has('account:own:read')` 回退（只对 UI 3.14 及更早的控制台、即 0.1.284 及更早的核心有效）。
 
