@@ -109,13 +109,16 @@ func (s PermissionSet) DataScope(uid int64, action perm.Key) DataScope {
 }
 
 // KeyList lists the canonical keys of the set, sorted (not the superuser
-// flag).
+// flag), without the scopes of an action it holds for every row.
 func (s PermissionSet) KeyList() []string {
 	out := make([]string, 0, len(s.Keys))
 	for k := range s.Keys {
 		out = append(out, k)
 	}
 	for a, scopes := range s.Scoped {
+		if _, all := s.Keys[string(a)]; all {
+			continue
+		}
 		for _, sc := range scopes {
 			out = append(out, string(perm.Pattern{Action: a, Scope: sc}.Key()))
 		}

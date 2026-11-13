@@ -15,10 +15,10 @@ import (
 // Grants of a role (CONTRACTS §21): an unscoped key is a role_permissions
 // row; a scoped one (account:read:group/12) a role_permission_scopes row of
 // the action and the scope. Until the former own-level keys retire (R2b),
-// every own scope of an action that had one is mirrored by the old row
-// (mirrorLegacyOwn), so cores of the previous version, which read only
-// role_permissions, keep the grant during a rolling upgrade; reading, the
-// old row is an alias of the scope.
+// the old row (account:own:read) is the record of an own scope of its
+// action: writes keep both (mirrorLegacyOwn), reads take the old row
+// (ownShadowed), so cores of the previous version, which read only
+// role_permissions, and this one agree during a rolling upgrade.
 
 // grant is a resolved grant: the permission and its scope, "" for every row.
 type grant struct {
@@ -92,8 +92,8 @@ func resolvePermissions(ctx context.Context, tx pgx.Tx, keys []string) ([]string
 // coreOnly (a reset leaves plugin permissions alone). Grants of removed
 // permissions stay: they grant nothing, and revive with the key.
 func writeGrants(ctx context.Context, tx pgx.Tx, roleID int64, grants []grant, coreOnly bool) error {
-	var ids, scopedIDs []int64
-	var scopes []string
+	// Never nil: a NULL array would make "<> ALL" delete nothing.
+	ids, scopedIDs, scopes := []int64{}, []int64{}, []string{}
 	for _, g := range grants {
 		if g.scope == "" {
 			ids = append(ids, g.id)
@@ -154,15 +154,31 @@ ON CONFLICT DO NOTHING`, roleID, actions, legacy)
 	return err
 }
 
+// ownShadowed is the condition, on a role_permission_scopes row rs of
+// permission p, of an own scope whose former own-level key is still live:
+// that key's role_permissions row is then the record of the grant (R2a), so
+// a revoke by an older core, which deletes only that row, holds on every
+// node. Once the aliases are retired (R2b) the scoped row is the record.
+var ownShadowed = func() string {
+	actions, legacy := legacyOwnPairs()
+	c := "rs.scope = 'own' AND EXISTS (SELECT 1 FROM permissions lp WHERE lp.status <> 'removed' AND lp.key = CASE p.key"
+	for i, a := range actions {
+		c += " WHEN '" + a + "' THEN '" + legacy[i] + "'"
+	}
+	return c + " END)"
+}()
+
 // roleGrantsJoin joins, to each role r, g.key: the canonical grants of r
 // (former own-level rows as they are; PermissionSet.Add reads them as
-// aliases) whose permission p passes status, an SQL condition on p.
+// aliases; own scopes they shadow left out) whose permission p passes
+// status, an SQL condition on p.
 func roleGrantsJoin(status string) string {
 	return `
 LEFT JOIN LATERAL (
     SELECT p.key FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id AND ` + status + ` WHERE rp.role_id = r.id
     UNION ALL
-    SELECT p.key || ':' || rs.scope FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id AND ` + status + ` WHERE rs.role_id = r.id
+    SELECT p.key || ':' || rs.scope FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id AND ` + status + `
+    WHERE rs.role_id = r.id AND NOT (` + ownShadowed + `)
 ) g ON true`
 }
 

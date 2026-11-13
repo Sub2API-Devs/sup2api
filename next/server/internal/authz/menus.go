@@ -230,7 +230,7 @@ func hasAny(set core.PermissionSet, perms []string) bool {
 		return true
 	}
 	for _, p := range perms {
-		if set.HasAction(perm.Key(p)) {
+		if a, err := perm.Parse(p); err == nil && set.HasAction(a.Action) {
 			return true
 		}
 	}

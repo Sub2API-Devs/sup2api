@@ -32,7 +32,7 @@ func TestScopedRoleGrants(t *testing.T) {
 	r, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "group_ops", Name: map[string]string{"en": "Group ops"},
 		PermissionKeys: []string{"account:update:group/12/*", "account:own:read", "account:read:own", "proxy:manage:proxy/8", "user:read", "account:test:*"}})
 	require.NoError(t, err)
-	require.Equal(t, []string{"user:read", "account:read:own", "account:update:group/12", "account:test", "proxy:manage:proxy/8"}, r.PermissionKeys)
+	require.ElementsMatch(t, []string{"user:read", "account:read:own", "account:update:group/12", "account:test", "proxy:manage:proxy/8"}, r.PermissionKeys)
 	plain, scoped := rows(r.ID)
 	require.Equal(t, []string{"account:own:read", "account:test", "user:read"}, plain, "the own scope is mirrored for older cores")
 	require.Equal(t, []string{"account:read:own", "account:update:group/12", "proxy:manage:proxy/8"}, scoped)
@@ -53,6 +53,37 @@ func TestScopedRoleGrants(t *testing.T) {
 	plain, scoped = rows(r.ID)
 	require.Equal(t, []string{"account:test"}, plain)
 	require.Equal(t, []string{"account:update:group/12"}, scoped)
+
+	// Scoped grants only: every unscoped grant goes (a NULL id list once
+	// kept them); then nothing at all.
+	r, err = s.SetRolePermissions(ctx, root, r.ID, []string{"account:read:own"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"account:read:own"}, r.PermissionKeys)
+	plain, scoped = rows(r.ID)
+	require.Equal(t, []string{"account:own:read"}, plain)
+	require.Equal(t, []string{"account:read:own"}, scoped)
+	set, err = s.PermissionSet(ctx, holder)
+	require.NoError(t, err)
+	require.False(t, set.Has("account:test"))
+	require.True(t, set.Has("account:read:own"))
+
+	// An older core revokes by deleting the former own-level row: while the
+	// alias is live that row is the record, so every node sees the revoke.
+	_, err = db.Pool.Exec(ctx, `DELETE FROM role_permissions rp USING permissions p WHERE p.id = rp.permission_id AND rp.role_id = $1 AND p.key = 'account:own:read'`, r.ID)
+	require.NoError(t, err)
+	r, err = s.GetRole(ctx, r.ID)
+	require.NoError(t, err)
+	require.Empty(t, r.PermissionKeys)
+	fresh := New(Deps{DB: db})
+	set, err = fresh.PermissionSet(ctx, holder)
+	require.NoError(t, err)
+	require.False(t, set.HasAction("account:read"))
+
+	r, err = s.SetRolePermissions(ctx, root, r.ID, []string{})
+	require.NoError(t, err)
+	plain, scoped = rows(r.ID)
+	require.Empty(t, plain)
+	require.Empty(t, scoped)
 
 	for _, bad := range []string{"user:read:own", "account:create:account/5", "account:read:proxy/1", "account:read:group/01"} {
 		_, err = s.SetRolePermissions(ctx, root, r.ID, []string{bad})

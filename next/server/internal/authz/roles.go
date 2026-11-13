@@ -42,12 +42,13 @@ var (
 	errLastSuperAdmin      = core.ErrConflict.WithMessage("the last super admin cannot be removed")
 )
 
-const roleSelect = `
+var roleSelect = `
 SELECT r.id, r.key, r.name, r.description, r.builtin, r.superuser, r.created_at, r.updated_at,
     COALESCE((SELECT array_agg(g.key ORDER BY g.sort, g.key) FROM (
         SELECT p.key, p.sort FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = r.id
         UNION ALL
-        SELECT p.key || ':' || rs.scope, p.sort FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id WHERE rs.role_id = r.id) g), '{}'),
+        SELECT p.key || ':' || rs.scope, p.sort FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id
+        WHERE rs.role_id = r.id AND NOT (` + ownShadowed + `)) g), '{}'),
     COALESCE((SELECT array_agg(ar.key ORDER BY ar.key) FROM role_assignable_roles ra
         JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser WHERE ra.role_id = r.id), '{}'),
     r.assign_custom,

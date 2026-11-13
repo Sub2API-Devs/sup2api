@@ -838,8 +838,18 @@
   - 旧 own key 及其授予行保持有效，supplier 不中断。
   - 新节点写 own 范围时同时写旧行。
   - 已知：滚动期间在旧节点上撤销某个 own 授予，不会删除新表里的对应行，新节点仍然认为它有效。发布说明要求升级期间不改角色权限，全部节点升级后再改。
+- 审查后（R2 review fixes）：
+  - `writeGrants` 的 id 数组不再是 nil。nil 时 `<> ALL(NULL)` 什么都不删，角色只剩带范围授予或被清空时，原有的全量授予不会被移除。
+  - 旧 own key 仍是 active 时，以旧 key 的授予行为准（`ownShadowed`）：新表里同一动作的 own 行不读。这样旧节点撤销 own 授予（只删旧行）后，新节点同样不再授予，新编辑器也不会再显示并写回。
+  - `KeyList` 不列出已被全量 key 覆盖的范围，`Missing` 不会报冗余的 own。
+  - 菜单的 anyOf 也接受旧别名。
+  - 已知问题与对策：
+    - 新节点保存一个同时持有全量与 own 的角色时，不再保留冗余的旧 own 行，旧节点上的字面比较（例如 operator 分配 supplier）会失败。发布说明要求升级期间不改角色权限。
+    - 范围只有分组或 id 的 create 类路由（POST /accounts、预备容器、草稿、`/account-types/…/models/fetch`、POST /proxies、`/proxies/probe`）在本步骤里还按 own 处理（创建者为调用者），由 R3/R4 的创建后置条件收紧。在此之前不要授出这类范围。
+    - `/environment/variables`、`/platforms`、`/account-types` 现在也对只有全量 `account:create`、没有 read 的人开放，属轻微放宽。
 - R2b（下一版本，本期不做）：
-  - 确认全部节点都已升级后，在目录里把 8 个旧 key 标 removed（可写成 deprecated 改 removed 的同步规则或一次迁移）。
+  - 先按旧 own 行重新同步新表：补上缺的 own 行，删除没有对应旧行的 own 行，写审计。然后再把旧 key 标 removed。标 removed 之后 `ownShadowed` 自动不再遮蔽，新表成为唯一记录。
+  - 确认全部节点都已升级后执行上一步。
   - 删除 `mirrorLegacyOwn` 与 `perm.WithLegacyOwn`，清理冗余的旧 own 行与密钥中的旧写法（写审计）。
   - `/me` 不再输出别名。
   - `Parse` 里的别名表保留，用于读取旧请求。
