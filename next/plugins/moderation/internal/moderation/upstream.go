@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -205,11 +207,7 @@ func callJSON(ctx context.Context, ch *liveChannel, path string, header map[stri
 	for k, v := range header {
 		req.Header.Set(k, v)
 	}
-	client := ch.client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
+	resp, err := ch.do(req)
 	if err != nil {
 		return ctxErr(ctx, &networkError{err})
 	}
@@ -232,6 +230,37 @@ func callJSON(ctx context.Context, ch *liveChannel, path string, header map[stri
 		return fmt.Errorf("invalid upstream JSON: %s", snippet(data, 200))
 	}
 	return nil
+}
+
+// do sends req with the channel's client. A call that failed before it had
+// a connection (dial, proxy handshake, TLS: nothing of the request was sent)
+// is sent once more while its context lasts; a failure after that is not
+// retried, the upstream may have taken the request.
+func (ch *liveChannel) do(req *http.Request) (*http.Response, error) {
+	client := ch.client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, connected, err := doTraced(client, req)
+	if err == nil || connected || req.Context().Err() != nil || req.GetBody == nil {
+		return resp, err
+	}
+	body, berr := req.GetBody()
+	if berr != nil {
+		return nil, err
+	}
+	retry := req.Clone(req.Context())
+	retry.Body = body
+	resp, _, err = doTraced(client, retry)
+	return resp, err
+}
+
+// doTraced sends req and reports whether it got a connection.
+func doTraced(client *http.Client, req *http.Request) (*http.Response, bool, error) {
+	var connected atomic.Bool
+	trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }}
+	resp, err := client.Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
+	return resp, connected.Load(), err
 }
 
 func ctxErr(ctx context.Context, err error) error {

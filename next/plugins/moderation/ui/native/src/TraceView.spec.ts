@@ -47,6 +47,16 @@ describe('the reasons of a trace', () => {
     })
   }
 
+  it('list the error text of a failed call, also in its verdict tooltip', () => {
+    const detail = 'network: Post "https://up.example/v1/chat/completions": socks connect tcp 1.2.3.4:1080: EOF'
+    const failed = { ...trace, stages: [{ stage: 1, result: 'failed', outcomes: [outcome({ err: 'network', err_detail: detail })] }] } as unknown as Trace
+    const w = mountPinned(TraceView, { props: { trace: failed } }, { compact: false })
+    const items = w.findAll('.mod-trace-reason')
+    expect(items).toHaveLength(1)
+    expect(items[0].find('.mod-text-warning').text()).toContain(detail)
+    expect(w.find(`[title*="${'socks connect'}"]`).exists()).toBe(true)
+  })
+
   it('leave no list when no call gave one', () => {
     const plain = { ...trace, stages: [trace.stages![0]] } as Trace
     expect(mountPinned(TraceView, { props: { trace: plain } }, { compact: false }).find('.mod-trace-reasons').exists()).toBe(false)

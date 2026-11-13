@@ -508,8 +508,10 @@ type storedAuditor struct {
 //   - the prompt template of llm_questions and how its answers are read;
 //   - what an auditor without review_images does with images
 //     (AuditorConfig.reviewsImages), and which images an auditor sends;
-//   - the built-in Jev question set (the default set when the settings
-//     carry none) and how questions are sent and scored;
+//   - how questions are sent and scored (the built-in Jev question set
+//     itself needs no bump: the auditors that use the default set hash its
+//     content, so a new built-in set changes their fingerprints alone, as
+//     in 0.11.2);
 //   - how content is cut into segments and rendered for the auditors, when
 //     the same segment hash would then stand for other text.
 //

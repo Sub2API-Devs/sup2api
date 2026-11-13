@@ -587,11 +587,20 @@ func TestAuditorJudge(t *testing.T) {
 		t.Fatal("threshold 0 accepted")
 	}
 	j, err := compileAuditor(2, "j", AuditorTypeSafe, 1, AuditorConfig{}, nil, &def)
-	if err != nil || len(j.order) != 10 || j.questions.RulesVersion != RulesVersionZH || !j.images {
+	if err != nil || len(j.order) != 9 || j.questions.RulesVersion != RulesVersionZH || !j.images {
 		t.Fatalf("jev default: %+v %v", j, err)
 	}
-	if j.labels["custom/jailbreak"] != "越狱与恶意预填充" || j.thresholds["sexual"] != 0.90 {
+	if j.labels["custom/jailbreak"] != "越狱与恶意预填充" || j.thresholds["sexual"] != 0.8 {
 		t.Fatal("jev rows")
+	}
+	// The built-in set is the production table of 2026-11-13 (0.11.2).
+	var rows []string
+	for _, c := range j.order {
+		rows = append(rows, fmt.Sprintf("%s %s %v", c, j.labels[c], j.thresholds[c]))
+	}
+	if got, want := strings.Join(rows, "; "), "illicit  0.75; illicit/violent  0.75; self-harm/instructions  0.75; violence/graphic  0.8; sexual/minors  0.75; sexual  0.8; "+
+		"custom/jailbreak 越狱与恶意预填充 0.85; custom/prompt-extraction 套取系统提示词 0.75; custom/distillation 批量蒸馏 0.75"; got != want {
+		t.Fatalf("built-in rows = %s", got)
 	}
 	custom := def
 	custom.Items = append(custom.Items[:1:1], JevQuestion{Category: "custom/x", Label: "X", Question: "q?", Threshold: 0.5})
@@ -603,7 +612,7 @@ func TestAuditorJudge(t *testing.T) {
 	// is a bad response, thresholds are refused. It sends images unless its
 	// image switch is off.
 	q, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, AuditorConfig{}, nil, &def)
-	if err != nil || len(q.order) != 10 || q.questions.RulesVersion != RulesVersionZH || !q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
+	if err != nil || len(q.order) != 9 || q.questions.RulesVersion != RulesVersionZH || !q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
 		t.Fatalf("llm_questions default: %+v %v", q, err)
 	}
 	answers := map[string]float64{}

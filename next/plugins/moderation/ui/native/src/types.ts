@@ -136,6 +136,8 @@ export interface Outcome {
   latency_ms: number
   skipped?: boolean
   err?: string
+  /** the error text with URL queries, credentials and token-like strings removed, at most 200 characters (0.11.2) */
+  err_detail?: string
   /** upstream status of the error (err); without one, the status with which the upstream refused the images (images_refused) */
   status?: number
   /** the upstream of an LLM auditor refused the call that carried the images (400, 413, 415, 422): no image was reviewed, the outcome is of a second call with the text alone, or skipped without a text */

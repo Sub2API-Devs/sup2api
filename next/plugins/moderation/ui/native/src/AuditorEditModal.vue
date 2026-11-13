@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SField, SHint, SInput, SFormModal, SSegmented, SSelect, SSwitch, STextarea } from '@sub2api/ui'
+import AuditorDefaultsDrawer from './AuditorDefaultsDrawer.vue'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { useCatalog } from './catalog'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
-import { auditorConfig, auditorFormOf } from './auditorForm'
+import { auditorConfig, auditorFormOf, fillDefaults, restoreDefaults, usesDefault } from './auditorForm'
 import { AUDITOR_TYPES, hasQuestions as typeHasQuestions } from './flowOps'
 import { THRESHOLD_PRESETS, presetThresholds, thresholdOverrides, thresholdPresetOf } from './thresholdPresets'
 import { categoryLabel, enumLabel, enumOptions } from './format'
@@ -15,7 +16,10 @@ import type { Auditor, AuditorDraft, AuditorTryTarget, AuditorType, Defaults } f
 // thresholds with presets, Jev questions, an LLM verdict prompt, or an LLM
 // question table (the Jev question editor without thresholds); bound to one
 // channel of its type. Jev and both LLM types have an image switch (the LLM
-// model may not support images; off = text only). "Try" runs the unsaved edits. `readonly` shows
+// model may not support images; off = text only). What the auditor leaves
+// to the plugin's defaults (question table, LLM prompt and categories) is
+// shown as its content, can be viewed side by side with the edits
+// (AuditorDefaultsDrawer) and restored (auditorForm.ts). "Try" runs the unsaved edits. `readonly` shows
 // the auditor without saving or trying (read users). The list row is shown
 // at once and replaced by GET /auditors/:id unless the form was edited.
 const props = defineProps<{ auditor: Auditor | null; defaults: Defaults | null; readonly?: boolean }>()
@@ -43,10 +47,20 @@ const channelOptions = computed(() =>
 )
 const firstChannel = () => Number(channelOptions.value[0]?.value || 0)
 
+/** The defaults were restored since the form was filled: saving is what applies them. */
+const restored = ref(false)
+const defaultsOpen = ref(false)
+
 function fill(a: Auditor | null) {
-  Object.assign(form, auditorFormOf(a))
+  Object.assign(form, auditorFormOf(a, props.defaults))
   form.channel_id ||= firstChannel()
+  restored.value = false
 }
+// The defaults may arrive after the form opened: show them where it has nothing.
+watch(
+  () => props.defaults,
+  (d) => fillDefaults(form, d)
+)
 const snapshot = () => JSON.stringify(form)
 
 watch(open, async (v) => {
@@ -60,11 +74,22 @@ watch(open, async (v) => {
   if (fresh && open.value && props.auditor?.id === a.id && snapshot() === shown) fill(fresh)
 })
 
-function copyDefault() {
-  const d = props.defaults?.default
-  if (!d) return
-  form.ownQuestions = true
-  form.questions = { preamble: d.preamble, items: d.items.map((q) => ({ ...q })) }
+const isVerdict = computed(() => form.type === 'llm_verdict')
+const onDefault = computed(() => usesDefault(form, props.defaults))
+/** Whether the type's default parts are all in use, edited from the default, or the auditor's own. */
+const defaultState = computed(() => {
+  const parts = isVerdict.value ? (['system_prompt', 'categories'] as const) : (['questions'] as const)
+  if (parts.every((k) => onDefault.value[k])) return 'default'
+  return parts.some((k) => form.own[k]) ? 'own' : 'edited'
+})
+const defaultsKind = computed(() => (isVerdict.value ? 'llm' : 'questions'))
+
+async function restore() {
+  const v = props.defaults?.default_version || ''
+  if (!(await host.confirm({ message: t(`auditors.restoreConfirm.${defaultsKind.value}`, { v }), confirmText: t('auditors.restoreDefault') }))) return
+  restoreDefaults(form, props.defaults)
+  restored.value = true
+  defaultsOpen.value = false
 }
 
 /** The OpenAI overrides of the form (a cleared input is not an override), for the preset shown. */
@@ -77,7 +102,7 @@ function applyPreset(id: unknown) {
   form.thresholds = Object.fromEntries(Object.entries(presetThresholds(props.defaults, p.factor)).map(([k, v]) => [k, String(v)]))
 }
 
-const config = () => auditorConfig(form)
+const config = () => auditorConfig(form, props.defaults)
 const draft = (): AuditorDraft => ({ name: form.name, type: form.type, channel_id: Number(form.channel_id), config: config() })
 const hasQuestions = computed(() => typeHasQuestions(form.type))
 
@@ -121,6 +146,17 @@ async function save() {
         </div>
         <SAlert v-if="errs.config" tone="danger" dense>{{ errs.config }}</SAlert>
 
+        <div v-if="form.type !== 'openai_moderation'" class="mod-default-bar">
+          <SBadge :tone="defaultState === 'default' ? 'info' : defaultState === 'own' ? 'purple' : 'warning'" size="sm">
+            {{ t(`auditors.defaultState.${defaultState === 'default' && isVerdict ? 'defaultLLM' : defaultState}`, { v: defaults?.default_version || '' }) }}
+          </SBadge>
+          <span class="mod-ml-auto mod-inline mod-gap">
+            <SButton size="sm" variant="ghost" icon="eye" :disabled="!defaults" @click="defaultsOpen = true">{{ t(`auditors.viewDefault.${defaultsKind}`) }}</SButton>
+            <SButton size="sm" variant="ghost" icon="refresh" :disabled="!defaults || defaultState === 'default'" @click="restore">{{ t('auditors.restoreDefault') }}</SButton>
+          </span>
+        </div>
+        <SAlert v-if="restored" tone="info" dense>{{ t('auditors.restored') }}</SAlert>
+
         <template v-if="form.type === 'openai_moderation'">
           <div class="mod-inline mod-gap">
             <SSegmented :model-value="formPreset ?? ''" :options="presetOptions" size="sm" @update:model-value="applyPreset" />
@@ -139,21 +175,17 @@ async function save() {
           <SField :label="t(form.type === 'typesafe' ? 'auditors.reviewImages' : 'auditors.modelImages')" :hint="t(form.type === 'typesafe' ? 'auditors.reviewImagesHint' : 'auditors.modelImagesHint')">
             <SSwitch v-model="form.review_images" />
           </SField>
-          <SField :label="t('auditors.ownQuestions')" :hint="form.ownQuestions ? '' : t('auditors.useDefault', { v: defaults?.default_version || '' })">
-            <SSwitch v-model="form.ownQuestions" />
-          </SField>
-          <JevQuestionsEditor v-if="form.ownQuestions" v-model="form.questions" :hide-threshold="form.type === 'llm_questions'">
-            <template #toolbar><SButton size="sm" @click="copyDefault">{{ t('auditors.copyDefault') }}</SButton></template>
-          </JevQuestionsEditor>
+          <SHint size="xs">{{ t('auditors.questionsHint') }}</SHint>
+          <JevQuestionsEditor v-model="form.questions" :hide-threshold="form.type === 'llm_questions'" />
           <SHint v-if="auditor?.rules_version" size="xs">{{ t('auditors.rulesVersion', { v: auditor.rules_version }) }}</SHint>
         </template>
 
         <template v-else>
           <SField :label="t('auditors.systemPrompt')" :hint="t('auditors.systemPromptHint')">
-            <STextarea v-model="form.system_prompt" :rows="6" :placeholder="defaults?.llm_system_prompt.slice(0, 200) + '…'" />
+            <STextarea v-model="form.system_prompt" :rows="10" />
           </SField>
           <SField :label="t('auditors.categories')" :hint="t('auditors.categoriesHint')">
-            <STextarea v-model="form.categories" :rows="4" :placeholder="(defaults?.llm_categories || []).slice(0, 3).map((c) => `${c.id}: ${c.description}`).join('\n')" />
+            <STextarea v-model="form.categories" :rows="8" />
           </SField>
           <div class="mod-form-row">
             <SField :label="t('auditors.toolChoice')">
@@ -172,6 +204,7 @@ async function save() {
         </template>
       </fieldset>
     </div>
+    <AuditorDefaultsDrawer v-model:open="defaultsOpen" :form="form" :defaults="defaults" :readonly="readonly || defaultState === 'default'" @restore="restore" />
     <template v-if="readonly" #footer>
       <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
     </template>

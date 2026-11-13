@@ -19,6 +19,8 @@ import {
   validateSchema
 } from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
+import JevQuestionsView from './JevQuestionsView.vue'
+import { copyQuestions } from './auditorForm'
 import VerdictCacheRow from './VerdictCacheRow.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { enumOptions, joinList } from './format'
@@ -79,7 +81,6 @@ const listsPending = computed(() => listsImportPending(status.data.value))
 /** Collapsed groups opened by the user. */
 const opened = reactive<Record<string, boolean>>({})
 
-const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
 /** The stored values when the page loaded (currentSettings), and this page's values then (what a save compares with). */
 let loaded: Record<string, unknown> = {}
 /** The stored settings keep the verdict cache off (verdict_cache_days = 0). */
@@ -279,6 +280,7 @@ const jevOptions = computed(() => [
                   <SButton size="sm" @click="jevMode = 'custom'">{{ t('settingsTab.jevCopyBuiltin') }}</SButton>
                 </template>
               </JevQuestionsEditor>
+              <JevQuestionsView v-else-if="defaults" :questions="defaults.builtin" />
             </div>
           </SSettingRow>
           <SchemaField

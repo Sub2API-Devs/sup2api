@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { auditorConfig, auditorFormOf, isLLMAuditor, llmTextOnly, tryImages, tryTextOnly, type AuditorForm } from './auditorForm'
+import { auditorConfig, auditorFormOf, fillDefaults, isLLMAuditor, llmTextOnly, questionDiff, restoreDefaults, tryImages, tryTextOnly, usesDefault, type AuditorForm } from './auditorForm'
 import { AUDITOR_TYPES } from './flowOps'
 import messages from './messages'
-import type { Auditor, AuditorConfig, AuditorType } from './types'
+import type { Auditor, AuditorConfig, AuditorType, Defaults } from './types'
 
 const LLM_TYPES: AuditorType[] = ['llm_verdict', 'llm_questions']
 const stored = (type: AuditorType, config: AuditorConfig): Auditor => ({ id: 7, name: 'a', type, channel_id: 3, config }) as Auditor
@@ -12,7 +12,7 @@ describe('auditorFormOf', () => {
   it('starts a new auditor with images on', () => {
     const f = auditorFormOf(null)
     expect(f.review_images).toBe(true)
-    expect(f).toMatchObject({ name: '', type: 'openai_moderation', channel_id: 0, thresholds: {}, ownQuestions: false, tool_choice: 'required', max_turns: 3, temperature: 0, max_tokens: 512, flag_as_hit: false })
+    expect(f).toMatchObject({ name: '', type: 'openai_moderation', channel_id: 0, thresholds: {}, own: { questions: false, system_prompt: false, categories: false }, tool_choice: 'required', max_turns: 3, temperature: 0, max_tokens: 512, flag_as_hit: false })
   })
 
   it('shows images on for a stored auditor without the field, off only for a stored false', () => {
@@ -115,5 +115,98 @@ describe('the texts of the image switch', () => {
     expect(messages.en.auditors.tryTextOnly).toContain('Model supports images')
     // the limits of the backend contract
     for (const lang of [messages.zh, messages.en]) for (const limit of ['5 MiB', '8000', '400', '413', '415', '422', 'URL']) expect(lang.auditors.modelImagesHint).toContain(limit)
+  })
+})
+
+const DEFAULTS = {
+  builtin: { preamble: 'b', items: [] },
+  builtin_version: 'content-audit-v3-zh',
+  default: { preamble: 'pre', items: [{ category: 'sexual', question: 'q1?', threshold: 0.8 }, { category: 'custom/x', label: 'X', question: 'q2?', threshold: 0.75 }] },
+  default_version: 'content-audit-v3-zh',
+  custom: false,
+  openai_categories: [],
+  openai_thresholds: {},
+  llm_system_prompt: 'You judge.\n{{categories}}',
+  llm_categories: [{ id: 'sexual', description: '色情' }, { id: 'other', description: '其他' }]
+} as Defaults
+
+describe('the defaults in the form', () => {
+  const QUESTION_TYPES: AuditorType[] = ['typesafe', 'llm_questions']
+
+  it('shows the default table of an auditor on the default set, and saves it as the default while unchanged', () => {
+    for (const type of QUESTION_TYPES) {
+      const f = auditorFormOf(stored(type, {}), DEFAULTS)
+      expect(f.questions).toEqual(DEFAULTS.default)
+      expect(f.questions.items[0]).not.toBe(DEFAULTS.default.items[0])
+      expect(usesDefault(f, DEFAULTS).questions).toBe(true)
+      expect(auditorConfig(f, DEFAULTS).questions).toBeNull()
+      // a threshold typed as text still equals the default
+      f.questions.items[0].threshold = '0.8' as unknown as number
+      expect(auditorConfig(f, DEFAULTS).questions).toBeNull()
+    }
+  })
+
+  it("saves an edited default table as the auditor's own", () => {
+    const f = auditorFormOf(stored('typesafe', {}), DEFAULTS)
+    f.questions.items[1].question = 'q2 edited?'
+    expect(usesDefault(f, DEFAULTS).questions).toBe(false)
+    expect(auditorConfig(f, DEFAULTS).questions).toEqual({ preamble: 'pre', items: [DEFAULTS.default.items[0], { ...DEFAULTS.default.items[1], question: 'q2 edited?' }] })
+    f.questions.items.splice(1, 1)
+    expect(auditorConfig(f, DEFAULTS).questions?.items).toHaveLength(1)
+  })
+
+  it('keeps a stored table its own, even one equal to the default', () => {
+    const f = auditorFormOf(stored('typesafe', { questions: DEFAULTS.default }), DEFAULTS)
+    expect(f.own.questions).toBe(true)
+    expect(auditorConfig(f, DEFAULTS).questions).toEqual(DEFAULTS.default)
+  })
+
+  it('restores the default table, which then saves as the default', () => {
+    const f = auditorFormOf(stored('typesafe', { questions: { preamble: 'mine', items: [{ category: 'hate', question: 'h?', threshold: 0.5 }] } }), DEFAULTS)
+    restoreDefaults(f, DEFAULTS)
+    expect(f.questions).toEqual(DEFAULTS.default)
+    expect(f.own.questions).toBe(false)
+    expect(auditorConfig(f, DEFAULTS).questions).toBeNull()
+  })
+
+  it('shows the defaults that arrive after the form was filled, only where it has nothing', () => {
+    const f = auditorFormOf(stored('typesafe', {}), null)
+    expect(f.questions).toEqual({ preamble: '', items: [] })
+    // without defaults an empty table stays the default
+    expect(auditorConfig(f, null).questions).toBeNull()
+    fillDefaults(f, DEFAULTS)
+    expect(f.questions).toEqual(DEFAULTS.default)
+    const own = auditorFormOf(stored('typesafe', { questions: { preamble: 'mine', items: [] } }), null)
+    fillDefaults(own, DEFAULTS)
+    expect(own.questions.preamble).toBe('mine')
+  })
+
+  it('shows the default prompt and categories of an llm_verdict auditor and saves them empty while unchanged', () => {
+    const f = auditorFormOf(stored('llm_verdict', {}), DEFAULTS)
+    expect(f.system_prompt).toBe(DEFAULTS.llm_system_prompt)
+    expect(f.categories).toBe('sexual: 色情\nother: 其他')
+    expect(auditorConfig(f, DEFAULTS)).toMatchObject({ system_prompt: '', categories: [] })
+    f.categories += '\nspam: 垃圾'
+    expect(auditorConfig(f, DEFAULTS)).toMatchObject({ system_prompt: '', categories: [...DEFAULTS.llm_categories, { id: 'spam', description: '垃圾' }] })
+    f.system_prompt = 'Mine {{categories}}'
+    expect(auditorConfig(f, DEFAULTS).system_prompt).toBe('Mine {{categories}}')
+    restoreDefaults(f, DEFAULTS)
+    expect(auditorConfig(f, DEFAULTS)).toMatchObject({ system_prompt: '', categories: [] })
+  })
+
+  it('keeps a stored prompt and categories as they are', () => {
+    const f = auditorFormOf(stored('llm_verdict', { system_prompt: DEFAULTS.llm_system_prompt, categories: [{ id: 'x', description: 'y' }] }), DEFAULTS)
+    expect(f.own).toEqual({ questions: false, system_prompt: true, categories: true })
+    expect(auditorConfig(f, DEFAULTS)).toMatchObject({ system_prompt: DEFAULTS.llm_system_prompt, categories: [{ id: 'x', description: 'y' }] })
+  })
+
+  it('compares an edited table with the default row by row', () => {
+    const edited = { preamble: 'other', items: [{ ...DEFAULTS.default.items[0] }, { category: 'custom/new', label: 'N', question: 'n?', threshold: 0.5 }] }
+    const d = questionDiff(edited, DEFAULTS.default)
+    expect(d.preambleSame).toBe(false)
+    expect(d.rows.map((r) => r.state)).toEqual(['same', 'missing'])
+    expect(d.extra).toBe(1)
+    edited.items[0].question = 'changed?'
+    expect(questionDiff(edited, DEFAULTS.default).rows[0].state).toBe('changed')
   })
 })
