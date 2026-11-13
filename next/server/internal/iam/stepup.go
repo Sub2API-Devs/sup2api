@@ -405,7 +405,8 @@ func stepUpSessionToken(ctx context.Context, userID int64, scope, session string
 }
 
 // OpenStepUpSession implements core.StepUpSessions: the request must have
-// spent its proof on scope. Opening it again keeps it open longer.
+// spent its proof on scope. Opening it again, with a new proof, starts it
+// afresh.
 func (s *Service) OpenStepUpSession(ctx context.Context, scope, session string) error {
 	uid, _ := core.UserID(ctx)
 	if uid == 0 || session == "" || core.StepUpSpent(ctx) != scope {
@@ -416,7 +417,7 @@ func (s *Service) OpenStepUpSession(ctx context.Context, scope, session string) 
 		return err
 	}
 	_, err = s.db.Pool.Exec(ctx, `INSERT INTO auth_flows (token_hash, purpose, user_id, payload, expires_at) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (token_hash) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
+		ON CONFLICT (token_hash) DO UPDATE SET expires_at = EXCLUDED.expires_at, created_at = now()`,
 		hashToken(stepUpSessionToken(ctx, uid, scope, session)), flowStepUpSession, uid, payload, time.Now().Add(core.StepUpSessionIdle))
 	return err
 }
@@ -426,8 +427,9 @@ func (s *Service) ContinueStepUpSession(ctx context.Context, scope, session stri
 	uid, _ := core.UserID(ctx)
 	continued := false
 	if uid != 0 && session != "" {
-		tag, err := s.db.Pool.Exec(ctx, `UPDATE auth_flows SET expires_at = $3 WHERE token_hash = $1 AND purpose = $2 AND expires_at > now()`,
-			hashToken(stepUpSessionToken(ctx, uid, scope, session)), flowStepUpSession, time.Now().Add(core.StepUpSessionIdle))
+		tag, err := s.db.Pool.Exec(ctx, `UPDATE auth_flows SET expires_at = LEAST($3, created_at + make_interval(secs => $4))
+			WHERE token_hash = $1 AND purpose = $2 AND expires_at > now() AND created_at > now() - make_interval(secs => $4)`,
+			hashToken(stepUpSessionToken(ctx, uid, scope, session)), flowStepUpSession, time.Now().Add(core.StepUpSessionIdle), core.StepUpSessionMax.Seconds())
 		if err != nil {
 			return err
 		}

@@ -67,13 +67,18 @@ type StepUpVerifier interface {
 
 // ErrVerificationExpired: a request continuing a step-up session
 // (StepUpSessions) whose session is unknown, idle for StepUpSessionIdle,
-// or opened by another user, login session or access key. The operation
+// older than StepUpSessionMax, or opened by another user, login session or
+// access key. The operation
 // starts again, with a new proof.
 var ErrVerificationExpired = NewError(http.StatusForbidden, "verification_expired", "this verified operation has expired or belongs to another session; start it again")
 
 // StepUpSessionIdle is how long a step-up session stays open after its last
 // request: the ccgateway controller drops an upload untouched for an hour.
 const StepUpSessionIdle = time.Hour
+
+// StepUpSessionMax bounds a step-up session however busy it is kept: one
+// proof never covers more than a day of an operation.
+const StepUpSessionMax = 24 * time.Hour
 
 // StepUpSessions lets one proof cover an operation made of several requests
 // (a ccgateway image upload: creation, chunks, load). The request that spent
@@ -88,8 +93,8 @@ type StepUpSessions interface {
 	OpenStepUpSession(ctx context.Context, scope, session string) error
 	// ContinueStepUpSession passes a request of the same user, login
 	// session or access key on a session opened under scope, and keeps it
-	// open for StepUpSessionIdle from now; otherwise it fails with
-	// ErrVerificationExpired.
+	// open for StepUpSessionIdle from now, never past StepUpSessionMax from
+	// its opening; otherwise it fails with ErrVerificationExpired.
 	ContinueStepUpSession(ctx context.Context, scope, session string) error
 }
 

@@ -1399,7 +1399,8 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 // One proof covers an operation of several requests (CONTRACTS §80.2, the
 // ccgateway image upload): the request that spent it opens a step-up
 // session, and only the same user through the same access key or login
-// session continues it, until it has been idle for an hour.
+// session continues it, until it has been idle for an hour or a day has
+// passed since the proof.
 func TestStepUpSessions(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
@@ -1442,7 +1443,22 @@ func TestStepUpSessions(t *testing.T) {
 	if err := k.s.db.Pool.QueryRow(ctx, `SELECT expires_at > now() + interval '59 minutes' FROM auth_flows WHERE purpose = 'step_up_session'`).Scan(&idle); err != nil || !idle {
 		t.Fatalf("the session is not kept open an hour from its last request: %v %v", idle, err)
 	}
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE auth_flows SET expires_at = now() - interval '1 second' WHERE purpose = 'step_up_session'`); err != nil {
+	// However busy, a session ends a day after its proof.
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE auth_flows SET created_at = now() - interval '23 hours 30 minutes' WHERE purpose = 'step_up_session'`); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := k.call(keyA.Key, "PUT", "/x/uploads/1", nil); code != 204 {
+		t.Fatalf("continued within the day: %d %v", code, out)
+	}
+	var capped bool
+	if err := k.s.db.Pool.QueryRow(ctx, `SELECT expires_at <= created_at + interval '24 hours' FROM auth_flows WHERE purpose = 'step_up_session'`).Scan(&capped); err != nil || !capped {
+		t.Fatalf("the session is kept open past a day from its proof: %v %v", capped, err)
+	}
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE auth_flows SET created_at = now() - interval '25 hours' WHERE purpose = 'step_up_session'`); err != nil {
+		t.Fatal(err)
+	}
+	refused(keyA.Key, "/x/uploads/1", "verification_expired")
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE auth_flows SET created_at = now(), expires_at = now() - interval '1 second' WHERE purpose = 'step_up_session'`); err != nil {
 		t.Fatal(err)
 	}
 	refused(keyA.Key, "/x/uploads/1", "verification_expired")
