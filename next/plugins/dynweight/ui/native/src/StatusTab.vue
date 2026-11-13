@@ -50,7 +50,8 @@ const resetRow = (r: KeyStatus) =>
   reset({ account_id: r.account_id, group_id: r.group_id, model: r.model }, t('status.resetKeyConfirm', { account: accountLabel(r), group: catalog.groupName(r.group_id), model: r.model }), keyOf(r))
 
 // Reset every key the applied filter's account and/or group covers (not what
-// is typed but not searched yet).
+// is typed but not searched yet). A group alone covers every account: only a
+// viewer of all accounts gets it (the core refuses the others).
 // null when an id is not a positive integer (the list then shows the error).
 const filtered = computed(() => {
   const f = list.filters as Filter
@@ -96,7 +97,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
       </KeyFilters>
     </SCard>
 
-    <div v-if="manage && filtered" class="dw-toolbar">
+    <div v-if="manage && filtered && !needsAccount" class="dw-toolbar">
       <SButton variant="danger" icon="refresh" :loading="busy === 'filter'" @click="resetFiltered">
         {{ t('status.resetFiltered') }}
       </SButton>

@@ -221,6 +221,7 @@ func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (a access, ok bool
 	if !httpapi.CanAny(c, s.authz, e.Read, e.OwnRead) {
 		return a, false
 	}
+	// CanAny recorded the keys it matched in a new request context: not ctx.
 	return access{own: !core.HasGranted(c.Request.Context(), perm.Key(e.Read))}, true
 }
 

@@ -21,7 +21,8 @@ if (props.preset) Object.assign(filter, filterQuery(props.preset))
 const query = () => ({ ...filterQuery(filter), kind: kind.value })
 
 const list = useList<WeightEvent>(keyListApi(), '/events', query(), { pageSize: 50 })
-const needsAccount = computed(() => !seesAllAccounts() && !list.filters.account_id)
+const allAccounts = seesAllAccounts()
+const needsAccount = computed(() => !allAccounts && !list.filters.account_id)
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
 const models = computed(() => modelCandidates(list.items.value))
 

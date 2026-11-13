@@ -61,9 +61,8 @@ const KINDS: Record<string, Kind> = {
   },
   groups: {
     rows(_req, who, mine) {
-      const named = !mine && !hasPerm(who, 'group:read') ? scopeGroups(who) : null
-      if (named && !named.length) return denied('group:read')
-      const rows = mine ? myGroups(who.id) : named ? groups.filter((g) => named.includes(g.id)) : groups
+      const rows = groupRows(who, mine)
+      if (!rows) return denied('group:read')
       return rows.map((g) => ({ id: g.id, name: g.name, status: g.status }))
     }
   },
@@ -115,9 +114,17 @@ const KINDS: Record<string, Kind> = {
   }
 }
 
-/** The groups the caller's own scopes name (group/G, group/G/account/X; core PermissionSet.ScopeGroups). */
-function scopeGroups(who: Identity): number[] {
-  return who.permissions.map((k) => parsePermission(k)?.scope.group ?? 0).filter((g) => g > 0)
+/**
+ * The groups a lookup lists: every one to group:read; the caller's usable ones
+ * to `mine` and to account:group:bind alone; otherwise those its own scopes
+ * name (group/G, group/G/account/X; core PermissionSet.ScopeGroups, Entity.Named),
+ * null (refused) when they name none.
+ */
+function groupRows(who: Identity, mine: boolean) {
+  if (!mine && hasPerm(who, 'group:read')) return groups
+  if (mine || hasPerm(who, 'account:group:bind')) return myGroups(who.id)
+  const named = new Set(who.permissions.map((k) => parsePermission(k)?.scope.group ?? 0).filter((g) => g > 0))
+  return named.size ? groups.filter((g) => named.has(g.id)) : null
 }
 
 /** Reads the parameters as the core does, with its 400s (CONTRACTS §96.1); they come before the permission. */
