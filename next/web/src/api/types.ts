@@ -69,6 +69,10 @@ export interface Role {
   builtin: boolean
   superuser: boolean
   permission_keys?: string[]
+  /** Roles the holders manage: may assign, and may act on users holding (CONTRACTS §15.7, §43.6). */
+  assignable_role_keys?: string[]
+  /** Also every custom role, except the ones the holder itself holds. */
+  assign_custom?: boolean
   user_count?: number
   member_count?: number // deprecated alias
 }

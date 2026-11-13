@@ -674,3 +674,11 @@
 - 影响对象：own 级账号用户（供应商）。原来提交后才 403 的分组、粘贴代理、relay 类型，现在在表单上直接不可操作。编辑账号不再总是带 `group_ids`：没改分组的保存不再触发分组权限检查。
 - 测试：`useAccountCaps.spec`、`AccountEditor.spec`（无 bind 权限分组只读不提交、group_ids 没变不带、无代理管理权限无粘贴 URL、own 且无 relay 时 custom 认证方式置灰、受限设置提示）、`AccountTypePicker.spec`、`AccountBulkDialogs.spec`。
 - 回滚：revert 提交即可，纯前端。
+
+## T77 角色页：role:define、可管理角色编辑、内置角色对非超管只读
+
+- 改动：`Role` 类型补 `assignable_role_keys`、`assign_custom`。角色页 `canDefine = role:define`；`readOnly = !canDefine || 超管角色 || (内置角色 && 非超管)`，只读时不显示保存、重置与“恢复默认/删除”菜单（原来对非超管的内置角色仍显示，点击 403）；有 role:define 的非超管查看内置角色时提示“只有超级管理员能修改”。权限树下新增“可管理角色”（`RoleAssignable.vue`，原“可分配角色”，界面统一称“可管理角色”）：多选全部非超管角色 +“全部自定义角色”开关（提示不含持有者自己持有的角色），说明它同时决定能分配哪些角色、能管理哪些用户，以及分配时被分配角色的权限须在操作者之内。保存时变化部分按需调用 PATCH、PUT permissions、PUT `/roles/:id/assignable {role_keys, assign_custom}`；403 的 `details.missing` / `missing_assignable` / `missing_assign_custom` 在编辑器内列出。新建按钮改为 `v-if="canDefine"`。
+- 偏离：spec 中的快捷按钮“仅本角色”未做（含义不明确，清单可直接勾选本角色）；新建角色时不带可分配清单（建好后在编辑器里设置）。
+- 影响对象：有 role:define 的非超管（内置角色不再出现编辑入口）；超管与可编辑自定义角色的人多了可管理角色编辑。
+- 测试：`RolesView.spec`（非超管查看内置角色只读、超管可编辑、保存发出 PUT assignable 含 assign_custom 且不列超管角色、403 缺项回显、无 role:define 不显示新建与保存）。
+- 回滚：revert 提交即可，纯前端。

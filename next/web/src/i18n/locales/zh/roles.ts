@@ -29,5 +29,13 @@ export default {
   restoreDefaults: '恢复默认',
   restoreConfirm: '将「{name}」的名称、描述和核心权限恢复为内置默认值？插件权限保持不变。',
   restored: '已恢复默认',
+  builtinLocked: '内置角色的名称、权限和可管理角色只有超级管理员能修改。',
+  assignable: '可管理角色',
+  assignableHint: '持有该角色的人能把这些角色分配给用户，也只能管理所持角色（默认的 user 除外）都在这份清单里的用户。分配时还要求被分配角色的权限不超出操作者自己的权限。',
+  assignCustom: '全部自定义角色',
+  assignCustomHint: '包括以后新建的自定义角色，但不含持有者自己持有的角色。',
+  missingPermissions: '缺少权限：{keys}',
+  missingAssignable: '缺少可管理角色：{keys}',
+  missingAssignCustom: '你自己没有“全部自定义角色”',
   selectRole: '请在左侧选择一个角色'
 }

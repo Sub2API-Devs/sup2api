@@ -29,5 +29,13 @@ export default {
   restoreDefaults: 'Restore defaults',
   restoreConfirm: 'Restore the name, description and core permissions of "{name}" to the built-in defaults? Plugin permissions are kept.',
   restored: 'Defaults restored',
+  builtinLocked: 'Only the super admin can change the name, permissions and managed roles of a built-in role.',
+  assignable: 'Managed roles',
+  assignableHint: 'Holders of this role can assign these roles to users, and can only manage users whose roles (besides the default user) are all in this list. Assigning a role also requires its permissions to be within your own.',
+  assignCustom: 'All custom roles',
+  assignCustomHint: 'Includes custom roles created later, but not the roles the holder holds itself.',
+  missingPermissions: 'Missing permissions: {keys}',
+  missingAssignable: 'Missing managed roles: {keys}',
+  missingAssignCustom: 'You do not have "all custom roles" yourself',
   selectRole: 'Select a role on the left'
 }
