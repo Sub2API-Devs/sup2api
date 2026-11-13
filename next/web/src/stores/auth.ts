@@ -34,7 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
     return hasDynamic(perm)
   }
 
-  /** `has` for keys that come from data (route meta, plugin manifests, server responses). */
+  /** `has` for keys that come from data (plugin manifests, server responses, the plugin bridge). */
   function hasDynamic(perm: string | readonly string[] | undefined | null): boolean {
     if (!perm || (Array.isArray(perm) && perm.length === 0)) return true
     if (me.value?.superuser) return true

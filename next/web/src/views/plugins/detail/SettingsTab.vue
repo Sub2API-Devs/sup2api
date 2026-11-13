@@ -7,6 +7,7 @@ import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { settingsFieldErrors, type PluginSettings } from '../pluginUtil'
+import { P } from '@/generated/permissions'
 
 // Plugin settings rendered from the plugin's JSON Schema in the settings
 // layout (one SSettingsGroup per ui:section, one SSettingRow per field).
@@ -22,7 +23,8 @@ const emit = defineEmits<{ (e: 'saved'): void }>()
 const SETTINGS_ERROR_CODES = { reenter: 'plugins.settings.reenter' }
 const { t } = useI18n()
 const auth = useAuthStore()
-const canManage = computed(() => auth.hasDynamic(['plugin:manage', ...(props.settings.permission ? [props.settings.permission] : [])]))
+// The plugin names its own settings permission.
+const canManage = computed(() => auth.has(P.PluginManage) || (!!props.settings.permission && auth.hasDynamic(props.settings.permission)))
 
 const values = ref<Record<string, any>>({})
 const loaded = ref('')

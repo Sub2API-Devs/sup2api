@@ -11,9 +11,9 @@ import (
 // PermissionsTS renders the core permission catalog as the console's
 // next/web/src/generated/permissions.ts (`sub2api permissions-ts`;
 // TestGeneratedPermissionsTS keeps the checked-in file in step): a constant
-// per key, the scopable actions and their former own-level aliases, each key's flags, soft dependencies and
-// description, the key types and the role key pattern. The output is
-// already in the console's prettier style.
+// per key, the scopable actions and their former own-level aliases, each
+// key's flags, soft dependencies and description, the key types and the
+// role key pattern. The output is already in the console's prettier style.
 func PermissionsTS() string {
 	var b strings.Builder
 	w := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
@@ -49,6 +49,8 @@ func PermissionsTS() string {
 	w("")
 	w("/** The former own-level key of each scopable action: a deprecated alias of <action>:own, still in /me (CONTRACTS §21). */")
 	w("export const LEGACY_OWN = {")
+	// Every scopable action has an alias (TestPermissionsTSNames): an empty
+	// one would read as no permission at all, which auth.has grants.
 	for i, p := range scopable {
 		w("  %s: %s%s", tsString(string(p.key)), tsString(perm.LegacyOwnKey(p.key)), comma(i, len(scopable)))
 	}
@@ -93,7 +95,7 @@ func PermissionsTS() string {
 	w("}")
 	w("")
 	w("/** A custom role's key (authz roleKeyRe). */")
-	w("export const ROLE_KEY_PATTERN = /%s/", roleKeyRe.String())
+	w("export const ROLE_KEY_PATTERN = /%s/", strings.ReplaceAll(roleKeyRe.String(), "/", `\/`))
 	return b.String()
 }
 
@@ -135,7 +137,7 @@ func tsString(s string) string {
 	if strings.Contains(s, "'") && !strings.Contains(s, `"`) {
 		q = `"`
 	}
-	r := strings.NewReplacer(`\`, `\\`, q, `\`+q, "\n", `\n`)
+	r := strings.NewReplacer(`\`, `\\`, q, `\`+q, "\n", `\n`, "\r", `\r`, "\t", `\t`)
 	return q + r.Replace(s) + q
 }
 

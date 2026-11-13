@@ -3,6 +3,7 @@ package authz
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,12 +33,16 @@ func TestGeneratedPermissionsTS(t *testing.T) {
 func TestPermissionsTSNames(t *testing.T) {
 	t.Parallel()
 	seen := map[string]bool{}
+	ident := regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 	for _, p := range listedPerms() {
 		n := tsName(p.key)
-		if seen[n] {
-			t.Errorf("constant name %s is taken twice", n)
+		if seen[n] || !ident.MatchString(n) {
+			t.Errorf("constant name %s of %s is taken twice or not an identifier", n, p.key)
 		}
 		seen[n] = true
+		if perm.ScopeType(p.key) != "" && perm.LegacyOwnKey(p.key) == "" {
+			t.Errorf("scopable %s has no former own-level alias", p.key)
+		}
 	}
 	for in, want := range map[string]string{"plugin:grant:db_schema_unconfined": "PluginGrantDbSchemaUnconfined", "self:plugin_ui": "SelfPluginUi"} {
 		if got := tsName(perm.Key(in)); got != want {
@@ -47,7 +52,7 @@ func TestPermissionsTSNames(t *testing.T) {
 	if got := tsString("it's"); got != `"it's"` {
 		t.Errorf("tsString = %s", got)
 	}
-	if got := tsString(`a'b"c\`); got != `'a\'b"c\\'` {
+	if got := tsString("a'b\"c\\\t"); got != `'a\'b"c\\\t'` {
 		t.Errorf("tsString = %s", got)
 	}
 	if !strings.Contains(PermissionsTS(), "ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]{1,49}$/") {

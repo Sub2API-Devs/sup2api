@@ -31,7 +31,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const CCGatewaySettings = defineAsyncComponent(() => import('@/views/ccgateway/CCGatewayView.vue'))
-const isCCGatewaySettings = computed(() => hasCoreSettings(key.value, (p) => auth.hasDynamic(p)) && status.value !== 'awaiting_consent')
+const isCCGatewaySettings = computed(() => hasCoreSettings(key.value, (p) => auth.has(p)) && status.value !== 'awaiting_consent')
 
 const key = computed(() => String(route.params.key))
 const detail = ref<PluginDetail | null>(null)

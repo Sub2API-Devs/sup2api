@@ -1133,7 +1133,7 @@
   - golden 测试 `TestGeneratedPermissionsTS` 要求生成物与目录一致；`UPDATE_GOLDEN=1` 时重写文件。
   - 前端：
     - `auth.has(perm: PermRef | readonly PermRef[])` 与 `v-permission` 改为类型化，实现不变。
-    - 新增 `auth.hasDynamic(string | readonly string[])`，给服务端或插件提供的 key 用：插件桥 `permissions.has/any`、同意页的必需权限、插件设置权限、插件设置入口。
+    - 新增 `auth.hasDynamic(string | readonly string[])`，给服务端或插件提供的 key 用：插件桥 `permissions.has/any`、同意页里服务端给出的必需权限、插件 manifest 声明的设置权限。代码里写死的 key 一律走类型化的 `has`（含 `pluginUtil` 的回调与同意页的 `P.PluginGrant*`）。
     - 路由 meta `perm`、设置页 `Page.perm`、实体查找的 `permissions` 改为 `PermRef`。
     - `useOwnership` 的 `ACCOUNT_KEYS`、`PROXY_KEYS`、`ACCOUNT_FIELD_KEYS` 与 `entities.ts` 的 `OWN_OR_ALL` 改为引用生成常量（`P` 与 `LEGACY_OWN`），导出名与取值不变。
     - `quoteSubjects` 改用 `P`；`RolesView` 的角色 key 正则改用 `ROLE_KEY_PATTERN`。

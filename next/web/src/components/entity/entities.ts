@@ -2,7 +2,7 @@
 // Each is one description: where it is looked up, how it shows, who may look
 // it up. A new entity is a new entry here; the picker does not change.
 
-import { LEGACY_OWN, P, type PermRef } from '@/generated/permissions'
+import { LEGACY_OWN, P, type PermRef, type ScopableKey } from '@/generated/permissions'
 
 export type EntityKind = 'user' | 'group' | 'api_key' | 'account' | 'model' | 'proxy'
 
@@ -26,7 +26,7 @@ export interface EntityDescriptor {
   scopes?: Record<string, { kind: EntityKind; note: string }>
 }
 
-const OWN_OR_ALL = (read: typeof P.AccountRead | typeof P.ProxyRead): PermRef[] => [read, LEGACY_OWN[read]]
+const OWN_OR_ALL = (read: ScopableKey): PermRef[] => [read, LEGACY_OWN[read]]
 
 export const ENTITIES: Record<EntityKind, EntityDescriptor> = {
   user: { path: 'users', icon: 'user', label: 'entity.kind.user', numeric: true, permissions: ['user:read'] },
