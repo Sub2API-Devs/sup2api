@@ -65,6 +65,7 @@
 | 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`） | 角色管理者、供应商 | R1–R8 |
 | 23 | 启动时自检路由表与菜单（不一致拒绝启动）；控制台权限目录由服务端生成 | 运维、开发 | T68（7698df4d65）、T69（bb27dc839f） |
 | 24 | 控制台：X-Authz-Version 与 403 触发重新取权限；用户页、角色页、同意页只给可管理的对象；仪表盘账号状态卡片；财务区“余额流水”菜单；iframe 插件可查本插件权限 | 控制台用户 | T74–T83 |
+| 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级 | 插件管理者 | 期 4 收尾 F1 |
 
 被后续任务取代、不再成立的中间口径：T10/T57 的 sessionOnly（S3 删除，改为二次验证）；T11 的明文回显拒绝访问密钥（S3 改为二次验证）；T33/FU5 的“不能作用于自己 / 超管自作用豁免”（FU6 改为可管理角色口径）；T41 的带密钥 schema 一律拒绝 `$ref`（FU4 支持本地引用）；own/all 成对 key（R1–R7 改为范围）。
 
@@ -155,7 +156,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 ### 6. 待用户决定（期 4 整合审查提出，未改）
 
-1. **插件升级授权的两条路径规则不同**：第三方插件升级的同意页里，来自 `defaultRoles`/`inheritFrom` 的需同意授予（敏感、或给 user、自定义角色）只要 `plugin:install` + 二次验证就能批准；内置插件同一授予在插件页确认要 `role:define` + 能修改每个角色（内置角色只有超管）。可以统一为严的（同意页对需同意的计划授予也跑 `checkRolesGrantable`，admin 不能再批这类升级）或宽的（确认只要 `plugin:install`）。
+1. **已定（期 4 收尾 F1，统一为严的）**：插件升级授权的两条路径规则不同：第三方插件升级的同意页里，来自 `defaultRoles`/`inheritFrom` 的需同意授予（敏感、或给 user、自定义角色）只要 `plugin:install` + 二次验证就能批准；内置插件同一授予在插件页确认要 `role:define` + 能修改每个角色（内置角色只有超管）。可以统一为严的（同意页对需同意的计划授予也跑 `checkRolesGrantable`，admin 不能再批这类升级）或宽的（确认只要 `plugin:install`）。→ 同意页对需同意的计划授予也跑 `checkRolesGrantable`，见“期 4 收尾”。
 2. **`apikey:self:manage` 没有 step-up 标记**，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。
 3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。
 4. **访问密钥的新建与修改**仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
@@ -1386,3 +1387,14 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - **其他**：e2e `guardTestVersion` 改为 0.2.9-test（与 guard overlay 一致）；`PLUGIN-CODEX.md` 补 0.1.4；mock 的明文回显、删除用户、插件上传/市场安装/同意也走二次验证；二次验证弹窗补 `host.install` 文案（R0 新增的 scope 原来显示原文）；期 4 条目按任务组重排并标注被后续任务改写的地方；R2a 与资源范围发布说明补托管部署的回滚步骤。
 - 审查确认无问题的：proof 绑定（用户、会话或密钥、scope、`METHOD path`）与一次性消费；无验证器时失败收紧；`X-Verify-Proof` 不转发给插件；`Restrict`/`Implies` 不会让密钥宽于用户；`Router.Self` 与 `withSelf` 只给有效用户；`KeyAllowed`、`sessionOnly`、`SelfConfirmation` 已删干净；0102/0103 在生产形态数据上可执行且可重跑；T84 版本与测试包版本一致。
 - 留给用户决定（未改）：见文首“发布说明”第 6 节“待用户决定”。
+
+## 期 4 收尾（发布说明第 6 节待决定项 1、2、4、5）
+
+### F1 插件升级授权统一为严的规则（产品性收紧，待决定 1）
+
+- 改动：`plugin/install/consent.go` `upgradeRoleGrants`（原 `autoRoleGrants`）。操作者在同意页批准升级时，按 `planRoleGrants` 算出本次同意会做的授予，其中需要同意的（`needs_consent`：敏感，或授予对象不是内置 `admin`/`operator`/`supplier`）的每个目标角色都要过 `checkRolesGrantable`（`role:define` + `PermissionCatalog.CanGrantToRoles`：内置角色只有超管能改，自定义角色须在可分配清单内且不是自己持有的），与 `role-grants/confirm` 同一函数；请求里显式指定、已由 `checkRoleGrantRights` 查过的角色不再重复查。不需要同意的授予、首次安装、自动沿用与系统同意不变。失败 403，事务回滚，版本仍为 `awaiting_consent`。
+- 控制台：同意页（`ConsentView`）在升级时，若列出的需同意授予里有调用者不能指定的角色（`useNameableRoles`，与插件页确认按钮同一规则），禁用“确认升级”并提示是哪些角色；在上面把该权限改授给自己能指定的角色后，默认授予退出列表即可提交。
+- 测试：install `TestUpgradeConsentNeedsRightsOverTheRoles`（真实 authz `CanGrantToRoles`：非超管 admin 批准带敏感权限给内置 admin 的升级 → 403 且版本仍待同意；超管成功并授予）、`TestUpgradeRoleGrantsNeedConsent`（无 `role:define` 403、角色不可改 403、只查需同意的角色）；web `ConsentView.spec`（升级时非超管被拦、改授角色后放行、首次安装不受限、超管放行）。
+- 影响对象：只有 `plugin:install`（及 `role:define`）的非超管管理员，不能再批准把需同意授予给内置角色的第三方插件升级，由超管批准，或改授给自己可管理的自定义角色。
+- 回滚：revert 该提交（前后端同一提交）。无迁移。
+

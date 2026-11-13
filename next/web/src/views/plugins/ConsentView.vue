@@ -18,6 +18,7 @@ import type { HPRow } from './consent/hostPermission'
 import { useConsentLabels } from './consent/hostPermission'
 import { useOptionalT } from '@/composables/optionalText'
 import { useNewPermissionRoles } from './consent/newPermissionRoles'
+import { useAssignableRoles } from '@/composables/useAssignableRoles'
 import NewRoleGrants from './consent/NewRoleGrants.vue'
 import { P } from '@/generated/permissions'
 
@@ -40,6 +41,8 @@ const showMissing = ref(false)
 
 const checked = reactive<Record<string, boolean>>({})
 const permissionRoles = useNewPermissionRoles(review)
+const managedRoles = useAssignableRoles()
+const roleName = (key: string) => lt(managedRoles.get(key)?.name) || key
 /** The default grants, less those of permissions given other roles here (their choice is shown with them). */
 const shownRoleGrants = computed(() => {
   const changed = new Set(Object.keys(permissionRoles.payload()).map((k) => `plugin.${key.value}:${k}`))
@@ -103,8 +106,19 @@ function toggle(row: HPRow, v: boolean) {
 const missingRequired = computed(() => rows.value.filter((r) => !r.optional && !checked[r.id]))
 const blockedByPermission = computed(() => rows.value.filter((r) => !r.optional && !r.allowed))
 const signatureOk = computed(() => review.value?.signature_status === 'valid')
-const canSubmit = computed(() => !!review.value && review.value.host_compat_ok !== false && blockedByPermission.value.length === 0)
 const isUpgrade = computed(() => !!review.value?.diff)
+/**
+ * An upgrade's grants that need consent go only to roles the caller may name
+ * (the server's checkRolesGrantable, as confirming held-back grants): the
+ * roles of such grants it may not name. Giving a permission other roles
+ * above takes its default grants out of the list.
+ */
+const blockedRoles = computed(() =>
+  isUpgrade.value ? [...new Set(shownRoleGrants.value.filter((g) => g.needs_consent && !permissionRoles.canName(g.role)).map((g) => g.role))] : []
+)
+const canSubmit = computed(
+  () => !!review.value && review.value.host_compat_ok !== false && blockedByPermission.value.length === 0 && blockedRoles.value.length === 0
+)
 const { colon, hpLabel } = useConsentLabels()
 
 function sigLabel(s: string | undefined): string {
@@ -284,6 +298,9 @@ onMounted(load)
           <p v-if="!review.host_compat_ok" class="text-red-600 dark:text-red-400">{{ t('plugins.consent.incompatibleTitle') }}</p>
           <p v-else-if="blockedByPermission.length" class="text-orange-700 dark:text-orange-300">
             {{ t('plugins.consent.blockedByPermission', { list: blockedByPermission.map((x) => hpLabel(x.id)).join(', ') }) }}
+          </p>
+          <p v-else-if="blockedRoles.length" class="text-orange-700 dark:text-orange-300" data-testid="role-grants-blocked">
+            {{ t('plugins.consent.roleGrantsBlocked', { list: blockedRoles.map(roleName).join(t('plugins.listSep')) }) }}
           </p>
           <p v-else-if="missingRequired.length" class="text-gray-600 dark:text-gray-300">
             {{ t('plugins.consent.stillRequired', { n: missingRequired.length }) }}

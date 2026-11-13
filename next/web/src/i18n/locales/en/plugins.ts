@@ -241,6 +241,7 @@ export default {
     needPermission: 'Requires {perm}, which you do not have.',
     auto: 'Automatic',
     missingRequired: 'These permissions are required by the plugin: {list}. Tick them or reject the installation.',
+    roleGrantsBlocked: 'This upgrade gives grants that need confirmation to roles you cannot change: {list}. Give those permissions other roles above, or ask someone who can change these roles to confirm (built-in roles only the super admin can change).',
     blockedByPermission: 'You cannot grant required permissions: {list}. Ask an administrator with the needed permission.',
     stillRequired: '{n} required permission(s) still need to be ticked.',
     approve: 'Approve & install',

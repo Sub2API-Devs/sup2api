@@ -241,6 +241,7 @@ export default {
     needPermission: '需要 {perm} 权限，你没有该权限。',
     auto: '自动',
     missingRequired: '以下权限是插件必需的：{list}。请勾选，或拒绝安装。',
+    roleGrantsBlocked: '这个升级把需要确认的授予给了你不能修改的角色：{list}。可以在上面改掉对应权限的授予角色，或请能修改这些角色的人确认（内置角色只有超级管理员能改）。',
     blockedByPermission: '你无法授予必需的权限：{list}。请联系拥有相应权限的管理员。',
     stillRequired: '还有 {n} 项必需权限未勾选。',
     approve: '确认并安装',

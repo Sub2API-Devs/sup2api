@@ -53,5 +53,5 @@ export function useNewPermissionRoles(review: Ref<PluginReview | null>) {
   /** new_permission_roles of the consent: the changed permissions only. */
   const payload = () => Object.fromEntries(perms.value.filter(changed).map((p) => [p.key, selected(p)]))
 
-  return { choices, perms, selected, changed, dropsDefaults, toggle, payload }
+  return { choices, canName: selectable, perms, selected, changed, dropsDefaults, toggle, payload }
 }

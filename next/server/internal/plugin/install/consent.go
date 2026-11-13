@@ -240,11 +240,12 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req, existing); err != nil {
+	named, err := s.checkRoleGrantRights(ctx, tx, actorID, m, req, existing)
+	if err != nil {
 		return nil, err
 	}
 	roles := roleGrants(m, req, existing)
-	syncM, roles, err := s.autoRoleGrants(ctx, tx, actorID, key, version, c, existing, roles, auto)
+	syncM, roles, err := s.upgradeRoleGrants(ctx, tx, actorID, key, version, c, existing, roles, named, auto)
 	if err != nil {
 		return nil, err
 	}
@@ -320,20 +321,28 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 	return s.consent(ctx, key, version, req, actorID, false)
 }
 
-// autoRoleGrants applies the upgrade role grant rule (rolegrants.go) to a
-// consent nobody gave (auto: a carried-over upgrade; or the system's, for a
-// built-in plugin): it fails with errRoleGrantsNeedConsent when a grant needs
-// consent, except for the system, whose such grants are withheld for review,
-// and audits the rest. It returns the manifest and roles to sync with, which
-// grant exactly the planned grants made now (withholdGrants).
-func (s *Service) autoRoleGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version string, c *consentable, existing map[string]bool, roles map[string][]string, auto bool) (*manifest.Manifest, map[string][]string, error) {
+// upgradeRoleGrants applies the upgrade role grant rule (rolegrants.go).
+// An operator's consent makes the grants that need consent only when it
+// may name every role they go to, as confirming withheld grants needs
+// (checkRolesGrantable; the roles the request named, checked already, are
+// not checked again). A consent nobody gave (auto: a carried-over
+// upgrade; or the system's, for a built-in plugin) fails with
+// errRoleGrantsNeedConsent when a grant needs consent, except for the
+// system, whose such grants are withheld for review, and audits the rest.
+// It returns the manifest and roles to sync with, which for a consent
+// nobody gave grant exactly the planned grants made now (withholdGrants).
+func (s *Service) upgradeRoleGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version string, c *consentable, existing map[string]bool, roles map[string][]string, named []string, auto bool) (*manifest.Manifest, map[string][]string, error) {
 	m := c.manifest
-	if !c.upgrade || !(auto || isSystem(ctx)) {
+	if !c.upgrade {
 		return m, roles, nil
 	}
 	plan, err := planRoleGrants(ctx, tx, m, existing, roles)
 	if err != nil {
 		return nil, nil, err
+	}
+	if !auto && !isSystem(ctx) {
+		unchecked := slices.DeleteFunc(consentRoles(plan), func(r string) bool { return slices.Contains(named, r) })
+		return m, roles, s.checkRolesGrantable(ctx, tx, actorID, unchecked)
 	}
 	if !isSystem(ctx) && needConsent(plan) {
 		return nil, nil, errRoleGrantsNeedConsent
@@ -447,13 +456,14 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 // operator's own rights, on its assignable list and not held by it unless
 // it is the super admin, never a super admin role). The new permissions
 // themselves need not be held. Manifest defaultRoles are the catalog's own
-// defaults and need nothing. Only permissions the catalog does not have yet
+// defaults and need nothing here (an upgrade's grants that need consent are
+// checked by upgradeRoleGrants). Only permissions the catalog does not have yet
 // are handed out (authz SyncPlugin), so an upgrade adding none needs nothing
 // even with roles named - carrying a running plugin forward must not
-// require role:define.
-func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest, existing map[string]bool) error {
+// require role:define. It returns the roles it checked.
+func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest, existing map[string]bool) ([]string, error) {
 	if err := checkNamedRolesExist(ctx, tx, req); err != nil {
-		return err
+		return nil, err
 	}
 	var roles []string
 	for _, up := range m.UserPermissions {
@@ -461,7 +471,7 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 			roles = append(roles, named...)
 		}
 	}
-	return s.checkRolesGrantable(ctx, tx, actorID, roles)
+	return roles, s.checkRolesGrantable(ctx, tx, actorID, roles)
 }
 
 // checkRolesGrantable verifies the operator may hand plugin permissions to

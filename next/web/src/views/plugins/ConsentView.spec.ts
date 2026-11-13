@@ -177,6 +177,39 @@ describe('plugin consent page', () => {
     expect(w.find('[data-testid="role-grants-need-consent"]').exists()).toBe(true)
   })
 
+  it('on an upgrade, approves grants that need consent only for whoever may name their roles', async () => {
+    const grants = [
+      { permission: 'plugin.demo:demo.read', role: 'admin', sensitive: true, via: 'default', needs_consent: true },
+      { permission: 'plugin.demo:demo.read', role: 'operator', sensitive: false, via: 'default', needs_consent: false }
+    ]
+    const upgrade = review({
+      user_permissions: [perm('demo.read', { default_roles: ['admin', 'operator'] })],
+      host_permissions: [{ id: 'storage.read', risk: 'low' }],
+      diff: { added: [], widened: [], removed: [] } as never,
+      new_role_grants: grants as never,
+      role_grants_need_consent: true
+    })
+    const approve = (w: ReturnType<typeof render>) => (w.get('[data-testid="consent-approve"]').element as HTMLButtonElement).disabled
+    // The super admin may name any role.
+    const ok = render(upgrade)
+    await flushPromises()
+    expect(approve(ok)).toBe(false)
+    expect(ok.find('[data-testid="role-grants-blocked"]').exists()).toBe(false)
+    // A non-super admin may not change the built-in admin role: blocked, and told which role.
+    mocks.superuser = false
+    const w = render(upgrade)
+    await flushPromises()
+    expect(approve(w)).toBe(true)
+    expect(w.get('[data-testid="role-grants-blocked"]').text()).toContain('管理员')
+    // Giving the permission a role it may name instead takes the default grants out.
+    await roleBox(w, 'demo.read', 'auditor').setValue(true)
+    expect(approve(w)).toBe(false)
+    // A first install is not held to it (the server checks upgrades only).
+    const first = render({ ...upgrade, diff: null })
+    await flushPromises()
+    expect(approve(first)).toBe(false)
+  })
+
   it('keeps a scope on the grant it belongs to', async () => {
     const w = render(review({ host_permissions: [{ id: 'storage.read', risk: 'low', scope: { domains: ['a.example'] } } as never] }))
     await flushPromises()
