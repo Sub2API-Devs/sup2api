@@ -128,7 +128,7 @@ async function save() {
       if (!Array.isArray(fresh.permission_keys)) fresh.permission_keys = [...perms.value]
       selectRole(fresh, true)
     }
-    if (auth.me?.roles.includes(r.key)) auth.loadMe().catch(() => undefined)
+    if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
   } catch (e) {
     notifyError(e)
   } finally {
@@ -216,7 +216,7 @@ async function restoreDefaults() {
     await loadRoles()
     const fresh = roles.value.find((x) => x.id === r.id)
     if (fresh) selectRole(fresh, true)
-    if (auth.me?.roles.includes(r.key)) auth.loadMe().catch(() => undefined)
+    if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
   } catch (e) {
     notifyError(e)
   } finally {

@@ -28,6 +28,8 @@ export interface Me {
   roles: string[]
   permissions: string[]
   superuser: boolean
+  /** authz version the permissions were read at (CONTRACTS §5.2). */
+  authz_version?: number
 }
 
 export interface MenuItem {

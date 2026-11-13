@@ -7,6 +7,7 @@ import type { SidebarViewKey } from '@/layouts/sidebarViews'
 import { CCGATEWAY_PAGE, isPluginKey, pluginSettingsPath } from '@/views/plugins/pluginUtil'
 import { settingsLanding } from '@/views/settings/settingsNav'
 import { closeLayersOnBack } from './layerBack'
+import { deniedRoute } from './guard'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -159,11 +160,5 @@ router.beforeEach(async (to) => {
   }
   const moved = to.meta.movedTo?.(to)
   if (moved) return moved
-  if (to.meta.perm && !auth.has(to.meta.perm)) {
-    const redirect = to.meta.deniedRedirect?.(to)
-    if (redirect) return redirect
-    const perm = Array.isArray(to.meta.perm) ? to.meta.perm.join(' / ') : to.meta.perm
-    return { path: '/forbidden', query: { perm } }
-  }
-  return true
+  return deniedRoute(to) ?? true
 })

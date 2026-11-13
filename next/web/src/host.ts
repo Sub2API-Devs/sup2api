@@ -5,6 +5,7 @@ import { confirm, toast } from '@sub2api/ui'
 import { addMessages, currentLocale, i18n, lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import { watchPermissions } from '@/stores/authzWatch'
 import { hostComponents } from '@/components/plugin/hostComponents'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
 
@@ -21,7 +22,8 @@ export function setupHost(router: Router) {
       if (reason === 'expired') auth.sessionExpired = true
       const cur = router.currentRoute.value
       if (!cur.meta.public) router.replace({ path: '/login', query: { redirect: cur.fullPath } })
-    }
+    },
+    ...watchPermissions(router)
   })
   // A login lasts while it is used: renew the access token before it expires.
   startKeepAlive()

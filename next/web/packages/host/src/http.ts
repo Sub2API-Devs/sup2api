@@ -180,7 +180,17 @@ export interface HttpConfig {
   /** Called when the session is gone (refresh failed). */
   onUnauthenticated?: (reason: UnauthenticatedReason) => void
   locale?: () => string
+  /**
+   * Called with X-Authz-Version of every authenticated response (CONTRACTS
+   * §5.2): the authz version the answering node knew when it authenticated.
+   */
+  onAuthzVersion?: (version: number) => void
+  /** Called with the error of every 403 response before it is thrown. */
+  onForbidden?: (error: ApiError) => void
 }
+
+/** Response header carrying the node's authz version (CONTRACTS §5.2). */
+export const AUTHZ_VERSION_HEADER = 'X-Authz-Version'
 
 const config: HttpConfig = { baseURL: API_BASE }
 
@@ -414,11 +424,16 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     }
   }
 
+  const version = Number(res.headers.get(AUTHZ_VERSION_HEADER) || NaN)
+  if (Number.isFinite(version)) config.onAuthzVersion?.(version)
+
   if (res.status === 204) { opts.onSuccessHeaders?.(new Headers(res.headers)); return null }
   const json = await safeJSON(res)
   if (!res.ok) {
     const body: ApiErrorBody = json?.error || { code: statusCode(res.status), message: res.statusText || 'request failed' }
-    throw new ApiError(res.status, body)
+    const err = new ApiError(res.status, body)
+    if (res.status === 403) config.onForbidden?.(err)
+    throw err
   }
   opts.onSuccessHeaders?.(new Headers(res.headers))
   return json

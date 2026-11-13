@@ -657,3 +657,12 @@
 - 测试：authz `TestAssignCustomExcludesOwnRole`（lead 对自己与其他 lead 403、对 staff 持有者与普通用户放行、不能分配 lead、不能建带 `assign_custom` 的角色、不能把自己列进清单、对另一个通配角色的持有者 403；超管照常；超管把 lead 按名字列进 lead 的清单后，lead 管理自己与其他 lead 并可分配 lead）；`TestSetRoleAssignable` 的展开结果不再含角色自己。
 - 影响对象：带 `assign_custom` 的自定义角色的持有者，经管理接口作用于自己或同角色的其他持有者、分配该角色、交出 `assign_custom` 由成功变为 403。内置 admin（`assign_custom`，不持有自定义角色）不受影响；admin 同时持有自定义角色时，该角色同样不被它的通配覆盖。生产库没有自定义角色，无影响。前端 `GET /me/assignable-roles` 随之不再列出自己的角色。无迁移。CONTRACTS §43.6、§15.7 角色对象、FU2 段同步。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+# 期 4
+
+## T74 B1 前端：X-Authz-Version 与 403 触发重新取权限
+
+- 改动：`@sub2api/host` 的 `configureHttp` 增加 `onAuthzVersion(v)`（每个带 `X-Authz-Version` 的响应，含错误响应）与 `onForbidden(e)`（每个 403）。控制台 `stores/authzWatch.ts` 是唯一的判断处：头值大于 `max(me.authz_version, 已触发过的头值)` 时防抖 1 秒重取一次（多节点下同一版本至多一次，版本变小或相等不取）；`permission_denied` 的 403 节流 10 秒取一次（二次验证等其他 403 不算）；还没有 `/me` 时都不取。`auth.refreshPermissions()` = `loadMe()` + `refreshShell()`（插件模块与菜单），并发调用共用一次；完成后 `permissionsEpoch` 加一，当前路由按 `router/guard.ts` 的 `deniedRoute`（与导航守卫同一判断）不再允许时跳走（/forbidden 或该页的 deniedRedirect）。角色页改自己的角色后调 `refreshPermissions`（原来只 `loadMe`）。
+- 影响对象：控制台用户。权限被他人改动后，下一个带更大版本头的响应约 1 秒后刷新菜单与按钮；失去当前页权限时离开该页。跨域部署需服务端 `Access-Control-Expose-Headers: X-Authz-Version`，否则头读不到、只剩 403 触发。
+- 测试：`http.spec`（头与 403 钩子）、`authzWatch.spec`（版本变大只刷新一次、变小不刷新、403 节流、降权后当前页跳到 /forbidden）。
+- 回滚：revert 提交即可，纯前端。

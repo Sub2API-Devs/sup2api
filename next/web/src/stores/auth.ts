@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api, session } from '@sub2api/host'
 import type { Me, TokenResponse } from '@/api/types'
 import { getPasskey } from '@/utils/webauthn'
+import { refreshShell } from './app'
 
 export const useAuthStore = defineStore('auth', () => {
   const me = ref<Me | null>(null)
@@ -11,6 +12,12 @@ export const useAuthStore = defineStore('auth', () => {
   /** The session ended because it could not be renewed (login page shows a notice). */
   const sessionExpired = ref(false)
   const permSet = computed(() => new Set(me.value?.permissions || []))
+  /**
+   * Bumped after every refreshPermissions: whatever is derived from the
+   * caller's permissions (assignable roles, the current route) is checked again.
+   */
+  const permissionsEpoch = ref(0)
+  let refreshingPermissions: Promise<void> | null = null
 
   session.onChange((s) => {
     loggedIn.value = !!s
@@ -57,6 +64,21 @@ export const useAuthStore = defineStore('auth', () => {
     return me.value
   }
 
+  /**
+   * Reloads what depends on the caller's permissions: /me, then the plugin
+   * modules and menus. Concurrent callers share one reload.
+   */
+  function refreshPermissions(): Promise<void> {
+    refreshingPermissions ??= (async () => {
+      await loadMe()
+      await refreshShell()
+      permissionsEpoch.value++
+    })().finally(() => {
+      refreshingPermissions = null
+    })
+    return refreshingPermissions
+  }
+
   async function refreshBalance() {
     if (!has('balance:self:read')) return
     try {
@@ -77,5 +99,19 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired.value = false
   }
 
-  return { me, balance, loggedIn, sessionExpired, has, login, loginSecondFactor, loginWithPasskey, loadMe, refreshBalance, logout }
+  return {
+    me,
+    balance,
+    loggedIn,
+    sessionExpired,
+    permissionsEpoch,
+    has,
+    login,
+    loginSecondFactor,
+    loginWithPasskey,
+    loadMe,
+    refreshPermissions,
+    refreshBalance,
+    logout
+  }
 })

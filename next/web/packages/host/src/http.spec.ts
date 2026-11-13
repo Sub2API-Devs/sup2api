@@ -219,3 +219,22 @@ describe('keep-alive', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 })
+
+describe('authz hooks', () => {
+  it('reports X-Authz-Version of success and error responses, and 403 errors', async () => {
+    const onAuthzVersion = vi.fn()
+    const onForbidden = vi.fn()
+    http.configureHttp({ onAuthzVersion, onForbidden })
+    stubFetch((url) => {
+      if (url.endsWith('/ok')) return json(1, 200, { 'X-Authz-Version': '7' })
+      if (url.endsWith('/denied')) return json({ code: 'permission_denied', message: 'no' }, 403, { 'X-Authz-Version': '8' })
+      return json(1)
+    })
+    await http.api.get('/ok')
+    await expect(http.api.get('/denied')).rejects.toMatchObject({ status: 403, code: 'permission_denied' })
+    await http.api.get('/plain')
+    expect(onAuthzVersion.mock.calls).toEqual([[7], [8]])
+    expect(onForbidden).toHaveBeenCalledTimes(1)
+    expect(onForbidden.mock.calls[0][0]).toBeInstanceOf(http.ApiError)
+  })
+})
