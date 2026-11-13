@@ -131,6 +131,11 @@ func (s *Service) runtimesOn(ctx context.Context) bool {
 	return e == nil && cfg.AccountRuntimes
 }
 
+// maxOpenDrafts is how many open drafts one user may hold (W1-F13); a
+// settings administrator is not limited. A draft takes a runtime container
+// until it is adopted, deleted or swept.
+const maxOpenDrafts = 3
+
 type draftInput struct {
 	ProxyID *int64 `json:"proxy_id"`
 }
@@ -154,9 +159,19 @@ func (s *Service) draftCreate(c *gin.Context) {
 	}
 	uid, _ := core.UserID(ctx)
 	key := newDraftKey()
-	if _, e := s.DB.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by)
-		VALUES($1, $2, NULLIF($3::bigint, 0))`, key, in.ProxyID, uid); e != nil {
-		httpapi.Fail(c, e)
+	// The count and the insert are one statement, without a lock: two
+	// concurrent requests may leave one draft over the limit.
+	limit := maxOpenDrafts
+	if draftScope(ctx) == nil {
+		limit = 0 // no limit
+	}
+	tag, e := s.DB.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by)
+		SELECT $1, $2, NULLIF($3::bigint, 0)
+		WHERE $4::int = 0 OR (SELECT count(*) FROM ccgateway_runtimes
+			WHERE created_by = $3 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL) < $4`,
+		key, in.ProxyID, uid, limit)
+	if e != nil || tag.RowsAffected() == 0 {
+		httpapi.Fail(c, errOr(e, core.ErrTooManyDrafts))
 		return
 	}
 	s.Kick(key)

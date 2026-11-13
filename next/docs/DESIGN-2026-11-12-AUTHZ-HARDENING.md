@@ -404,3 +404,10 @@
   - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
 - 回滚：revert 这个提交即可；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截。
 
+## T64 W1-F13：草稿与预备容器的单用户数量上限
+
+- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。无迁移。CONTRACTS §49.9 路由表同步。
+- 偏离任务说明：草稿的计数条件多了 `for_account IS NULL`，重新授权的草稿（每个账号至多一个、只能对自己能改的账号发起）不占新建账号的名额，否则同时给 3 个账号重新授权的人建不了新账号。ccgateway 类型的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），它同时计入草稿数。
+- 影响对象：没有 `settings:manage` 的人（含只有 `account:create` 的运营）同时打开的新建草稿不能超过 3 个，own 级用户（`account:own:create`）同时进行的预备容器不能超过 3 个；此前不限，每个草稿占一个运行环境容器直到被采用、删除或被清理任务回收（草稿超时、预备容器 2 小时过期）。控制台一次只开一个草稿，关闭编辑器会删除，正常使用不会碰到；碰到时删掉一个或等回收后即可再建。并发请求下可能多出 1 个（已接受）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+

@@ -372,3 +372,51 @@ func TestSweepStopsWhenTheDraftQueryFails(t *testing.T) {
 		t.Fatalf("the sweep continued after its query failed: %v", seen[before:])
 	}
 }
+
+// W1-F13: a user holds at most maxOpenDrafts open drafts; deleting one makes
+// room, and a settings administrator is not limited.
+func TestDraftCreateLimit(t *testing.T) {
+	ctl := newFakeController(t)
+	f := newRuntimeFixture(t, ctl.ServeHTTP)
+	owner, other, admin := f.user("owner@x"), f.user("other@x"), f.user("admin@x")
+	f.auth.keys[owner] = []string{"account:own:create"}
+	f.auth.keys[other] = []string{"account:create"}
+	f.auth.keys[admin] = []string{"settings:manage"}
+	create := func(uid int64) (int, map[string]any) {
+		t.Helper()
+		return f.request(uid, "POST", "/system/ccgateway/drafts", `{}`)
+	}
+	var keys []string
+	for i := range maxOpenDrafts {
+		code, out := create(owner)
+		if code != 201 {
+			t.Fatalf("draft %d: %d %v", i+1, code, out)
+		}
+		keys = append(keys, data(out)["key"].(string))
+	}
+	code, out := create(owner)
+	if errBody, _ := out["error"].(map[string]any); code != http.StatusTooManyRequests || errBody["code"] != "too_many_drafts" {
+		t.Fatalf("draft over the limit: %d %v", code, out)
+	}
+	// The limit is per user, and account:create without settings:manage is
+	// limited like the own level.
+	for i := range maxOpenDrafts {
+		if code, out := create(other); code != 201 {
+			t.Fatalf("another user's draft %d: %d %v", i+1, code, out)
+		}
+	}
+	if code, _ := create(other); code != http.StatusTooManyRequests {
+		t.Fatalf("another user over the limit: %d", code)
+	}
+	if code, out := f.request(owner, "DELETE", "/system/ccgateway/drafts/"+keys[0], ""); code != 204 {
+		t.Fatalf("delete: %d %v", code, out)
+	}
+	if code, out := create(owner); code != 201 {
+		t.Fatalf("draft after a delete: %d %v", code, out)
+	}
+	for i := range maxOpenDrafts + 2 {
+		if code, out := create(admin); code != 201 {
+			t.Fatalf("administrator's draft %d: %d %v", i+1, code, out)
+		}
+	}
+}

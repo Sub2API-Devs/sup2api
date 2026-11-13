@@ -3,6 +3,9 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -430,6 +433,53 @@ func TestAccountPatchSetsSchedulingAndLimits(t *testing.T) {
 		plugin.patch = func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch { return patch }
 		if code, out = e.do("PATCH", "/accounts/"+strconv.FormatInt(id, 10), map[string]any{"name": "limited-3"}); code < 400 {
 			t.Fatalf("invalid patch accepted: %d %v", code, out)
+		}
+	}
+}
+
+// W1-F13: an own-level user holds at most maxOpenDrafts open preparations;
+// repeating an idempotency key is not a new one, cancelling makes room, and
+// the full account:create is not limited.
+func TestAccountPreparationLimit(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e, _, _, _ := preparationFixtureWith(t, authz)
+	admin := e.uid
+	alice := e.addUser("alice-preparation@example.test")
+	// The fixture type takes a custom upstream: an own-level caller needs
+	// account:relay to prepare it.
+	authz.keys[admin], authz.keys[alice] = adminKeys, append(slices.Clone(supplierKeys), "account:relay")
+	prepare := func(uid int64, idem string) (int, map[string]any) {
+		t.Helper()
+		return e.doAs(uid, "POST", "/account-types/fixture/managed/preparations", map[string]any{"idempotency_key": idem})
+	}
+	var keys []string
+	for i := range maxOpenDrafts {
+		code, out := prepare(alice, fmt.Sprintf("attempt-%d", i))
+		if code != 201 {
+			t.Fatalf("preparation %d: %d %v", i+1, code, out)
+		}
+		keys = append(keys, data(out)["key"].(string))
+	}
+	code, out := prepare(alice, "one-more")
+	if errBody, _ := out["error"].(map[string]any); code != http.StatusTooManyRequests || errBody["code"] != "too_many_drafts" {
+		t.Fatalf("preparation over the limit: %d %v", code, out)
+	}
+	if code, out = prepare(alice, ""); code != http.StatusTooManyRequests {
+		t.Fatalf("preparation without a key over the limit: %d %v", code, out)
+	}
+	// A retry of an open preparation is the same preparation.
+	if code, out = prepare(alice, "attempt-0"); code != 201 || data(out)["key"] != keys[0] {
+		t.Fatalf("idempotent retry at the limit: %d %v", code, out)
+	}
+	if code, out = e.doAs(alice, "DELETE", "/account-preparations/"+keys[0], nil); code != 204 {
+		t.Fatalf("cancel: %d %v", code, out)
+	}
+	if code, out = prepare(alice, "one-more"); code != 201 {
+		t.Fatalf("preparation after a cancel: %d %v", code, out)
+	}
+	for i := range maxOpenDrafts + 2 {
+		if code, out = prepare(admin, fmt.Sprintf("admin-%d", i)); code != 201 {
+			t.Fatalf("administrator's preparation %d: %d %v", i+1, code, out)
 		}
 	}
 }
