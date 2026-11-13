@@ -17,8 +17,8 @@ import (
 
 // The permission catalog across a plugin's life, with the real catalog and
 // defaults applier: keys start disabled and turn active at enable; a key
-// registered at consent for an upgrade which then fails stays (active, the
-// plugin still runs) until the next activation syncs the catalog again.
+// registered at consent for an upgrade which then fails stays until another
+// version is activated; every activation leaves all keys active.
 func TestPermissionCatalogFollowsRollouts(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -38,6 +38,8 @@ func TestPermissionCatalogFollowsRollouts(t *testing.T) {
 	}
 	version := func(v string, perms ...string) (*manifest.Manifest, []byte) {
 		m := h.manifest(v)
+		// The real defaults applier prunes grants the manifest does not request.
+		m.HostPermissions = []manifest.HostPermission{{ID: "db.schema"}}
 		m.UserPermissions = nil
 		for _, p := range perms {
 			m.UserPermissions = append(m.UserPermissions, manifest.UserPermission{Key: p})
@@ -101,11 +103,56 @@ func TestPermissionCatalogFollowsRollouts(t *testing.T) {
 		t.Fatalf("after failed upgrade: audit:read %q, want it kept", got)
 	}
 
-	// The next activation syncs the catalog with the version which runs.
+	// Activating another version syncs the catalog with its manifest.
 	m3, p3 := version("3.0.0", "rules:read")
 	registrytest.AddVersion(t, h.db, m3, p3)
 	upgrade(n, "3.0.0", rollout.PhaseActive)
 	if a, r := status("audit:read"), status("rules:read"); a != "" || r != "active" {
 		t.Fatalf("after the next activation: audit:read %q, rules:read %q", a, r)
+	}
+
+	// A version approved while the plugin is disabled registers its key
+	// disabled; enabling (the version which ran) turns every key on.
+	off, err := n.ctl.Disable(ctx, h.key, 0, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "disable completes", func() bool { phase, _, _ := h.rolloutRow(off.ID); return phase == rollout.PhaseActive })
+	if got := status("rules:read"); got != "disabled" {
+		t.Fatalf("after disable: rules:read %q", got)
+	}
+	m4, p4 := version("4.0.0", "rules:read", "stats:read")
+	registrytest.AddVersion(t, h.db, m4, p4)
+	sync(m3, m4)
+	if got := status("stats:read"); got != "disabled" {
+		t.Fatalf("approved while disabled: stats:read %q", got)
+	}
+	on, err := n.ctl.Enable(ctx, h.key, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "second enable completes", func() bool { phase, _, _ := h.rolloutRow(on.ID); return phase == rollout.PhaseActive })
+	if r, s := status("rules:read"), status("stats:read"); r != "active" || s != "active" {
+		t.Fatalf("after re-enable: rules:read %q, stats:read %q", r, s)
+	}
+
+	// A version approved between the commit and the end of an enable sees
+	// status "enabling": its key is inserted disabled and the upgrade to that
+	// version turns it on.
+	m5, p5 := version("5.0.0", "rules:read", "stats:read", "export:run")
+	registrytest.AddVersion(t, h.db, m5, p5)
+	if _, err := h.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'enabling' WHERE key = $1`, h.key); err != nil {
+		t.Fatal(err)
+	}
+	sync(m3, m5)
+	if _, err := h.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'enabled' WHERE key = $1`, h.key); err != nil {
+		t.Fatal(err)
+	}
+	if got := status("export:run"); got != "disabled" {
+		t.Fatalf("approved while enabling: export:run %q", got)
+	}
+	upgrade(n, "5.0.0", rollout.PhaseActive)
+	if got := status("export:run"); got != "active" {
+		t.Fatalf("after the upgrade: export:run %q", got)
 	}
 }

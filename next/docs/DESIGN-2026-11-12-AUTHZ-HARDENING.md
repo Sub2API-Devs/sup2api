@@ -370,9 +370,10 @@
 
 ## T61 W4-P8、W4-P9：新插件权限的状态跟随插件运行状态
 
-- 改动：`authz.SyncPlugin` 新登记的插件权限不再一律 `active`：插件此刻在运行（`plugins.status` 为 `enabled` 或 `upgrading`，与 `plugin/install` 的常量一致，`TestSyncPluginNewPermissionFollowsPluginStatus` 防漂移）时为 `active`，否则为 `disabled`；已存在的行不动。启用时的 `SetPluginActive(true)`、禁用时的 `SetPluginActive(false)` 不变。W4-P9 不改行为：`rollout.finishFailed` 的升级分支加注释说明“同意新版本时登记的新 key 保留到下次激活”，`TestPermissionCatalogFollowsRollouts` 用真实的目录与 `DefaultsApplier` 锁定整个生命周期。无迁移。CONTRACTS §4 同步。
-- 影响对象：首次安装（尚未启用）和禁用期间同意新版本时登记的权限，此前立即 `active`（持有它的角色在插件没运行时就“有”这个权限，`/me` 的权限列表、可分配判断会把它算进去），现在到启用那一刻才生效；角色授予照常写入，启用后无需重新勾选。运行中升级登记的新权限仍立即 `active`。存量行不追溯：已经是 `active` 的未运行插件的权限保持原状，直到该插件下一次禁用或启用。升级失败后残留的新 key 在运行中的插件上是 `active` 的（没有任何路由检查它），下次激活时按实际运行版本的 manifest 清理。
-- 回滚：revert 这个提交即可，无迁移；回滚后已登记为 `disabled` 的权限在插件下次启用时变为 `active`。
+- 改动：`authz.SyncPlugin` 新登记的插件权限不再一律 `active`：插件此刻在运行（`plugins.status` 为 `enabled` 或 `upgrading`，与 `plugin/install` 的常量一致，`TestSyncPluginNewPermissionFollowsPluginStatus` 逐个状态验证，防漂移）时为 `active`，否则为 `disabled`；已存在的行不动。禁用时的 `SetPluginActive(false)` 不变；`rollout` 的 `commit` 现在每次激活都调用 `SetPluginActive(true)`（此前只在启用时），见下面的偏离说明。W4-P9 不改行为：`rollout.finishFailed` 的升级分支加注释说明“同意新版本时登记的新 key 保留到激活另一个版本”，`TestPermissionCatalogFollowsRollouts` 用真实的目录与 `DefaultsApplier` 锁定整个生命周期。无迁移。CONTRACTS §4 同步。
+- 偏离任务说明（审查发现）：启用的 rollout 提交之后、完成之前，节点已经在服务，但 `plugins.status` 仍是 `enabling`；这段时间同意新版本（内置插件在滚动部署时会自动发生）登记的新 key 是 `disabled`，而升级提交原来不调用 `SetPluginActive`，这些 key 会一直停在 `disabled`，直到手工禁用再启用。因此升级提交也置 `active`（`plugin/rollout/coordinator.go`，超出任务列出的文件范围）。
+- 影响对象：首次安装（尚未启用）和禁用期间同意新版本时登记的权限，此前立即 `active`（持有它的角色在插件没运行时就“有”这个权限，`/me` 的权限列表与 `Can` 会把它算进去），现在到启用那一刻才生效；角色授予照常写入，启用后无需重新勾选。授予视角（角色的权限清单、能否授予与分配的判断）本来就包含 `disabled` 的插件权限，不变。运行中升级登记的新权限仍立即 `active`。存量行不追溯：已经是 `active` 的未运行插件的权限保持原状，直到该插件下一次禁用或启用。升级失败后残留的新 key 没有任何路由检查，激活另一个版本时按那个版本的 manifest 清理；只是禁用再启用同一版本不会清理。
+- 回滚：revert 这两个提交即可，无迁移；回滚后已登记为 `disabled` 的权限在插件下次启用时变为 `active`。
 
 ## T62 W4-A4：插件任务手动运行统一要求 task:run（产品性收紧）
 

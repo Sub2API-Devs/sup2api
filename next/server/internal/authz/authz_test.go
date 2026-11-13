@@ -843,14 +843,6 @@ func TestSyncPluginNewPermissionFollowsPluginStatus(t *testing.T) {
 	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
 	running := []string{install.StatusEnabled, install.StatusUpgrading}
-	for _, st := range running {
-		if !strings.Contains(runningPluginStatuses, "'"+st+"'") {
-			t.Fatalf("runningPluginStatuses %s misses %q", runningPluginStatuses, st)
-		}
-	}
-	if n := strings.Count(runningPluginStatuses, ","); n != len(running)-1 {
-		t.Fatalf("runningPluginStatuses %s lists more than %v", runningPluginStatuses, running)
-	}
 	sync := func(key string, defs ...core.PermissionDef) {
 		t.Helper()
 		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, key, defs, nil) }); err != nil {
