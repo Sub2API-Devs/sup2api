@@ -56,7 +56,7 @@
 | 6 | 分配角色受“可管理角色”清单约束，撤销同样；作用于用户 = 操作权限 + 目标的非默认角色都在清单内且权限 ⊆ 操作者（含本人；不能禁用、删除自己，不能撤销自己的超管） | 用户管理者 | T13–T15、T56、FU6（fec1698e1b）、期 3 整合审查（ec3b6de722） |
 | 7 | 内置角色（含新增的 supplier）声明化，名称、权限、清单只允许超管改；admin 默认不含超管专属权限（存量收回）；operator 按白名单 | admin、operator | T50–T55 |
 | 8 | 访问密钥 = 用户实时权限 ∩ 密钥权限，可勾任何权限（含插件权限、`self:*`）；只有管理访问密钥本身与登录会话只允许会话 | 访问密钥 | S2（826eab1049）、S3（9bde44b7f2）、S4（5835a65248） |
-| 9 | 高危操作每次二次验证（通行密钥 / 2FA / 无强方式时密码，proof 5 分钟一次性，绑定用户、会话或密钥、scope、`METHOD path`）：明文回显、超管移交、本人改密码/邮箱/2FA/通行密钥（含开启 2FA）、改他人密码、清他人 2FA、删用户、插件上传/安装/同意/确认暂缓授予、发布者、核心升级与更新源、ccgateway 装码与拨号；改密码等接口不再收当前密码字段 | 控制台用户、脚本 | S1（dd8f66cbb9）、S3、S5（5626d84d91）、R0（8927849f66）、p4-review |
+| 9 | 高危操作每次二次验证（通行密钥 / 2FA / 无强方式时密码，proof 5 分钟一次性，绑定用户、会话或密钥、scope、`METHOD path`）：明文回显、超管移交、本人改密码/邮箱/2FA/通行密钥（含开启 2FA）、改他人密码、清他人 2FA、删用户、插件上传/安装/同意/确认暂缓授予、发布者、核心升级与更新源、ccgateway 装码与拨号、ccgateway 镜像上传（创建时验证一次，同一上传的分片、续传、取消与装载凭上传 id 延续）；改密码等接口不再收当前密码字段 | 控制台用户、脚本 | S1（dd8f66cbb9）、S3、S5（5626d84d91）、R0（8927849f66）、p4-review、发布前待定项 |
 | 10 | 插件代理：访问密钥按插件权限放行；空权限路由拒绝；按账号操作的插件路由要求调用者对这些账号有范围（只有插件权限的角色由 200 变 403） | 插件路由调用者 | T22、T24、T25、S4 |
 | 11 | own（受限档）规则：只在变化时校验分组、解绑也要权限、掩码回填改地址须重新输入、不能恢复被管理员禁用的账号、草稿与预备容器每人 3 个 | 供应商 | T28、T29、T63、T64 |
 | 12 | 代理拨号守卫（内网地址在拨号时拒绝）；他人账号在用的 own 代理不能改连接字段 | 代理属主 | T30、T31、FU1 |
@@ -72,7 +72,7 @@
 | 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`）；8 个旧 own key 由迁移改写为 `<action>:own` 后删除，不再作为别名接受，`/me` 只输出规范 key | 角色管理者、供应商、脚本 | R1–R8、发布前去兼容层 |
 | 23 | 启动时自检路由表与菜单（不一致拒绝启动）；控制台权限目录由服务端生成 | 运维、开发 | T68（7698df4d65）、T69（bb27dc839f） |
 | 24 | 控制台：X-Authz-Version 与 403 触发重新取权限；用户页、角色页、同意页只给可管理的对象；仪表盘账号状态卡片；财务区“余额流水”菜单；iframe 插件可查本插件权限 | 控制台用户 | T74–T83 |
-| 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级 | 插件管理者 | 期 4 收尾 F1 |
+| 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级。已授予且范围覆盖的宿主权限沿用，不按风险要 `plugin:grant:*`（非超管 admin 不再被已有的 `ui.native` 等挡住） | 插件管理者 | 期 4 收尾 F1、发布前待定项 |
 | 26 | 目录 `apikey:self:manage` 带 `stepUp`、`sensitive` 标记（明文回显本来就每次二次验证，访问密钥选择器现在会提示）；启动自检要求挂 StepUp 的路由引用带 stepUp 标记的权限或在豁免表中 | 访问密钥、开发 | 期 4 收尾 F2 |
 | 27 | 新建、修改访问密钥每次二次验证 `self.access_key.write`（取代只要密码），删除不要 | 控制台用户、脚本 | 期 4 收尾 F3 |
 | 28 | 超管去掉自己最后一个强因素（清自己的安全设置、无通行密钥时关 2FA、无 2FA 时删唯一通行密钥）要密码 + 第二因素 | 超管 | 期 4 收尾 F4 |
@@ -168,7 +168,8 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 6）。（已定：生产核查无安装记录，不需处理）
 4. **已定（期 4 收尾 F3，改为二次验证）**：访问密钥的新建与修改仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
 5. **已定（期 4 收尾 F4，要密码 + 第二因素）**：超管只用一个因素就能清掉自己的全部因素（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
-6. **ccgateway 运行时镜像上传**（`runtime/uploads*` 创建与分片）不要二次验证，只有 `load` 要；DECISIONS 原文是“安装与上传”。
+6. **已定（发布前待定项，按协调者推荐）**：ccgateway 运行时镜像上传（`runtime/uploads*` 创建与分片）此前不要二次验证，只有 `load` 要；DECISIONS 原文是“安装与上传”。→ 创建时验证一次，同一上传的其余请求凭上传 id 延续（二次验证会话），见文末“发布前待定项”。
+7. **已定（发布前待定项）**：插件升级同意页把已授予的宿主权限当新授予提交，缺 `plugin:grant:critical` 的非超管 admin 被已有的 `ui.native` 挡住。→ 已授予且范围覆盖的沿用，只有新增、扩大的需要同意，见文末。
 
 ### 7. 契约索引
 
@@ -1465,6 +1466,26 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 | 插件 `hostCompat`/UI 3.15 下限 0.1.286 | 改为 0.1.285 |
 | moderation 原生 UI 在没有 `hasAction` 时回落到 `account:own:read` | 删除：0.12.0 的 `hostCompat` 是 `>=0.1.285`，宿主都有 `hasAction` |
 
-保留：核心在 `SUB2API_UPDATER_TOKEN_FILE` 未设置时不带令牌（develop 既有，线上网关会设置）；`web/packages/ui/README.md` 给插件作者的 `hasAction?.() ?? has('account:own:read')` 回退（只对 UI 3.14 及更早的控制台、即 0.1.284 及更早的核心有效）。
+保留：核心在 `SUB2API_UPDATER_TOKEN_FILE` 未设置时不带令牌（develop 既有，线上网关会设置）。`web/packages/ui/README.md` 与 `@sub2api/host` 注释里给插件作者的 `hasAction?.() ?? has('account:own:read')` 回退建议已删除（发布前待定项一并清理），用到 `hasAction`/`scope` 的插件声明 `hostUICompat ^3.15`。
 
 测试：`migrations` `TestAuthzHardeningMigration`（从 0096 形态的库：旧 own 授予（角色与密钥、冗余与非冗余）、`role:manage`（admin、operator、自定义角色）、超管专属权限的改写，审计条数、版本只推进一次，重跑不变，启动同步后不回退）、`TestAuthzHardeningNeedsOneSuperAdmin`（0 个、2 个超管报错且库不变）、`TestAuthzHardeningRollback`（反向脚本后表结构与 0096 一致、旧键授予恢复、再升级结果相同）；authz `TestRetiredOwnKeysReachTheSameRows`（每个用户、每把密钥在 8 个动作上可达的账号、代理与 0.1.284 的 own 语义一致）。
+
+## 发布前待定项（2026-11-13，发布说明第 6 节第 6、7 项）
+
+### ccgateway 镜像上传：一次验证覆盖一次上传
+
+- 设计：上传由创建、多个分片（16 MiB 一片，最多 4 GiB）、续传查询、取消与装载组成，每片验证不可用。改为**二次验证会话**：创建（`POST runtime/uploads`，挂 `StepUp(host.install)`）消耗 proof 后，处理函数用控制器返回的上传 id 打开会话 `ccgateway.upload/<id>`（`httpapi.OpenStepUpSession`）；`PUT`/`GET`/`DELETE runtime/uploads/:id` 与 `POST runtime/uploads/:id/load` 用 `Router.StepUpSession(host.install, …)` 注册，在权限检查之后凭上传 id 延续会话，不再各自要 proof。会话绑定用户 + 登录会话（JWT `fam`）或访问密钥 id + scope + 名字，存在 `auth_flows`（`purpose = step_up_session`，token 为这几项拼起来的哈希，别人的请求算出的行不存在），每次延续顺延 1 小时（`core.StepUpSessionIdle`，控制器清理一小时未动的上传）；过期、不存在或换了用户、会话、密钥 403 `verification_expired`。
+- 为什么这样最简且不弱于此前：每次装载仍对应一次验证（创建时，而不是装载时）；此前任何有 `settings:manage` 的调用者都能不经验证创建上传、往别人的上传里写分片，现在只有打开会话的那个会话或密钥能写；不改控制器、不加表、不要前端额外传令牌（上传 id 本身就是会话名，跨节点由 `auth_flows` 共享）。会话打开失败时控制器上的空上传由它自己一小时后清理。
+- 核心：`core.StepUpSessions`（iam 实现，`OpenStepUpSession` 要求本请求已在该 scope 上消耗 proof）、`core.ErrVerificationExpired`；`httpapi.Router.StepUpSession`、`httpapi.OpenStepUpSession`、`RouteSpec.StepUpSession`；`testutil.StepUpPassed`/`StepUpRefused` 同时实现会话接口。
+- 控制台：`views/ccgateway/imageUpload.ts` 的创建请求经 HTTP 层弹出 StepUpDialog，去掉它自己的 60 秒超时（验证要等用户，核心对控制器调用另有 30 秒上限）；分片仍用 fetch，403 `verification_expired` 不重试，放弃这次上传；装载不再弹验证。`auth.errors.verification_expired` 文案。
+- 测试：httpapi `TestStepUpSession`（打开前 403、非 StepUp 路由打开 500、打开后延续、别的会话名 403、无权限 403、没有会话实现 500、RouteSpec 记录）；iam `TestStepUpSessions`（真实 `auth_flows`：无 proof 不能打开；打开后同一密钥可多次延续、有效期顺延到一小时后；别的上传、别的密钥、登录会话 403；过期 403）；ccgateway `TestHostInstallRoutesStepUp`（创建要 proof，分片、查询、取消、装载要会话）、`TestControllerUploadSession`（创建按控制器返回的 id 打开会话，别的上传 id 装载 403）；web `imageUpload.spec`（创建只带调用方的 signal、过期会话的分片不重试）。
+- 影响对象：用控制台上传镜像的人在开始上传时验证一次，装载时不再验证；脚本要在创建时带 `host.install` 的 proof，并用同一个会话或密钥完成整次上传。
+- 回滚：revert 该提交。无迁移（`auth_flows` 里的会话行到期由 `createFlow` 顺带清理）。
+
+### 插件升级沿用已授予的宿主权限
+
+- 改动：`plugin/install/consent.go` `decide`：升级时当前授予已覆盖本次范围（`status = granted` 且 `ScopeWithin`）的宿主权限一律标 `carried`，请求里显式列出（同意页以前总是列出）也一样，`checkGrantRights` 因此不再按风险要 `plugin:grant:high`/`plugin:grant:critical`；新增、扩大（diff 的 added/widened）的仍按新授予检查。审计 `plugin.consent` 的 `decisions[].carried` 如实记录。
+- 控制台：`ConsentView` 用 review 的 `current_status` 与 diff 判断沿用（`HPRow.carried`）：默认勾选、不因缺少授予权限而禁用、标“已授予，沿用”，提交时不放进 `grants`（服务端沿用）；可选的取消勾选即拒绝。
+- 测试：install `TestDecideCarriesCoveredGrants`（列出或不列都沿用、扩大的不沿用、首次安装不沿用）、`TestInstallConsentUpgradeUninstall`（只有 `plugin:grant:high` 的操作者在升级同意里显式列出已授予的 `ui.native` 通过）；web `ConsentView.spec`（缺 `plugin:grant:critical` 时沿用 `ui.native` 可提交，只提交扩大的 `http.client`，拒绝未授予的可选项）。
+- 影响对象：只有 `plugin:install`（+ `plugin:grant:high`）的非超管管理员可以批准不新增关键宿主权限的升级。
+- 回滚：revert 该提交（前后端同一提交）。无迁移。

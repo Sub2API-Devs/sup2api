@@ -56,7 +56,7 @@
 | 失败 | HTTP 状态码 + `{"error": {"code": "...", "message": "...", "details": {...}}}` |
 | 字段校验失败 | `invalid_argument`，`details.fields = [{"field","code","message"}]` |
 
-错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`verification_required` 403（缺少或无效的二次验证 proof，`details {scope, context, methods, password_required}`，§80.2，2026-11-13）、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`too_many_drafts` 429（未完成的账号草稿或预备容器达到单用户上限，§49.9）、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随 2026-10 的二次验证一起删除，§3.3；2026-11-13 的新二次验证用 `verification_required`，§80.2。）
+错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`verification_required` 403（缺少或无效的二次验证 proof，`details {scope, context, methods, password_required}`，§80.2，2026-11-13）、`verification_expired` 403（延续的二次验证会话已过期或属于别的用户、会话或密钥，`details {scope}`，重新开始这次操作，§80.2）、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`too_many_drafts` 429（未完成的账号草稿或预备容器达到单用户上限，§49.9）、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随 2026-10 的二次验证一起删除，§3.3；2026-11-13 的新二次验证用 `verification_required`，§80.2。）
 
 ### 3.2 数据格式
 
@@ -224,7 +224,7 @@
 | POST `/plugins/upload`（multipart `file`） | `plugin:install` | → 安装审查信息 `review`（见下） |
 | POST `/plugins/install-from-market` `{source_id, key, version}` | `plugin:install` | → `review` |
 | GET `/plugins/:key/versions/:version/review` | `plugin:read` | 重新获取待确认版本的 `review` |
-| POST `/plugins/:key/versions/:version/consent` `{grants:[{permission, scope?}], denied:[permission], new_permission_roles?:{<本地 key>:[role]}, role_keys_for_new_permissions:[]}`（新权限的角色，省略按 manifest `defaultRoles`，§4） | `plugin:install` + 按风险 `plugin:grant:high`/`plugin:grant:critical`；升级时 `new_role_grants` 里需要同意的授予（`needs_consent`），另需与 `role-grants/confirm` 相同的资格（`role:define` + `CanGrantToRoles` 覆盖这些授予的每个角色，2026-11-13 权限加固期 4 收尾） | 确认授权 |
+| POST `/plugins/:key/versions/:version/consent` `{grants:[{permission, scope?}], denied:[permission], new_permission_roles?:{<本地 key>:[role]}, role_keys_for_new_permissions:[]}`（新权限的角色，省略按 manifest `defaultRoles`，§4） | `plugin:install` + 按风险 `plugin:grant:high`/`plugin:grant:critical`（升级时沿用的已授予宿主权限不要）；升级时 `new_role_grants` 里需要同意的授予（`needs_consent`），另需与 `role-grants/confirm` 相同的资格（`role:define` + `CanGrantToRoles` 覆盖这些授予的每个角色，2026-11-13 权限加固期 4 收尾） | 确认授权 |
 | POST `/plugins/:key/versions/:version/reject` | `plugin:install` | |
 | POST `/plugins/:key/versions/:version/role-grants/confirm`、`/role-grants/reject` | `plugin:install`，另需与同意页显式指定角色相同的资格（`role:define` + `CanGrantToRoles`）；confirm 每次二次验证 `plugin.grant`（与同意页相同，期 4 整合审查），reject 不需要 | 确认（写入）或全部拒绝内置插件自动升级暂缓的角色授予 → `{grants:[RoleGrant], confirmed}`；该版本没有待确认项 404；拒绝的每个 (permission, role) 也清除此前其他版本暂缓的同一授予（2026-11-13 权限加固期 4 P4C、P4CFIX） |
 | POST `/plugins/:key/enable`、`/disable` | `plugin:manage` | 发起发布 → `rollout` |
@@ -251,6 +251,7 @@
 - 插件详情中的钩子统计来自 `core.HookStatsSource`（G），手动执行任务通过 `core.JobTrigger`（H）
 - 发布行为（C2）：Disable 立即提交，返回时状态已是 `disabled`；Enable 优先启用 `active_version`，否则取最新的已批准版本；`plugins` 行删除后，各节点在一次对账内停止实例
 - **内置插件**（`plugins.builtin=true`，本期为 anthropic）：随镜像提供（`SUB2API_BUILTIN_PLUGIN_DIR`，默认 `/opt/sub2api/builtin`），核心启动时在一个节点上（锁 `plugins:builtin`）自动上传、授予全部宿主权限（新插件权限授予 `admin` 角色）、首次安装后启用（**只安装**类的除外，见 §26.8），镜像带新版本时自动升级；管理员禁用后保持禁用。签名密钥由入口脚本通过 `SUB2API_BUILTIN_TRUST_KEY` 始终信任。`DELETE /plugins/:key` 对内置插件返回 403，`details.reason = "builtin"`；列表与详情返回 `builtin` 字段
+- 升级同意时，当前授予已覆盖本次范围的宿主权限沿用原授权（`decide` 标 `carried`，审计 `plugin.consent` 的 `decisions[].carried`），请求里列不列都一样，不需要按风险的 `plugin:grant:high`/`plugin:grant:critical`；只有新增、扩大的才按新授予检查。`review.host_permissions[]` 在升级时带 `current_status`、`current_scope`；同意页把这类权限标为“已授予，沿用”，不当作新授予提交（可选的取消勾选即拒绝），缺少 `plugin:grant:critical` 的非超管 admin 不再被已有的 `ui.native` 等授予挡住（2026-11-13 发布前）。
 - 升级包的宿主权限没有新增或扩大时，上传即沿用原授权（版本直接为 `approved`）；否则进入 `awaiting_consent`，旧版本继续运行。另一个例外（2026-11-13 权限加固期 4 P4C）：新版本新建的插件权限经 `defaultRoles` 或 `inheritFrom` 授予角色时，只要其中有 `sensitive` 权限，或授予对象不是内置 `admin`、`operator`、`supplier`（如 `user`、自定义角色），就不沿用，留在 `awaiting_consent` 由有资格的人在同意页确认（同意者须能修改这些需同意授予的每个目标角色：`role:define` + `CanGrantToRoles`，内置角色只有超管能改，与确认内置插件暂缓授予同一规则；否则 403，版本仍为 `awaiting_consent`；控制台只对能指定全部这些角色的人允许提交，期 4 收尾）；否则沿用并写 `plugin.consent.auto` 审计（`detail`：`version`、`granted`、`pending: []`、`review_required: false`；每条授予照常有 `authz.sync.grant`）。`review` 增加 `new_role_grants: [RoleGrant]`（不覆盖角色时这次同意会做的授予）与 `role_grants_need_consent`；另有 `needs_db_schema_unconfined`（同意会授予 db.schema 且需要 `plugin:grant:db_schema_unconfined`：未启用角色隔离、不是官方发布者，与同意时的检查同一函数）和 `user_permissions[].new`（目录里还没有、这次同意才登记的权限；`new_permission_roles` 只对它们生效）（期 4 T82）。`RoleGrant` = `{version?, permission（完整 key）, role, sensitive, via: default|inherit, needs_consent}`
 - 内置插件自动升级（系统同意，节点就绪与托管升级提交需要版本 `approved`）同样判断，但需要同意的授予不写入，记在 `plugin.consent.auto` 审计的 `pending` 里（`review_required: true`），其余照常写入；插件列表与详情的 `role_grants_to_review: [RoleGrant]` 列出各版本仍待确认的授予（权限与角色仍存在、角色尚未持有，且该版本之后没有 `plugin.role_grants.confirm`/`plugin.role_grants.reject` 审计），由上面的 confirm/reject 处理（两者要求相同资格；只计插件本次安装之后的审计）；自动同意时新建权限一律按计划按名字授予、不走 `inheritFrom`，激活时才新建的权限不授予任何角色（也不继承）；confirm 经权限目录 `GrantPluginPermission` 写入，`authz.sync.grant` 的 `via` 为 `review`
 - 插件设置：GET `/plugins/:key/settings` → `{mode, schema, ui_schema, values, page, component, secret_fields}`（`schema` 在非 schema 模式为 `null`）；PUT 请求体 `{values:{...}}`，整体替换（§15.8）
@@ -4084,7 +4085,7 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 
 全部 `settings:manage`，转发给控制器对应接口，状态码和 `error` 映射为 `details.reason`：
 
-- `POST /system/ccgateway/runtime/uploads` → 控制器 `POST /images/uploads`。
+- `POST /system/ccgateway/runtime/uploads` → 控制器 `POST /images/uploads`。创建要二次验证 `host.install`，同一上传的其余接口凭上传 id 延续这次验证（§80.2 二次验证会话），其他用户、会话或密钥 403 `verification_expired`。
 - `PUT /system/ccgateway/runtime/uploads/:id`（头 `X-CCG-Offset`，请求体 ≤ 64 MiB，流式转发不落盘）→ 控制器 `PUT`；409 时 `details.offset` 为控制器当前偏移。
 - `GET` / `DELETE /system/ccgateway/runtime/uploads/:id`。
 - `POST /system/ccgateway/runtime/uploads/:id/load` `{"role": "app"|"egress"|"controller", "apply": bool}`：控制器加载后取第一个镜像的第一个标签作为引用，没有标签用镜像 id。`apply` 为真时：先把 `images.<role>` 写进配置（审计 `ccgateway.config.update`，`fields: ["images"]`），app / egress 再调 `PUT /runtime/images`；controller 调 `POST /runtime/controller` 并最多等 90 秒健康检查报告新 `controller_image`（失败 503 `controller_unhealthy`，辅助容器已自行回滚）。成功后 Kick 所有运行环境。审计 `ccgateway.runtime.upload`。返回 `{"sha256", "images", "ref", "runtime": <GET runtime 结构>}`。
@@ -7038,8 +7039,10 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `system.update` | POST `/system/upgrades`、升级计划与节点的 recover 操作、`/system/releases/import` | `system:update:execute` / `recover` |
 | `system.update` | PUT `/system/update-source`（更新源决定下一次升级运行的代码；期 4 R0） | `settings:manage` |
 | `self.access_key.write` | POST `/me/access-keys`、PATCH `/me/access-keys/:id`（只允许登录会话；期 4 收尾 F3） | 无（登录会话） |
-| `host.install` | ccgateway：PUT `/system/ccgateway/remote-config`，POST `remote-fingerprint`、`remote-test`、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（会让核心拨号到某台主机或在其上装载、运行代码；remote-config 的其余字段随同一请求保存，也要；上传会话创建与分片、`cleanup`、`purge`、`cli`、读取不要；期 4 R0） | `settings:manage` |
+| `host.install` | ccgateway：PUT `/system/ccgateway/remote-config`，POST `remote-fingerprint`、`remote-test`、`controller/install`、`runtime/install`、`runtime/uploads`（创建镜像上传，打开这次上传的二次验证会话，见下）、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（会让核心拨号到某台主机或在其上装载、运行代码；remote-config 的其余字段随同一请求保存，也要；`cleanup`、`purge`、`cli`、读取不要；期 4 R0）。同一上传的 PUT、GET、DELETE `runtime/uploads/:id` 与 POST `runtime/uploads/:id/load` 不再各自要 proof，凭上传 id 延续创建时打开的会话（2026-11-13 发布前） | `settings:manage` |
 | `superadmin.identity` | 超管经访问密钥修改超管账号本身（§43.6，本请求已消耗过 proof 时不再要） | 路由本身的权限 |
+
+- **二次验证会话**（一次验证覆盖一次由多个请求组成的操作，2026-11-13 发布前，用于 ccgateway 镜像上传）：挂 `StepUp(scope)` 的创建请求消耗 proof 后由处理函数打开会话（`httpapi.OpenStepUpSession(c, name)`，`name` 由操作自己命名、在操作内唯一，镜像上传是 `ccgateway.upload/<upload_id>`）；后续请求用 `Router.StepUpSession(scope, name(c))` 注册，在权限检查之后按名字延续会话，不消耗也不接受 proof。会话绑定用户 + 本次登录会话（JWT `fam`）或访问密钥 id + scope + 名字，存在 `auth_flows`（`purpose = step_up_session`，各节点共用）；每次延续把有效期顺延到 1 小时后（`core.StepUpSessionIdle`，与控制器清理一小时未动的上传一致），过期、名字不存在或换了用户、会话、密钥都 403 `verification_expired`（控制台不弹验证，只提示重新开始；控制台的上传流程据此放弃这次上传）。镜像上传：创建要 proof（控制台的创建请求经 HTTP 层弹出 StepUpDialog，不设自己的超时）；分片、续传查询、取消与装载凭上传 id 延续，所以每次装载都对应创建时的一次验证（此前是装载时验证，上传本身不验证），分片也只有同一会话能写。
 
 PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先校验新密码再消耗 proof。路由级 proof 在处理函数之前消耗，处理函数随后因请求体失败时需重新验证。proof 绑定的是 URL，不含请求体（例如超管移交的目标）。
 
