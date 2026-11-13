@@ -4,6 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -277,10 +279,28 @@ func errorCode(t *testing.T, resp *pluginv1.HTTPResponse) string {
 
 func authHarness(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, newPlugin(), pluginsdktest.Options{
+	h, _ := authHarnessWithIssuer(t)
+	return h
+}
+
+// authHarnessWithIssuer is authHarness with codes exchanged at a fake token
+// endpoint, never the real one; the channel receives each exchange body.
+func authHarnessWithIssuer(t *testing.T) (*pluginsdktest.Harness, <-chan map[string]any) {
+	t.Helper()
+	exchanged := make(chan map[string]any, 4)
+	issuer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		exchanged <- body
+		_, _ = w.Write([]byte(`{"access_token":"at","refresh_token":"rt","expires_in":3600}`))
+	}))
+	t.Cleanup(issuer.Close)
+	p := newPlugin()
+	p.tokenURL = issuer.URL
+	return pluginsdktest.Start(t, p, pluginsdktest.Options{
 		SDK:    []pluginsdk.Option{pluginsdk.WithManifest(manifestRaw)},
 		Grants: []*pluginv1.Grant{{Permission: "kv"}, {Permission: "routes.admin"}},
-	})
+	}), exchanged
 }
 
 // Only the user who started an authorization can exchange its code: to anyone
@@ -306,11 +326,17 @@ func TestAuthExchangeNeedsTheStartingUser(t *testing.T) {
 
 // Whitespace pasted around the code or its state is not a different state.
 func TestAuthExchangeStateIgnoresPastedWhitespace(t *testing.T) {
-	h := authHarness(t)
+	h, exchanged := authHarnessWithIssuer(t)
 	id, state := startAuth(t, h)
 	resp := h.Do("POST", "/auth/exchange", nil, map[string]any{"session_id": id, "code": "  code-1#" + state + " \n"})
-	if errorCode(t, resp) == "state_mismatch" || !sessionStored(t, h, id) {
-		t.Fatalf("padded state = %d %s, session kept %v", resp.GetStatus(), resp.GetBody(), sessionStored(t, h, id))
+	if resp.GetStatus() != 200 {
+		t.Fatalf("padded state = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	if body := <-exchanged; body["code"] != "code-1" || body["state"] != state {
+		t.Fatalf("exchanged %v, want code-1 and state %q", body, state)
+	}
+	if sessionStored(t, h, id) {
+		t.Fatal("the session survived a completed exchange")
 	}
 }
 
