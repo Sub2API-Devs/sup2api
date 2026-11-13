@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // Two-factor authentication: enrolling an authenticator app, the backup codes
-// (shown once) and turning it off. Changes ask for the password, and once it is
-// on, for a code too.
+// (shown once) and turning it off. Enrolling asks for the password; turning
+// it off and new backup codes are step-up operations, verified by the dialog
+// the request brings up.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SCopyButton, SField, SFormModal, SInput, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCopyButton, SField, SFormModal, SInput, confirm, toast } from '@sub2api/ui'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 
 interface Status {
@@ -30,7 +31,7 @@ async function load() {
 }
 onMounted(load)
 
-type Step = 'password' | 'scan' | 'codes' | 'disable' | 'regenerate' | ''
+type Step = 'password' | 'scan' | 'codes' | ''
 const step = ref<Step>('')
 const busy = ref(false)
 const errors = ref<Record<string, string>>({})
@@ -74,16 +75,29 @@ const enable = () =>
     open('codes')
     await load()
   })
-const disable = () =>
-  attempt(async () => {
-    await api.post('/me/two-factor/disable', { password: password.value, code: code.value })
-    open('')
+/** Runs a card action once at a time (a double click would ask for two verifications). */
+async function act(fn: () => Promise<void>) {
+  if (busy.value) return
+  busy.value = true
+  try {
+    await fn()
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    busy.value = false
+  }
+}
+async function disable() {
+  if (!(await confirm({ title: t('me.twoFactor.disable'), message: t('me.twoFactor.disableConfirm'), danger: true }))) return
+  await act(async () => {
+    await api.post('/me/two-factor/disable')
     toast(t('me.twoFactor.disabled'), 'success')
     await load()
   })
+}
 const regenerate = () =>
-  attempt(async () => {
-    const r = await api.post<{ backup_codes: string[] }>('/me/two-factor/backup-codes', { password: password.value, code: code.value })
+  act(async () => {
+    const r = await api.post<{ backup_codes: string[] }>('/me/two-factor/backup-codes')
     backupCodes.value = r.backup_codes
     open('codes')
     await load()
@@ -96,8 +110,8 @@ const regenerate = () =>
       <template v-if="status?.enabled">
         <SBadge tone="success" data-testid="two-factor-on">{{ t('me.twoFactor.on') }}</SBadge>
         <span class="hidden text-xs text-fg-muted sm:inline">{{ t('me.twoFactor.codesLeft', { n: status.backup_codes_left }) }}</span>
-        <SButton size="sm" data-testid="two-factor-regenerate" @click="open('regenerate')">{{ t('me.twoFactor.regenerate') }}</SButton>
-        <SButton size="sm" variant="danger" data-testid="two-factor-disable" @click="open('disable')">{{ t('me.twoFactor.disable') }}</SButton>
+        <SButton size="sm" data-testid="two-factor-regenerate" :disabled="busy" @click="regenerate">{{ t('me.twoFactor.regenerate') }}</SButton>
+        <SButton size="sm" variant="danger" data-testid="two-factor-disable" :disabled="busy" @click="disable">{{ t('me.twoFactor.disable') }}</SButton>
       </template>
       <SButton v-else-if="status" size="sm" variant="primary" icon="shield" data-testid="two-factor-enable" @click="open('password')">{{ t('me.twoFactor.enable') }}</SButton>
     </template>
@@ -128,26 +142,6 @@ const regenerate = () =>
         <li v-for="c in backupCodes" :key="c">{{ c }}</li>
       </ul>
       <template #footer-start><SCopyButton :text="backupText" /></template>
-    </SFormModal>
-
-    <SFormModal
-      :open="step === 'disable' || step === 'regenerate'"
-      :title="step === 'disable' ? t('me.twoFactor.disable') : t('me.twoFactor.regenerate')"
-      width="sm"
-      :loading="busy"
-      :submit-text="step === 'disable' ? t('me.twoFactor.disable') : t('me.twoFactor.regenerate')"
-      :submit-variant="step === 'disable' ? 'danger' : 'primary'"
-      :submit-disabled="!password || !code.trim()"
-      @update:open="close"
-      @submit="step === 'disable' ? disable() : regenerate()"
-    >
-      <SAlert v-if="errors.form" tone="danger" dense>{{ errors.form }}</SAlert>
-      <SField :label="t('me.confirmPassword')" :error="errors.password" required>
-        <SInput v-model="password" type="password" autocomplete="current-password" revealable />
-      </SField>
-      <SField :label="t('auth.login.code')" :hint="t('me.twoFactor.codeHint')" :error="errors.code ? t('auth.login.badCode') : ''" required>
-        <SInput v-model="code" autocomplete="one-time-code" mono :maxlength="11" />
-      </SField>
     </SFormModal>
   </SCard>
 </template>

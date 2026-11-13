@@ -231,6 +231,11 @@ func (s *Service) confirmCode(ctx context.Context, userID int64, code string) er
 	return err
 }
 
+// errStepUpPasskeyFailed is a refused assertion of a signed-in caller: a
+// field error, not the login's 401, which the console would take for an
+// expired session.
+var errStepUpPasskeyFailed = core.InvalidFields(core.FieldError{Field: "credential", Code: "failed", Message: "passkey verification failed"})
+
 var errSecondFactorRequired = core.InvalidFields(core.FieldError{Field: "code", Code: "required", Message: "enter a verification code"})
 
 // BeginStepUpPasskey starts the passkey assertion of a step-up (POST
@@ -293,7 +298,7 @@ func (s *Service) finishStepUpPasskey(ctx context.Context, r *http.Request, user
 	}
 	if err != nil {
 		s.limiter.fail(ctx, "", ip)
-		return errPasskeyFailed
+		return errStepUpPasskeyFailed
 	}
 	raw, err := json.Marshal(used)
 	if err != nil {

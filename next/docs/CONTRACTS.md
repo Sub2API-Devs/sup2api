@@ -6952,7 +6952,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - `GET /me/verify/methods?scope=<scope>` → `{scope, password_required, methods:[{method:"passkey"|"totp"|"password", available, reason?}]}`。`reason`：`not_enrolled`、`access_key`（通行密钥只用于浏览器会话）、`strong_method`（配了通行密钥或 2FA 后不再接受只用密码）。未知 scope 400。
 - **策略**：配了通行密钥或 2FA（TOTP，备份码也算）时只接受这两种；都没配才接受密码。例外 `password_required = true`（`superadmin.transfer`、`self.password.change`）：密码 + 一种第二因素；都没配只验密码。访问密钥只能用 2FA 或（无强方式时）密码。
 - `POST /me/verify/begin {scope}` → `{flow_token, expires_in, options}`：通行密钥断言（要求 UV，只列本人的通行密钥），计入登录 IP 限速与 begin 限速。
-- `POST /me/verify {scope, context, method, password?, code?, flow_token?, credential?}` → `{proof, expires_at, method, scope, context}`。`context` 是要执行的操作 `"METHOD /api/v1/path"`（就是 403 `details.context`，原样回传）。密码计入登录限速，错码计入 2FA 锁定（5 次锁 5 分钟），通行密钥失败计入 IP 限速；方法不可用 400 `fields[{field:"method", code:"unavailable"}]`。写审计 `user.security_verify`（`detail {method, scope, context, via, access_key_id?}`）。
+- `POST /me/verify {scope, context, method, password?, code?, flow_token?, credential?}` → `{proof, expires_at, method, scope, context}`。`context` 是要执行的操作 `"METHOD /api/v1/path"`（就是 403 `details.context`，原样回传）。密码计入登录限速，错码计入 2FA 锁定（5 次锁 5 分钟），通行密钥失败计入 IP 限速，返回 400 `fields[{field:"credential", code:"failed"}]`（不是登录用的 401：控制台会把 401 当作会话过期去刷新）；方法不可用 400 `fields[{field:"method", code:"unavailable"}]`。写审计 `user.security_verify`（`detail {method, scope, context, via, access_key_id?}`）。
 - **proof**：5 分钟、只能用一次，绑定用户 + 本次会话（JWT `fam`）或访问密钥 id + scope + 操作上下文；存在 `auth_flows`（各节点共用，`DELETE … RETURNING` 原子消费，不依赖 Redis）。拿去用于别的 scope、别的操作、别的会话或密钥时被拒并作废；别的用户出示无效。一个请求消费过 proof 后，同一请求里同 scope 的再次检查直接通过。
 - **接口**：路由视图 `Router.StepUp(scope)` 在权限检查之后消费 proof（没有权限的调用者不会耗掉 proof）；失败 403 `verification_required`，`details {scope, context, methods, password_required}`，前端据此弹出验证并带 proof 重放一次。
 
@@ -6976,6 +6976,8 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `superadmin.identity` | 超管经访问密钥修改超管账号本身（§43.6，本请求已消耗过 proof 时不再要） | 路由本身的权限 |
 
 PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先校验新密码再消耗 proof。路由级 proof 在处理函数之前消耗，处理函数随后因请求体失败时需重新验证。proof 绑定的是 URL，不含请求体（例如超管移交的目标）。
+
+- **控制台**（期 4 S5）：`@sub2api/host` 的 HTTP 客户端遇到 403 `verification_required` 调 `HttpConfig.onVerificationRequired({scope, context, password_required})`，控制台弹出统一的 StepUpDialog（`components/stepUp/`），拿到 proof 后带 `X-Verify-Proof` 重放原请求一次；用户取消时请求以 `verification_cancelled` 失败（不提示）。重放同样经过 401 续期；请求的 `signal` 中止时验证作废，请求以 AbortError 失败；会话结束（登出、续期失败）时排队中的验证全部取消。页面不自己收密码或验证码，原生插件经宿主 `api` 的请求同样自动处理。权限树对 `step_up` 的权限显示“使用时需二次验证”。
 
 - **接口**（访问密钥管理，只能用登录会话调用）：`GET /me/access-keys`（含 `lost`）、`GET /me/access-keys/permissions`（可选的权限：`self` 模块，然后是自己持有的有效核心与插件权限，每项带 `step_up` 展示标记：使用时需二次验证）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。

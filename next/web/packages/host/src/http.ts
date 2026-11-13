@@ -4,6 +4,8 @@
 //   success  -> {"data": ...}            list -> {"data": [...], "page": {...}}
 //   failure  -> {"error": {code, message, details}}
 // 401 triggers one refresh attempt (POST /auth/refresh) and a retry.
+// 403 verification_required asks onVerificationRequired for a step-up proof
+// and replays the request once with X-Verify-Proof (CONTRACTS §80.2).
 
 import { API_BASE } from './routes'
 
@@ -175,10 +177,28 @@ if (typeof window !== 'undefined') {
  */
 export type UnauthenticatedReason = 'expired' | 'unauthenticated'
 
+/** details of a 403 verification_required: what to verify for (CONTRACTS §80.2). */
+export interface VerificationChallenge {
+  scope: string
+  /** The operation, "METHOD /api/v1/path"; sent back as is with the verification. */
+  context: string
+  password_required?: boolean
+}
+
+/** Error code of a request whose step-up verification the user dismissed. */
+export const VERIFICATION_CANCELLED = 'verification_cancelled'
+
 export interface HttpConfig {
   baseURL: string
   /** Called when the session is gone (refresh failed). */
   onUnauthenticated?: (reason: UnauthenticatedReason) => void
+  /**
+   * Called on 403 verification_required: resolves the proof the request is
+   * replayed with, or null when the user cancels (the request then fails
+   * with VERIFICATION_CANCELLED). `signal` is the request's: once it aborts
+   * the verification is moot. Unset, the 403 is the request's error.
+   */
+  onVerificationRequired?: (challenge: VerificationChallenge, signal?: AbortSignal) => Promise<string | null>
   locale?: () => string
   /**
    * Called with X-Authz-Version of every authenticated response (CONTRACTS
@@ -391,8 +411,8 @@ export function startKeepAlive(): () => void {
 export async function requestRaw(method: string, path: string, opts: RequestOptions = {}): Promise<any> {
   /** Access token carried by the last attempt. */
   let sentToken: string | undefined
-  const doFetch = async (): Promise<Response> => {
-    const headers: Record<string, string> = { Accept: 'application/json', ...(opts.headers || {}) }
+  const doFetch = async (extra?: Record<string, string>): Promise<Response> => {
+    const headers: Record<string, string> = { Accept: 'application/json', ...(opts.headers || {}), ...extra }
     const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData
     let body: BodyInit | undefined
     if (opts.body !== undefined) {
@@ -407,28 +427,39 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     if (sentToken) headers['Authorization'] = 'Bearer ' + sentToken
     const loc = config.locale?.()
     if (loc) headers['Accept-Language'] = loc
-    return fetch(buildURL(path, opts.query), { method, headers, body, signal: opts.signal })
+    const res = await fetch(buildURL(path, opts.query), { method, headers, body, signal: opts.signal })
+    const version = Number(res.headers.get(AUTHZ_VERSION_HEADER) || NaN)
+    if (Number.isFinite(version)) config.onAuthzVersion?.(version)
+    return res
   }
 
-  let res = await doFetch()
-
-  if (res.status === 401 && !opts.anonymous) {
+  /** One attempt, renewing the session once on 401. */
+  const send = async (extra?: Record<string, string>): Promise<Response> => {
+    let res = await doFetch(extra)
+    if (res.status !== 401 || opts.anonymous) return res
     const hadSession = !!session.get()
     const outcome: RefreshOutcome = hadSession ? await refreshSession(sentToken) : 'invalid'
-    if (outcome === 'ok') res = await doFetch()
+    if (outcome === 'ok') res = await doFetch(extra)
     // A network / server error while refreshing keeps the session: the next
     // request tries again instead of signing the user out.
     if (res.status === 401 && outcome !== 'error') {
       session.clear()
       config.onUnauthenticated?.(hadSession ? 'expired' : 'unauthenticated')
     }
+    return res
   }
 
-  const version = Number(res.headers.get(AUTHZ_VERSION_HEADER) || NaN)
-  if (Number.isFinite(version)) config.onAuthzVersion?.(version)
-
+  let res = await send()
+  let json = await safeJSON(res)
+  const challenge = verificationChallenge(res, json, opts)
+  if (challenge) {
+    const proof = await config.onVerificationRequired!(challenge, opts.signal)
+    if (opts.signal?.aborted) throw new DOMException('request aborted', 'AbortError')
+    if (!proof) throw new ApiError(403, { code: VERIFICATION_CANCELLED, message: '', details: json.error.details })
+    res = await send({ 'X-Verify-Proof': proof })
+    json = await safeJSON(res)
+  }
   if (res.status === 204) { opts.onSuccessHeaders?.(new Headers(res.headers)); return null }
-  const json = await safeJSON(res)
   if (!res.ok) {
     const body: ApiErrorBody = json?.error || { code: statusCode(res.status), message: res.statusText || 'request failed' }
     const err = new ApiError(res.status, body)
@@ -437,6 +468,14 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
   }
   opts.onSuccessHeaders?.(new Headers(res.headers))
   return json
+}
+
+/** The step-up a failed response asks for, when the console handles step-ups. */
+function verificationChallenge(res: Response, json: any, opts: RequestOptions): VerificationChallenge | null {
+  if (res.status !== 403 || json?.error?.code !== 'verification_required') return null
+  if (opts.anonymous || !config.onVerificationRequired) return null
+  const d = json.error.details || {}
+  return typeof d.scope === 'string' && typeof d.context === 'string' ? { scope: d.scope, context: d.context, password_required: !!d.password_required } : null
 }
 
 function statusCode(status: number): string {

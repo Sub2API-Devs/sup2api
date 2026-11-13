@@ -8,11 +8,13 @@ import { lt } from '@/i18n'
 
 // Permission checkboxes of a role, one collapsible block per module (core
 // modules first, then plugin modules). `allGranted` (superuser) ticks
-// everything; changes are emitted as a new set.
+// everything; changes are emitted as a new set. Permissions marked step_up
+// carry a shield: using them needs a step-up verification each time.
 const props = defineProps<{ modules: PermissionModule[]; granted: Set<string>; allGranted?: boolean; readOnly?: boolean }>()
 const emit = defineEmits<{ (e: 'update:granted', v: Set<string>): void }>()
 const { t } = useI18n()
 
+const anyStepUp = computed(() => props.modules.some((m) => m.permissions.some((p) => p.step_up)))
 const groups = computed(() => [props.modules.filter((m) => m.source !== 'plugin'), props.modules.filter((m) => m.source === 'plugin')])
 const collapsed = ref(new Set<string>())
 
@@ -89,6 +91,7 @@ function toggleModule(m: PermissionModule) {
               <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="p.key">
                 <span class="truncate">{{ lt(p.label) || p.key }}</span>
                 <span v-if="p.sensitive" class="shrink-0 text-warning-500 dark:text-warning-400" :title="t('roles.sensitive')" :aria-label="t('roles.sensitive')" role="img"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
+                <span v-if="p.step_up" class="shrink-0 text-primary-500 dark:text-primary-400" :title="t('roles.stepUp')" :aria-label="t('roles.stepUp')" role="img" data-testid="permission-step-up"><SIcon name="shield" class="h-3.5 w-3.5" /></span>
                 <template v-if="!moduleInactive(m)">
                   <SBadge v-if="p.status === 'disabled'" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
                   <SBadge v-else-if="p.status === 'removed'" tone="gray">{{ t('roles.removed') }}</SBadge>
@@ -101,6 +104,9 @@ function toggleModule(m: PermissionModule) {
     </div>
     <SHint size="xs" class="mt-3 flex items-center gap-1">
       <SIcon name="lock" class="h-3.5 w-3.5 text-warning-500 dark:text-warning-400" />{{ t('roles.sensitiveLegend') }}
+    </SHint>
+    <SHint v-if="anyStepUp" size="xs" class="mt-1 flex items-center gap-1">
+      <SIcon name="shield" class="h-3.5 w-3.5 text-primary-500 dark:text-primary-400" />{{ t('roles.stepUpLegend') }}
     </SHint>
   </div>
 </template>

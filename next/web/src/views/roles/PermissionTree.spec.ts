@@ -56,3 +56,13 @@ describe('PermissionTree removed permissions', () => {
     expect(lastEmitted(w)).toEqual([])
   })
 })
+
+describe('PermissionTree step-up marks', () => {
+  it('marks step-up permissions and explains the mark only when there is one', () => {
+    const selfMod: PermissionModule = { module: 'self', label: 'Self', source: 'core', status: 'active', permissions: [perm('self:profile'), { ...perm('self:security'), step_up: true }] }
+    const w = mount(PermissionTree, { props: { modules: [selfMod, mod], granted: new Set<string>() }, global: { plugins: [i18n] } })
+    expect(w.findAll('[data-testid="permission-step-up"]')).toHaveLength(1)
+    expect(w.text()).toContain(i18n.global.t('roles.stepUpLegend'))
+    expect(render([]).text()).not.toContain(i18n.global.t('roles.stepUpLegend'))
+  })
+})

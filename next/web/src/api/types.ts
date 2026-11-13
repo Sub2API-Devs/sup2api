@@ -93,6 +93,8 @@ export interface PermissionItem {
   key: string
   label: LText
   sensitive: boolean
+  /** Using it needs a step-up verification each time (CONTRACTS §80.2); shown only. */
+  step_up?: boolean
   status: string // active | disabled | removed
 }
 
