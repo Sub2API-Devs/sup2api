@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, apiBase, isApiError, isBridgeMessage, pluginApiBase, type BridgeMessage, type BridgeMode } from '@sub2api/host'
+import { api, apiBase, isApiError, isBridgeMessage, pluginApiBase, pluginPermissionKey, BRIDGE_MAX_PERMISSION_KEYS, type BridgeMessage, type BridgeMode } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 
 // Sandboxed plugin iframe (sandbox="allow-scripts": opaque origin, no
 // cookies/storage of the console, no session). All communication goes
@@ -24,6 +25,7 @@ const emit = defineEmits<{ (e: 'change', value: any): void; (e: 'ready'): void }
 
 const router = useRouter()
 const app = useAppStore()
+const auth = useAuthStore()
 const frame = ref<HTMLIFrameElement>()
 const height = ref(props.minHeight)
 const ready = ref(false)
@@ -67,6 +69,17 @@ function pluginPath(raw: unknown): string | null {
   return url.pathname.slice(apiBase().length) + url.search
 }
 
+/**
+ * A local permission key of this plugin ("stats:read") the caller holds, as
+ * host.can decides; a qualified key ("plugin.<key>:...") or anything else is
+ * false, so the frame learns nothing about other plugins or the core.
+ */
+function localAllowed(k: unknown): boolean {
+  if (typeof k !== 'string' || k === '' || k.startsWith('plugin.')) return false
+  const key = pluginPermissionKey(props.pluginKey, k)
+  return key !== '' && auth.has(key)
+}
+
 async function handleRequest(id: string, method: string, params: any) {
   const reply = (result?: any, error?: { code: string; message: string; details?: any }) =>
     post({ s2a: 1, kind: 'response', id, result, error })
@@ -86,6 +99,13 @@ async function handleRequest(id: string, method: string, params: any) {
         if (typeof p !== 'string' || !p.startsWith('/') || p.startsWith('//')) return reply(undefined, { code: 'invalid_argument', message: 'invalid path' })
         await router.push(p)
         return reply(true)
+      }
+      case 'permissions.check': {
+        const keys = params?.keys
+        if (!Array.isArray(keys) || keys.length > BRIDGE_MAX_PERMISSION_KEYS) {
+          return reply(undefined, { code: 'invalid_argument', message: `keys must be an array of at most ${BRIDGE_MAX_PERMISSION_KEYS} keys` })
+        }
+        return reply(Object.fromEntries(keys.map((k) => [String(k), localAllowed(k)])))
       }
       case 'toast': {
         const kind = ['success', 'error', 'info', 'warning'].includes(params?.kind) ? params.kind : 'info'

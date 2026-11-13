@@ -700,3 +700,10 @@
 - 影响对象：持有 `balance:all:read` 的角色（admin、operator 与自定义角色）侧栏多出财务区的“余额流水”；只有 `balance:all:read` 没有 `user:read` 的角色此前只能凭地址打开，现在有入口。
 - 测试：authz `TestMenus`（admin 区序含 finance；只有 balance:all:read 的角色 finance 区为 /ledger；普通用户没有）、iam `TestHTTP` 超管区序；web `routes.spec`。CONTRACTS §22.1 区表、§90 同步。
 - 回滚：revert 提交即可，无迁移。
+
+## T83 W5-C2：iframe 插件桥 permissions.check
+
+- 改动：`bridge-protocol.ts` 协议注释增加 `permissions.check` 并导出 `BRIDGE_MAX_PERMISSION_KEYS = 50`；`PluginIframe.vue` 处理该请求：`keys` 不是数组或超过 50 个回 `invalid_argument`；每个 key 只有是本插件本地 key（非空字符串、不带 `plugin.` 前缀）时才按 `pluginPermissionKey(本插件, key)` + `auth.has` 判断（与原生 `host.can` 同源），否则 false。核心 key（如 `user:read`）按本插件的本地 key 理解，iframe 因此探测不到核心或其他插件的权限。
+- 影响对象：iframe 插件可以按权限隐藏自己的按钮；老核心对该方法回 `not_found`，插件应按“无此能力”处理。
+- 测试：新增 `PluginIframe.spec`（本地 key 判断、核心 key 与带前缀 key 为 false、超过 50 个或非数组 invalid_argument）。CONTRACTS §23 同步。
+- 回滚：revert 提交即可，纯前端。

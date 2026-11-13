@@ -11,6 +11,10 @@
 //                          "/api/v1/p/<key>/..." is accepted); anything else is rejected
 //       method "navigate"  params {path}                     console route, e.g. "/p/guard/rules"
 //       method "toast"     params {message, kind?}
+//       method "permissions.check"  params {keys: string[]}  -> result {[key]: boolean}
+//                          keys are this plugin's local permission keys (at most
+//                          BRIDGE_MAX_PERMISSION_KEYS, else invalid_argument);
+//                          a qualified "plugin.<key>:..." key is always false
 //   {s2a:1, kind:"response", id, result?, error?}            answer to a console request
 //   {s2a:1, kind:"change", value}                            (account form) value changed
 //
@@ -33,6 +37,9 @@
 // the account list, so it should batch its own requests.
 
 export const BRIDGE_TAG = 1 as const
+
+/** Most keys one permissions.check request may ask about. */
+export const BRIDGE_MAX_PERMISSION_KEYS = 50
 
 export type BridgeMode = 'page' | 'account-form'
 
