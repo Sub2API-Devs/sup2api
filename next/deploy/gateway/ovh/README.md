@@ -4,6 +4,16 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-13 moderation **0.11.0**（`509655d10`，develop 头，合并了 `feat/moderation-contract` `da75da1d1`；只升级插件，核心 0.1.284 不动；北京时间 08:26:55 rollout 267，约 5 秒，两节点同时切换）：
+- 内容：0.10.0 的 contract 步骤（CONTRACTS §72 0.11.0）。迁移 0013（带 `SET LOCAL lock_timeout = '10s'`）删除 `user_analyses`、`watchlist` 的 9 个分析列及索引、`events` 的 6 个 `ai_*` 列，`config_state` 加 `lists_imported`；保留 `watch_events.analysis_id` 和 `watchlist.source` 的 `'analysis'`。设置删除 `analysis_*`、`on_error`、0.1 旧键、`exempt_user_ids`、`cache_ttl_seconds`、`allowlist_user_ids`、`blocklist_user_ids`、`ban_window_hours`（0.1 的 `api_key` 以隐藏 writeOnly 键保留，只为让核心打码）；名单只看锁定条目（PUT/DELETE `/watchlist/:id/lock`）；`ban_window_seconds`。all_but_own 放弃。0.10.0 的非测试代码不读写任何被删对象（worker `git grep` 核对，迁移兼容测试用 0.10.0 原 SQL）。
+- 测试：用户要求直接发布，没有再做线上备份测试。worker 在空库上跑了完整路径（0.10.0 准备 → 0.10.0 跑在 0013 之后的库上 → 上传升级 → 0.11.0 功能 → 设置清理 → 回滚 0.10.0 并写回名单与封禁窗口）31 个用例全部通过；ovh 构建时 go vet / go test 通过。
+- 构建：`stage/moderation-0.11.0/`（独立插件模板，取自 `stage/moderation-0.9.3/`，断言自核心 0.1.284 起只改插件 / web mock / docs，迁移只多 0013）。包 sha256 `e98341081d92a986584f3c630fea30a11fba50a38749b3b9e0decf4ff3838a2b`，hostCompat `>=0.1.280 <0.2.0`、hostUICompat `^3.12`。
+- 升级：`rollout.py upload` → `review`（signature valid、consent approved、host_compat_ok，没有新权限）→ `upgrade`；两节点 serving 0.11.0（ready、restarts 0）。日志：00:26:56 UTC “plugin migrations applied”，00:26:57 名单导入（allowlist 0、blocklist 0）。new-api 渠道没有关；不备份数据库。
+- 设置清理：`~/rel284/cleanup_run.sh clean`（`settings_cleanup.py`，先 `--dry-run`）删除 13 个已存旧键（10 个 `analysis_*`、`base_url`、`model`、`timeout_ms`），其余 15 个值逐项比对不变，mode 仍 enforce。
+- 核验：升级后新记录照常写入（08:27:51 起，`flow_source=account_any`、`level=enforce`）；`errs.sh` 08:00–08:30 共 647 次 5xx 0，08:27 起 30 次 5xx 0；两节点 moderation 日志没有 WARN / ERROR。
+- 回滚：① `cleanup_run.sh rollback-prepare --export <文件>`（导出锁定条目并改成同级别不过期的普通条目）；② 在 `stage/moderation-0.11.0/` 执行 `rollout.py upload-prev`（重新上传 `stage/0.1.284/payload/builtin/moderation-0.10.0.s2plugin`）再 `rollout.py rollback`；③ `cleanup_run.sh rollback-settings --export <文件>`（名单写回设置键、秒数折回 `ban_window_hours`、去掉 0.10.0 不认识的键并核对）。0.10.0 不读被删的表和列，可直接在 0013 之后的库上运行；被删的 AI 分析数据只能从数据库自动备份找回（功能已删除，不需要）。
+- 上游同步 PR 未提（需要用户原话同意）。
+
 2026-11-13 核心 **0.1.284** + moderation **0.10.0**（`75780e65a`，develop 头，合并了 `feat/moderation-redesign` `85f046a1b`；北京时间 06:42–06:44；计划 `27d93d22ebdf397aa959a48fb6077c16` rolling-v1 completed，06:42:50→06:44:03 约 73 秒，两节点轮流让出（先 ccp 后 ovh），`/readyz` 全程 200；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
 - 内容：moderation 0.10.0 重设计（侧栏子导航、设置拆 7 页、改名、删除 AI 分析代码、审核范围 scope、命中只重放命中部分、统一失败策略 fail_policy、记录匹配来源 flow_source / level_source、名单锁定条目、窗口内违规 N 次自动升拦截级，CONTRACTS §72）；平台插件页侧栏子导航（控制台 UI 3.14，sdk/manifest `Page.Nav`，server `visibleNav`，CONTRACTS §90.7）。设计与评估：本机 `/home/erio/rc/tmp/moderation-redesign/`、`/home/erio/rc/tmp/moderation-eval/`。
 - 插件迁移（rollout 时执行，都只加列、带 `SET LOCAL lock_timeout = '10s'`）：0011 `flows.scope`、`events.flow_source / flow_fallback_id / flow_fallback_reason`；0012 `watchlist.locked`、`events.level / level_source`。下一版 contract：删 `user_analyses`、分析相关列与 `analysis_*` / `on_error` / 0.1 旧键，名单改由观察名单为唯一依据。
