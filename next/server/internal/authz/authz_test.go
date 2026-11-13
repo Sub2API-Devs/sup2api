@@ -888,6 +888,43 @@ func TestSyncPluginNewPermissionFollowsPluginStatus(t *testing.T) {
 	}
 }
 
+// SyncPlugin stores the sort it is given (the manifest order install.
+// PermissionDefs numbers from 10) and corrects rows synced before.
+func TestSyncPluginSort(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	m := &manifest.Manifest{Key: "guard", UserPermissions: []manifest.UserPermission{{Key: "stats:read"}, {Key: "rules:manage"}}}
+	sorts := func() string {
+		t.Helper()
+		var got string
+		if err := db.Pool.QueryRow(ctx, `SELECT string_agg(key || '=' || sort, ',' ORDER BY sort, key) FROM permissions WHERE plugin_key = 'guard'`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	// Rows as the old numbering left them: the first permission at 0 was
+	// taken for unset and given 10, the second kept its 1.
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Sort: 10}, {Key: "rules:manage", Sort: 1}}, nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := sorts(); got != "plugin.guard:rules:manage=1,plugin.guard:stats:read=10" {
+		t.Fatalf("old numbering: %s", got)
+	}
+	if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", install.PermissionDefs(m), nil) }); err != nil {
+		t.Fatal(err)
+	}
+	if got := sorts(); got != "plugin.guard:stats:read=10,plugin.guard:rules:manage=20" {
+		t.Fatalf("after the next sync: %s", got)
+	}
+}
+
 func TestMenus(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -928,11 +965,41 @@ func TestMenus(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The sidebar shows exactly the plugin menus GET /ui/plugins returns:
+	// both go through manifest.FilterUI with the same permission check.
+	sameAsUI := func(userID int64, menus []MenuSection) {
+		t.Helper()
+		set, err := s.PermissionSet(ctx, userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want, got []string
+		for _, p := range plugins {
+			allowed := func(perm string) bool { return perm == "" || set.Has(manifest.PermissionKey(p.Key, perm)) }
+			for _, m := range manifest.FilterUI(p.Manifest.UI, allowed, set.Has).Menus {
+				want = append(want, p.Key+":"+m.ID)
+			}
+		}
+		for _, sec := range menus {
+			for _, it := range sec.Items {
+				if it.PluginKey != "" {
+					got = append(got, it.ID)
+				}
+			}
+		}
+		slices.Sort(want)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Fatalf("user %d: sidebar plugin menus %v, /ui/plugins menus %v", userID, got, want)
+		}
+	}
+
 	user := addUser(t, s, "u@x.com", RoleUser)
 	menus, err := s.Menus(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameAsUI(user, menus)
 	var sections []string
 	for _, m := range menus {
 		sections = append(sections, m.Section)
@@ -960,6 +1027,7 @@ func TestMenus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameAsUI(admin, menus)
 	sections = nil
 	for _, m := range menus {
 		sections = append(sections, m.Section)

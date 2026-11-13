@@ -29,7 +29,7 @@ func (s *Service) SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, d
 	module := manifest.PermissionModule(pluginKey)
 	keys := make([]string, 0, len(defs))
 	var newIDs []int64
-	for i, d := range defs {
+	for _, d := range defs {
 		key := manifest.PermissionKey(pluginKey, d.Key)
 		local, ok := manifest.LocalPermission(pluginKey, key)
 		if !ok {
@@ -44,10 +44,6 @@ func (s *Service) SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, d
 		if desc == nil {
 			desc = core.LocalizedText{}
 		}
-		sort := d.Sort
-		if sort == 0 {
-			sort = (i + 1) * 10
-		}
 		var id int64
 		var inserted bool
 		err := tx.QueryRow(ctx, `
@@ -58,7 +54,7 @@ VALUES ($1, $2, $3, $4, 'plugin', $5::text, $6,
 ON CONFLICT (key) DO UPDATE SET module = EXCLUDED.module, label = EXCLUDED.label,
     description = EXCLUDED.description, sensitive = EXCLUDED.sensitive, sort = EXCLUDED.sort
     WHERE permissions.plugin_key = EXCLUDED.plugin_key
-RETURNING id, (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, sort).Scan(&id, &inserted)
+RETURNING id, (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort).Scan(&id, &inserted)
 		if store.IsNoRows(err) {
 			return core.ErrConflict.WithMessage("permission " + key + " belongs to another owner")
 		}

@@ -380,3 +380,12 @@
 - 改动：`POST /plugins/:key/jobs/:job_id/run` 的权限由 `plugin:manage` 改为 `task:run`（`plugin/api/api.go`，用 `task.PermRun`），与 `POST /system/tasks/:name/run` 同口径：同一个任务不再有两个权限不同的手动运行入口。审计动作仍是 `plugin.job.run`。插件详情“任务”页的“立即运行”按钮改按 `task:run` 显示（`JobsTab.vue`）。无迁移。CONTRACTS §5.7 路由表同步。
 - 影响对象：只有 `plugin:manage`、没有 `task:run` 的角色：调用由 204 变为 403 `details.permission = task:run`，按钮不再显示；内置 `admin` 两个权限都有，不受影响。反过来，只有 `task:run` 的人（内置 `operator` 默认有 `task:run`、没有 `plugin:*`）现在可以从这个接口运行插件任务，他此前已经能在定时任务页运行同一个任务（看插件的任务列表仍需 `plugin:read`，所以 `operator` 看不到这个页面）。访问密钥无变化：`task:run` 与 `plugin:manage` 一样不是只认会话的权限，密钥带上它即可调用。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T65 W4-A3、W4-P5：插件 UI 可见性过滤收敛为 manifest.FilterUI，插件权限排序修正
+
+- 改动：
+  - W4-A3（纯重构）：新增 `next/sdk/manifest/visible_ui.go`：`FilterUI(ui, allowed, allowedCore) VisibleUI`（`Menus`、`Pages`、`Slots`、`AccountActions`），逻辑原样搬自 `plugin/api/ui.go` 的 `visibleMenusAndPages`、`visibleNav` 与槽位、账号动作两段循环（含页面侧边导航 `nav` 的 `permission`/`corePermission` 规则）。`GET /ui/plugins`（`uiPlugins`）取全部，侧栏 `GET /me/menus`（`authz.pluginMenus`）只取 `.Menus`；两处的 `allowed` 都写成 `p == "" || set.Has(manifest.PermissionKey(key, p))`，核心权限用 `set.Has`。未声明权限的元素不询问回调直接可见。原 `plugin/api` 的四个用例搬到 `sdk/manifest/visible_ui_test.go`，`TestMenus` 断言侧栏的插件菜单与 `FilterUI` 结果一致。
+  - W4-P5：`install.PermissionDefs` 的 `Sort` 由 `i` 改为 `(i+1)*10`，`authz.SyncPlugin` 删除 `sort == 0` 时按位置补 `(i+1)*10` 的兜底，直接写入给定值。此前第一个权限的 0 被当成“未设置”补成 10，其余是 1、2、3…，于是 manifest 里排第一的权限在角色页排到本插件的最后。
+- 影响对象：W4-A3 无行为变化。W4-P5 只影响角色页里插件权限的显示顺序：每个插件下一次同步权限目录（同意新版本、启用或升级激活）时，`ON CONFLICT` 把存量行的 `sort` 改成 10、20、30…，顺序变为 manifest 声明的顺序；在那之前保持旧顺序。无迁移，权限判断不受影响。
+- 回滚：revert 这个提交即可；回滚后下一次同步把 `sort` 写回旧编号。
+

@@ -31,8 +31,8 @@ type UIPlugin struct {
 }
 
 // uiPlugins lists console extensions of active plugins, filtered by the
-// caller's permissions. Pages only reachable through hidden menus are
-// dropped; native entries are only returned for official/verified plugins.
+// caller's permissions (manifest.FilterUI); native entries are only returned
+// for official/verified plugins.
 // A plugin with nothing left for the caller (no menu, page, slot, account
 // action or native entry) is left out.
 func (a *API) uiPlugins(c *gin.Context) {
@@ -57,22 +57,11 @@ func (a *API) uiPlugins(c *gin.Context) {
 		if m == nil || m.UI == nil {
 			continue
 		}
-		allowed := func(perm string) bool { return perm == "" || ps.Has(manifest.PermissionKey(p.Key, perm)) }
-		allowedCore := func(perm string) bool { return ps.Has(perm) }
+		vis := manifest.FilterUI(m.UI,
+			func(perm string) bool { return perm == "" || ps.Has(manifest.PermissionKey(p.Key, perm)) }, ps.Has)
 		item := UIPlugin{Key: p.Key, Version: p.Version, Name: core.LocalizedText(m.Name), AssetBase: p.AssetBase,
-			Menus: []manifest.Menu{}, Pages: map[string]manifest.Page{}, Slots: []manifest.Slot{}, AccountActions: []manifest.AccountAction{},
+			Menus: vis.Menus, Pages: vis.Pages, Slots: vis.Slots, AccountActions: vis.AccountActions,
 			Trust: p.Trust, HostUICompat: m.HostUICompat}
-		item.Menus, item.Pages = visibleMenusAndPages(m.UI, allowed, allowedCore)
-		for _, sl := range m.UI.Slots {
-			if allowed(sl.Permission) {
-				item.Slots = append(item.Slots, sl)
-			}
-		}
-		for _, act := range m.UI.AccountActions {
-			if allowed(act.Permission) {
-				item.AccountActions = append(item.AccountActions, act)
-			}
-		}
 		if m.UI.Native != nil && (p.Trust == pkg.TrustOfficial || p.Trust == pkg.TrustVerified) {
 			item.NativeEntry = m.UI.Native.Entry
 		}
@@ -84,91 +73,6 @@ func (a *API) uiPlugins(c *gin.Context) {
 		out = append(out, item)
 	}
 	httpapi.OK(c, out)
-}
-
-// visibleMenusAndPages filters a plugin's menus and pages for one caller.
-// A page reached only through menus the caller may not see is dropped; so is
-// a table's "New" link the caller may not use, and the form page it opens
-// unless a visible menu or another shown table's usable link reaches it (a
-// table hidden by its menu's permission makes its link unusable). Pages no
-// menu or link names stay (their routes check permissions themselves).
-// A kept page's nav loses the sections the caller may not see (see
-// visibleNav); allowedCore checks a core permission key.
-func visibleMenusAndPages(ui *manifest.UI, allowed, allowedCore func(perm string) bool) ([]manifest.Menu, map[string]manifest.Page) {
-	menus := []manifest.Menu{}
-	pages := map[string]manifest.Page{}
-	hidden := map[string]bool{}
-	visible := map[string]bool{}
-	for _, mn := range ui.Menus {
-		if allowed(mn.Permission) {
-			menus = append(menus, mn)
-			visible[mn.Page] = true
-		} else {
-			hidden[mn.Page] = true
-		}
-	}
-	// A link counts only from a page the menus leave shown: a table the
-	// caller cannot see must not reveal the form it opens.
-	linkVisible := map[string]bool{}
-	linkHidden := map[string]bool{}
-	for id, pg := range ui.Pages {
-		if pg.Create == nil {
-			continue
-		}
-		if (visible[id] || !hidden[id]) && allowed(pg.Create.Permission) {
-			linkVisible[pg.Create.Page] = true
-		} else {
-			linkHidden[pg.Create.Page] = true
-		}
-	}
-	for id := range linkVisible {
-		visible[id] = true
-	}
-	for id := range linkHidden {
-		hidden[id] = true
-	}
-	shown := func(id string) bool { return visible[id] || !hidden[id] }
-	for id, pg := range ui.Pages {
-		if !shown(id) {
-			continue
-		}
-		if pg.Create != nil && (!allowed(pg.Create.Permission) || !shown(pg.Create.Page)) {
-			pg.Create = nil
-		}
-		if pg.Nav != nil {
-			pg.Nav = visibleNav(pg.Nav, allowed, allowedCore)
-		}
-		pages[id] = pg
-	}
-	return menus, pages
-}
-
-// visibleNav returns the part of a page's nav the caller may see: an item
-// shows when it names no permission or the caller holds its plugin
-// permission or its core one. Groups left empty are dropped, and nil means
-// nothing is left, so the console falls back to the page's own tabs instead
-// of drawing an empty sidebar. The result is a copy: the manifest is shared
-// by every caller.
-func visibleNav(nav *manifest.PageNav, allowed, allowedCore func(perm string) bool) *manifest.PageNav {
-	var groups []manifest.NavGroup
-	for _, g := range nav.Groups {
-		var items []manifest.NavItem
-		for _, it := range g.Items {
-			if (it.Permission == "" && it.CorePermission == "") ||
-				(it.Permission != "" && allowed(it.Permission)) ||
-				(it.CorePermission != "" && allowedCore(it.CorePermission)) {
-				items = append(items, it)
-			}
-		}
-		if len(items) > 0 {
-			g.Items = items
-			groups = append(groups, g)
-		}
-	}
-	if len(groups) == 0 {
-		return nil
-	}
-	return &manifest.PageNav{Groups: groups}
 }
 
 // ---------------------------------------------------------------- market

@@ -44,7 +44,8 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 	return nil
 }
 
-// PermissionDefs converts manifest userPermissions into catalog entries.
+// PermissionDefs converts manifest userPermissions into catalog entries,
+// sorted in manifest order (10, 20, ...).
 func PermissionDefs(m *manifest.Manifest) []core.PermissionDef {
 	defs := make([]core.PermissionDef, 0, len(m.UserPermissions))
 	for i, up := range m.UserPermissions {
@@ -54,7 +55,7 @@ func PermissionDefs(m *manifest.Manifest) []core.PermissionDef {
 			Label:       core.LocalizedText(up.Label),
 			Description: core.LocalizedText(up.Description),
 			Sensitive:   up.Sensitive,
-			Sort:        i,
+			Sort:        (i + 1) * 10,
 		})
 	}
 	return defs
