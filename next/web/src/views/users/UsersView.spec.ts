@@ -41,7 +41,7 @@ async function render() {
   const w = mount(UsersView, {
     global: {
       plugins: [i18n],
-      stubs: { SDropdown, SFormModal, Teleport: true, UserCreateDialog: true, UserPricingDrawer: true, UserSegmentMoveDialog: true, AdjustBalanceModal: true },
+      stubs: { SDropdown, SFormModal, Teleport: true, UserCreateDialog: true, UserPricingDrawer: true, UserSegmentMoveDialog: true, AdjustBalanceModal: true, ResetPasswordDialog: true, TransferSuperAdminDialog: true },
       directives: { permission: {} }
     }
   })
@@ -63,7 +63,7 @@ describe('UsersView managed users (T78)', () => {
   it('offers user-changing actions only on users the caller manages', async () => {
     mocks.users = [user(2, ['operator', 'user']), user(3, ['admin']), user(1, ['admin'])]
     const w = await render()
-    expect(actions(w, 2)).toEqual(['edit', 'roles', 'pricing', 'ledger', 'security', 'balance', 'delete'])
+    expect(actions(w, 2)).toEqual(['edit', 'roles', 'pricing', 'ledger', 'password', 'security', 'balance', 'delete'])
     // An admin peer and the caller itself (admin is not on admin's list): read-only actions.
     expect(actions(w, 3)).toEqual(['pricing', 'ledger'])
     expect(actions(w, 1)).toEqual(['pricing', 'ledger'])
@@ -76,28 +76,27 @@ describe('UsersView managed users (T78)', () => {
     expect(actions(w, 2)).not.toContain('balance')
   })
 
-  it('the super admin manages everyone, itself included, but never deletes itself or resets its own 2FA here', async () => {
+  it('the super admin manages everyone else; its own row only hands the role over (UsersView.superAdmin.spec)', async () => {
     mocks.superuser = true
     mocks.users = [user(1, ['super_admin']), user(3, ['admin'])]
     const w = await render()
-    expect(actions(w, 1)).toEqual(['edit', 'roles', 'pricing', 'ledger', 'balance'])
-    expect(actions(w, 3)).toContain('delete')
+    expect(actions(w, 1)).toEqual(['transfer'])
+    expect(actions(w, 3)).toEqual(['edit', 'roles', 'pricing', 'ledger', 'password', 'security', 'balance', 'delete'])
   })
 
   it('locks roles the caller does not manage and submits them unchanged', async () => {
     mocks.superuser = true
-    mocks.assignable = [managed('admin'), managed('operator'), managed('supplier'), managed('user')]
-    mocks.users = [user(1, ['super_admin', 'user'])]
+    mocks.users = [user(2, ['admin', 'user'])]
     const w = await render()
-    await row(w, 1).get('[data-action="roles"]').trigger('click')
+    await row(w, 2).get('[data-action="roles"]').trigger('click')
     await flushPromises()
     const box = (k: string) => w.get(`[data-testid="modal"] input[value="${k}"]`)
-    expect(box('super_admin').attributes('disabled')).toBeDefined()
-    expect((box('super_admin').element as HTMLInputElement).checked).toBe(true)
+    expect(box('admin').attributes('disabled')).toBeDefined()
+    expect((box('admin').element as HTMLInputElement).checked).toBe(true)
     await box('operator').setValue(true)
     await w.get('[data-testid="modal"]').trigger('submit')
     await flushPromises()
-    expect(mocks.put).toHaveBeenCalledWith('/users/1/roles', { role_keys: ['super_admin', 'user', 'operator'] })
+    expect(mocks.put).toHaveBeenCalledWith('/users/2/roles', { role_keys: ['admin', 'user', 'operator'] })
   })
 
   it('checking supplier checks the default role with it', async () => {
