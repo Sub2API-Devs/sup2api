@@ -32,9 +32,9 @@ func assignableOf(t *testing.T, s *Service, roleKeys ...string) ([]string, bool)
 	return slices.Sorted(maps.Keys(set.Assignable)), set.AssignCustom
 }
 
-// A new database seeds the default lists of decision 5 (supplier comes with
-// its role): admin assigns operator, user and every custom role; operator
-// assigns user; nobody else anything. Seeding is not audited.
+// A new database seeds the default lists of decision 5: admin assigns
+// operator, supplier, user and every custom role; operator assigns supplier
+// and user; nobody else anything. Seeding is not audited.
 func TestBuiltinAssignableDefaults(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -48,8 +48,9 @@ func TestBuiltinAssignableDefaults(t *testing.T) {
 		keys   []string
 		custom bool
 	}{
-		{RoleAdmin, []string{"helper", RoleOperator, RoleUser}, true},
-		{RoleOperator, []string{RoleUser}, false},
+		{RoleAdmin, []string{"helper", RoleOperator, RoleSupplier, RoleUser}, true},
+		{RoleOperator, []string{RoleSupplier, RoleUser}, false},
+		{RoleSupplier, []string{}, false},
 		{RoleUser, []string{}, false},
 		{RoleSuperAdmin, []string{}, false},
 		{"helper", []string{}, false},
@@ -107,6 +108,47 @@ WHERE action = 'authz.sync.grant' AND user_id IS NULL AND detail->>'via' = 'assi
 	}
 }
 
+// An upgrade bringing the supplier role to a database that has the other
+// built-in roles: it is created with its defaults and joins the assignable
+// lists of admin and operator, each audited once; their other entries (here
+// what migration 0097 left on a production operator) stay.
+func TestSyncCoreAddsSupplierToExistingRoles(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	// The database before the supplier role existed.
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM roles WHERE key = 'supplier';
+UPDATE roles SET assign_custom = true WHERE key = 'operator';
+INSERT INTO role_assignable_roles (role_id, assignable_role_id) SELECT r.id, r.id FROM roles r WHERE r.key = 'operator'`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := s.SyncCore(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if keys, custom := assignableOf(t, s, RoleOperator); !slices.Equal(keys, []string{RoleOperator, RoleSupplier, RoleUser}) || !custom {
+		t.Fatalf("operator assignable %v custom %v", keys, custom)
+	}
+	if r, err := s.GetRole(ctx, roleID(t, s, RoleAdmin)); err != nil || !slices.Equal(r.AssignableRoleKeys, []string{RoleOperator, RoleSupplier, RoleUser}) {
+		t.Fatalf("admin assignable %+v, %v", r, err)
+	}
+	if r, err := s.GetRole(ctx, roleID(t, s, RoleSupplier)); err != nil || !r.Builtin || len(r.PermissionKeys) != len(supplierPermissions) {
+		t.Fatalf("supplier %+v, %v", r, err)
+	}
+	var audited []int64
+	if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(array_agg(target_id::bigint ORDER BY target_id::bigint), '{}') FROM audit_logs
+WHERE action = 'authz.sync.grant' AND user_id IS NULL AND detail->>'via' = 'assignable' AND detail->>'key' = 'supplier'`).Scan(&audited); err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{roleID(t, s, RoleAdmin), roleID(t, s, RoleOperator)}
+	slices.Sort(want)
+	if !slices.Equal(audited, want) {
+		t.Fatalf("audited roles %v, want admin and operator %v", audited, want)
+	}
+}
+
 // The target's side of SEC-H2 includes the roles it may assign: admin, who
 // cannot assign admin, cannot act on a holder of a custom role that can.
 func TestCanActOnUsersComparesAssignable(t *testing.T) {
@@ -136,6 +178,76 @@ SELECT r.id, a.id FROM roles r JOIN roles a ON (r.key, a.key) IN (('admin_maker'
 	}
 	if err := s.CanActOnUsers(ctx, root, adminMaker, userMaker); err != nil {
 		t.Fatalf("superuser: %v", err)
+	}
+}
+
+// Peer protection: every role a target holds, the default user role aside,
+// must be one the actor may assign. With the default lists an admin leaves
+// other admins alone and an operator other operators; a role with no
+// assignable list still acts on plain users.
+func TestCanActOnUsersPeerProtection(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	for _, key := range []string{"support", "viewer"} {
+		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt(key, key), PermissionKeys: []string{"user:read", "user:update"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	admin := addUser(t, s, "admin@x.com", RoleUser, RoleAdmin)
+	admin2 := addUser(t, s, "admin2@x.com", RoleUser, RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	operator2 := addUser(t, s, "op2@x.com", RoleUser, RoleOperator)
+	support := addUser(t, s, "support@x.com", RoleUser, "support")
+	viewer := addUser(t, s, "viewer@x.com", "viewer")
+	plain := addUser(t, s, "plain@x.com", RoleUser)
+	roleless := addUser(t, s, "none@x.com")
+
+	tests := []struct {
+		name    string
+		actor   int64
+		targets []int64
+		role    string // "" = allowed, else details.role of the denial
+	}{
+		{"admin on another admin", admin, []int64{admin2}, RoleAdmin},
+		{"admin on an operator, a custom role holder and users", admin, []int64{operator, support, plain, roleless}, ""},
+		{"one peer rejects the batch", admin, []int64{plain, admin2}, RoleAdmin},
+		{"operator on another operator", operator, []int64{operator2}, RoleOperator},
+		{"operator on a custom role holder", operator, []int64{viewer}, "viewer"},
+		{"operator on users", operator, []int64{plain, roleless}, ""},
+		{"no assignable list: users only", support, []int64{plain, roleless}, ""},
+		{"no assignable list: not a holder of the same role", support, []int64{viewer}, "viewer"},
+		{"itself", admin, []int64{admin}, ""},
+		{"super admin", root, []int64{admin, admin2, operator, viewer}, ""},
+		{"system", 0, []int64{admin, operator}, ""},
+	}
+	for _, tt := range tests {
+		err := s.CanActOnUsers(ctx, tt.actor, tt.targets...)
+		switch {
+		case tt.role == "" && err != nil:
+			t.Errorf("%s: %v", tt.name, err)
+		case tt.role != "" && (!isCode(err, "permission_denied") || detail(err, "role") != tt.role):
+			t.Errorf("%s: %v, want a denial naming %s", tt.name, err, tt.role)
+		}
+	}
+
+	// Role assignment judges the target the same way: the admin may assign
+	// operator, but not to another admin.
+	if err := setRoles(s, admin, admin2, RoleUser, RoleAdmin, RoleOperator); !isCode(err, "permission_denied") || detail(err, "role") != RoleAdmin {
+		t.Fatalf("admin assigns operator to another admin: %v", err)
+	}
+	if err := setRoles(s, admin, plain, RoleUser, RoleOperator); err != nil {
+		t.Fatalf("admin assigns operator to a user: %v", err)
+	}
+	// An access key assigns nothing, so it only reaches users.
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: admin, Permissions: []string{"user:read", "user:update"}})
+	if err := s.CanActOnUsers(keyed, admin, viewer); !isCode(err, "permission_denied") || detail(err, "role") != "viewer" {
+		t.Fatalf("admin's access key on a custom role holder: %v", err)
+	}
+	if err := s.CanActOnUsers(keyed, admin, roleless); err != nil {
+		t.Fatalf("admin's access key on a user: %v", err)
 	}
 }
 
@@ -401,9 +513,9 @@ func TestAssignableRoles(t *testing.T) {
 		actor int64
 		want  []row
 	}{
-		{"root", ctx, root, []row{{RoleAdmin, true}, {RoleOperator, true}, {RoleUser, true}, {"admin_maker", true}}},
-		{"admin", ctx, admin, []row{{RoleOperator, true}, {RoleUser, true}, {"admin_maker", false}}},
-		{"operator", ctx, operator, []row{{RoleUser, true}}},
+		{"root", ctx, root, []row{{RoleAdmin, true}, {RoleOperator, true}, {RoleSupplier, true}, {RoleUser, true}, {"admin_maker", true}}},
+		{"admin", ctx, admin, []row{{RoleOperator, true}, {RoleSupplier, true}, {RoleUser, true}, {"admin_maker", false}}},
+		{"operator", ctx, operator, []row{{RoleSupplier, true}, {RoleUser, true}}},
 		{"admin key", core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: admin, Permissions: []string{"role:assign", "user:read"}}), admin, []row{}},
 		{"root key", core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"user:read"}}), root, []row{}},
 	}
@@ -430,7 +542,7 @@ func TestResetRoleAssignable(t *testing.T) {
 	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
 	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
-	for _, role := range []string{RoleAdmin, RoleOperator, RoleUser} {
+	for _, role := range []string{RoleAdmin, RoleOperator, RoleSupplier, RoleUser} {
 		id := roleID(t, s, role)
 		if _, err := s.SetRoleAssignable(ctx, root, id, AssignableInput{RoleKeys: []string{RoleAdmin}, AssignCustom: true}); err != nil {
 			t.Fatal(err)

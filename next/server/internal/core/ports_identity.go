@@ -191,8 +191,9 @@ type AuthzVersioner interface {
 // UserGuard is SEC-H2 for actions on users (authz implements it).
 type UserGuard interface {
 	// CanActOnUsers fails unless what the targets' roles grant is within
-	// what actorID may grant (a superuser target: only a superuser). The
-	// actor itself among the targets (unless acting through its access
+	// what actorID may grant (a superuser target: only a superuser) and
+	// every role a target holds, the default user role aside, is one actorID
+	// may assign (peer protection). The actor itself among the targets (unless acting through its access
 	// key) and actor 0 (the system) pass.
 	CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error
 	// ActOnSelf fails with ErrSelfTarget unless actorID's roles make it a

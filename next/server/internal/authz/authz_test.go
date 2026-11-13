@@ -168,6 +168,46 @@ func isCode(err error, code string) bool {
 	return errors.As(err, &e) && e.Code == code
 }
 
+// fieldCode is the code of field's error in an invalid_argument err, "" when
+// it has none.
+func fieldCode(err error, field string) string {
+	var e *core.Error
+	if !errors.As(err, &e) {
+		return ""
+	}
+	fields, _ := e.Details["fields"].([]core.FieldError)
+	for _, f := range fields {
+		if f.Field == field {
+			return f.Code
+		}
+	}
+	return ""
+}
+
+// operatorDefaults pins the built-in operator role's default permissions
+// (decision D3), in catalog order: users without delete or password reset,
+// assigning roles without defining them, groups, user groups, accounts
+// without other people's credentials or the guarded settings, proxies, and
+// read access to prices, balances, usage, nodes, audit logs and tasks (which
+// it may also run), next to what a user and a supplier have.
+var operatorDefaults = []string{
+	"user:read", "user:create", "user:update",
+	"role:read", "role:assign",
+	"apikey:self:manage",
+	"group:read", "group:manage",
+	"segment:read", "segment:manage",
+	"account:read", "account:create", "account:update", "account:delete", "account:test",
+	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
+	"proxy:read", "proxy:manage", "proxy:own:read", "proxy:own:manage",
+	"price:read",
+	"balance:self:read", "balance:all:read",
+	"usage:self:read", "usage:all:read",
+	"node:read",
+	"audit:read",
+	"task:read", "task:run",
+	"gateway:use",
+}
+
 // ------------------------------------------------------------ tests
 
 func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
@@ -194,23 +234,35 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if !byKey[RoleSuperAdmin].Superuser || !byKey[RoleSuperAdmin].Builtin {
 		t.Fatalf("super_admin: %+v", byKey[RoleSuperAdmin])
 	}
-	if len(byKey[RoleAdmin].PermissionKeys) != n {
-		t.Fatalf("admin perms = %d, want %d", len(byKey[RoleAdmin].PermissionKeys), n)
+	// The admin holds every core permission but the five reserved for the
+	// super admin (decision D2).
+	superOnly := superOnlyKeys()
+	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
+		t.Fatalf("admin perms = %d of %d: %v", len(got), n, got)
 	}
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
 		t.Fatalf("user perms = %v", byKey[RoleUser].PermissionKeys)
 	}
-	op := byKey[RoleOperator]
-	if op == nil || !op.Builtin || op.Superuser || len(op.PermissionKeys) == 0 || len(op.PermissionKeys) >= n {
-		t.Fatalf("operator: %+v", op)
+	// The supplier role: its own accounts and proxies, nothing of plugins,
+	// no group binding (decision 7), and nothing to assign.
+	sup := byKey[RoleSupplier]
+	wantSup := []string{
+		"account:own:create", "account:own:credential:view", "account:own:delete", "account:own:read", "account:own:test", "account:own:update",
+		"proxy:own:manage", "proxy:own:read",
 	}
-	for _, k := range op.PermissionKeys {
-		if strings.HasPrefix(k, "settings:") || strings.HasPrefix(k, "sticky:") || strings.HasPrefix(k, "plugin:") || strings.HasPrefix(k, "publisher:") {
-			t.Fatalf("operator has %s", k)
+	if sup == nil || !sup.Builtin || sup.Superuser || !slices.Equal(slices.Sorted(slices.Values(sup.PermissionKeys)), wantSup) ||
+		len(sup.AssignableRoleKeys) != 0 || sup.AssignCustom {
+		t.Fatalf("supplier: %+v", sup)
+	}
+	for role, want := range map[string][]string{RoleAdmin: {RoleOperator, RoleSupplier, RoleUser}, RoleOperator: {RoleSupplier, RoleUser}} {
+		if got := byKey[role].AssignableRoleKeys; !slices.Equal(got, want) {
+			t.Fatalf("%s assigns %v, want %v", role, got, want)
 		}
 	}
-	if !slices.Contains(op.PermissionKeys, "account:update") || !slices.Contains(op.PermissionKeys, "system:update:execute") {
-		t.Fatalf("operator perms = %v", op.PermissionKeys)
+	// The operator holds exactly its whitelist (decision D3), in catalog order.
+	op := byKey[RoleOperator]
+	if op == nil || !op.Builtin || op.Superuser || !slices.Equal(op.PermissionKeys, operatorDefaults) {
+		t.Fatalf("operator: %+v\nwant %v", op, operatorDefaults)
 	}
 
 	// Idempotent: a second sync does not bump the version.
@@ -328,13 +380,13 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, a, "u@x.com", RoleUser)
-	admin := addUser(t, a, "admin@x.com", RoleAdmin)
+	root := addUser(t, a, "root@x.com", RoleSuperAdmin)
 	mustCan(t, a, uid, "gateway:use", true)
 	mustCan(t, b, uid, "gateway:use", true)
 	mustCan(t, b, uid, "user:read", false) // cached on b
 
 	// Mutation on node a is visible on node b through the bus.
-	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
+	if _, err := a.SetRolePermissions(ctx, root, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", true)
@@ -350,7 +402,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 		t.Fatalf("version poll spec: %+v", poll)
 	}
 	mustCan(t, c, uid, "user:read", true)
-	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), userRolePermissions); err != nil {
+	if _, err := a.SetRolePermissions(ctx, root, roleID(t, a, RoleUser), userRolePermissions); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := poll.Handler(ctx, core.TaskRun{Name: poll.Name}); err != nil {
@@ -359,7 +411,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	mustCan(t, c, uid, "user:read", false)
 
 	// Disabled users have no permissions.
-	su := addUser(t, a, "s@x.com", RoleSuperAdmin)
+	su := root
 	mustCan(t, a, su, "anything:at:all", true)
 	v := bump(t, a)
 	if _, err := db.Pool.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, su); err != nil {
@@ -425,9 +477,9 @@ func TestBumpDropsStaleCache(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, b, "u@x.com", RoleUser)
-	admin := addUser(t, b, "admin@x.com", RoleAdmin)
+	root := addUser(t, b, "root@x.com", RoleSuperAdmin)
 	mustCan(t, a, uid, "user:read", false) // cached on a
-	if _, err := b.SetRolePermissions(ctx, admin, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
+	if _, err := b.SetRolePermissions(ctx, root, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", false) // stale on a
@@ -472,6 +524,13 @@ func TestRoleManagement(t *testing.T) {
 	}
 	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "Bad Key", Name: lt("x", "x")}); !isCode(err, "invalid_argument") {
 		t.Fatalf("bad key: %v", err)
+	}
+	// Built-in role keys are reserved, supplier included.
+	for _, key := range []string{RoleSuperAdmin, RoleAdmin, RoleOperator, RoleSupplier, RoleUser} {
+		_, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x")})
+		if !isCode(err, "invalid_argument") || fieldCode(err, "key") != "reserved" {
+			t.Fatalf("create role %q: %v", key, err)
+		}
 	}
 	r, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"account:read", "account:test"}})
 	if err != nil {
@@ -537,13 +596,14 @@ func TestRoleGrantEscalation(t *testing.T) {
 		PermissionKeys: []string{"user:read", "account:read"}}); err != nil {
 		t.Fatalf("operator creates role: %v", err)
 	}
-	// The super admin is not limited; the admin holds every core permission.
+	// The super admin is not limited; the admin holds every core permission
+	// but those reserved for the super admin.
 	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "installer", Name: lt("Installer", "安装"),
-		PermissionKeys: []string{"plugin:install", "settings:manage", "system:update:execute"}}); err != nil {
+		PermissionKeys: []string{"plugin:install", "settings:manage"}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "updater", Name: lt("Updater", "升级"),
-		PermissionKeys: []string{"system:update:execute"}}); err != nil {
+		PermissionKeys: []string{"system:update:read", "price:manage"}}); err != nil {
 		t.Fatal(err)
 	}
 

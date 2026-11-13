@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -387,6 +388,65 @@ func TestDisabledAdminStaysOutOfReach(t *testing.T) {
 	// The superuser, who outranks the admin, still can.
 	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &active}, testIP); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Peer protection (T56) reaches every entry acting on a user: an admin
+// cannot change, reset or delete another admin, nor an operator another
+// operator; users below them are unaffected.
+func TestPeersCannotActOnEachOther(t *testing.T) {
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	mk := func(email string, roles ...string) int64 {
+		t.Helper()
+		u, err := s.CreateUser(ctx, root, CreateUserInput{Email: email, Password: "peer-password-1", RoleKeys: roles})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.ID
+	}
+	admin, admin2 := mk("admin1@example.com", authz.RoleUser, authz.RoleAdmin), mk("admin2@example.com", authz.RoleUser, authz.RoleAdmin)
+	op, op2 := mk("op1@example.com", authz.RoleUser, authz.RoleOperator), mk("op2@example.com", authz.RoleUser, authz.RoleOperator)
+	plain := mk("plain@example.com", authz.RoleUser)
+
+	name, pw := "renamed", "taken-over-1"
+	// roles drops the default role from the target, which every actor here
+	// may revoke, so only the target check can refuse it.
+	acts := func(actor, target int64, roles ...string) map[string]error {
+		out := map[string]error{}
+		_, out["rename"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{DisplayName: &name}, testIP)
+		_, out["password"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{Password: &pw}, testIP)
+		out["reset security"] = s.ResetSecurity(ctx, actor, target, SelfConfirmation{}, testIP)
+		_, out["roles"] = s.SetUserRoles(ctx, actor, target, roles)
+		out["delete"] = s.DeleteUser(ctx, actor, target)
+		return out
+	}
+	for _, peer := range []struct {
+		actor, target int64
+		role          string
+	}{{admin, admin2, authz.RoleAdmin}, {op, op2, authz.RoleOperator}} {
+		for act, err := range acts(peer.actor, peer.target, peer.role) {
+			if !isCode(err, "permission_denied") || core.AsError(err).Details["role"] != peer.role {
+				t.Errorf("user %d may %s its peer %d: %v", peer.actor, act, peer.target, err)
+			}
+		}
+	}
+	// Below them: the admin acts on the operator and on a user as before
+	// (the operator has no user:password:reset or user:delete by default).
+	if _, err := s.UpdateUser(ctx, op, plain, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+		t.Fatalf("operator renames a user: %v", err)
+	}
+	for target, roles := range map[int64][]string{op2: {authz.RoleOperator}, plain: {authz.RoleUser, authz.RoleOperator}} {
+		for act, err := range acts(admin, target, roles...) {
+			if err != nil {
+				t.Errorf("admin may not %s user %d: %v", act, target, err)
+			}
+		}
+	}
+	// The super admin is unaffected.
+	if _, err := s.UpdateUser(ctx, root, admin2, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+		t.Fatalf("super admin renames an admin: %v", err)
 	}
 }
 
@@ -1228,7 +1288,13 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	ccgateway.New(k.s.db, cipher).RegisterRoutes(k.r)
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
 	root := login.User.ID
-	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset"}
+	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
+		// T57: code execution, trust roots and plaintext credentials.
+		"plugin:install", "plugin:uninstall", "plugin:grant:high", "plugin:grant:critical", "plugin:grant:db_schema_unconfined",
+		"publisher:manage", "system:update:execute", "system:update:recover",
+		"account:credential:view", "account:own:credential:view"}
+	// A stand-in for the plugin upload route, guarded by the same permission.
+	k.r.Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	mods, err := k.s.AccessKeyPermissions(ctx, root)
 	if err != nil {
@@ -1249,17 +1315,26 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 		}
 	}
 
-	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage"}}
+	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage", "plugin:install"}}
 	code, out := k.call(login.AccessToken, "POST", "/me/access-keys", body)
 	e, _ := out["error"].(map[string]any)
 	details, _ := e["details"].(map[string]any)
-	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || details["missing"] != nil {
+	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || !slices.Contains(held, any("plugin:install")) || details["missing"] != nil {
 		t.Fatalf("choosing settings:manage: %d %v", code, out)
 	}
 
 	key := k.createKey(t, root, adminPassword, "settings:read")
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'settings:manage') WHERE id = $1`, key.ID); err != nil {
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = permissions || $2::text[] WHERE id = $1`, key.ID, sessionOnly); err != nil {
 		t.Fatal(err)
+	}
+	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"settings:read"}) {
+		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	}
+	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || !strings.Contains(fmt.Sprint(out), "plugin:install") {
+		t.Fatalf("stored plugin:install: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "POST", "/plugins/upload", nil); code != 204 {
+		t.Fatalf("session plugin:install: %d %v", code, out)
 	}
 	if code, out := k.call(key.Key, "GET", "/system/ccgateway/remote-config", nil); code != 200 {
 		t.Fatalf("settings:read: %d %v", code, out)
@@ -1275,7 +1350,13 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	if code != 200 || len(list) != 1 {
 		t.Fatalf("list: %d %v", code, out)
 	}
-	if lost, _ := list[0].(map[string]any)["lost"].([]any); !slices.Equal(lost, []any{"settings:manage"}) {
+	lost, _ := list[0].(map[string]any)["lost"].([]any)
+	if len(lost) != len(sessionOnly) {
 		t.Fatalf("lost = %v", lost)
+	}
+	for _, p := range sessionOnly {
+		if !slices.Contains(lost, any(p)) {
+			t.Fatalf("lost = %v, without %s", lost, p)
+		}
 	}
 }

@@ -30,14 +30,22 @@ func (s *Service) querier() store.Querier {
 // may act on it. Tests without a database seed the cache and are answered
 // from it.
 func (s *Service) usersRoleSet(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, error) {
+	set, _, err := s.usersRoles(ctx, q, userIDs)
+	return set, err
+}
+
+// usersRoles is usersRoleSet with the keys of those roles, sorted; tests
+// without a database have no role keys.
+func (s *Service) usersRoles(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, []string, error) {
 	if s.db == nil {
-		return s.cachedUnion(userIDs), nil
+		return s.cachedUnion(userIDs), nil, nil
 	}
 	var keys []string
-	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
-		return core.PermissionSet{}, err
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key ORDER BY r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
+		return core.PermissionSet{}, nil, err
 	}
-	return s.RolesPermissions(ctx, q, keys)
+	set, err := s.RolesPermissions(ctx, q, keys)
+	return set, keys, err
 }
 
 // cachedUnion is usersRoleSet for tests without a database.
@@ -121,12 +129,28 @@ func cannotActOn(ctx context.Context, target core.PermissionSet) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户"))
 }
 
+// cannotActOnPeer is the denial of an action on a target holding roleKey, a
+// role the actor cannot assign (peer protection, canActOnUsers).
+func cannotActOnPeer(ctx context.Context, roleKey string) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot modify a user holding a role you cannot assign",
+		"你不能修改持有你无权分配的角色的用户")).WithDetails(map[string]any{"role": roleKey})
+}
+
 // cannotActOnRole is the denial of a change to a role granting more than the
 // actor holds (editableRole).
 func cannotActOnRole(ctx context.Context) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx,
 		"you cannot change a role with permissions you don't have",
 		"你不能修改含有你所没有权限的角色"))
+}
+
+// builtinRoleSuperOnly is the denial of a change to a built-in role by anyone
+// but the super admin (editableRole).
+func builtinRoleSuperOnly(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"only the super admin can change built-in roles",
+		"只有超级管理员可以修改内置角色"))
 }
 
 // audit records one audit_logs row of an authz change through q, the
@@ -156,12 +180,16 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 }
 
 // CanActOnUsers implements core.UserGuard: what the targets' roles grant
-// together must be within the actor's grantSet. Each target within the actor
-// is the same as their union within it, so one query serves any number of
-// targets. The target's side is what its ROLES grant, not what it can do
-// right now: a disabled user can do nothing, and comparing against that
-// would let anyone with user:update re-enable a disabled admin or set its
-// password and take the account over (SEC-H2). The actor itself among the
+// together must be within the actor's grantSet, and every role a target
+// holds, the default user role aside, must be one the actor may assign (peer
+// protection: with the default lists an admin leaves other admins alone and
+// an operator other operators; the user role is left out so that a role with
+// user:update and no assignable list still serves plain users). Each target
+// within the actor is the same as their union within it, so one query serves
+// any number of targets. The target's side is what its ROLES grant, not what
+// it can do right now: a disabled user can do nothing, and comparing against
+// that would let anyone with user:update re-enable a disabled admin or set
+// its password and take the account over (SEC-H2). The actor itself among the
 // targets and the system (actor 0) pass; ActOnOthers asks ActOnSelf for the former. An
 // access key acts with less than its owner's roles, so its owner is a target
 // like any other: no access key changes a superuser, its own included
@@ -197,18 +225,51 @@ func (s *Service) ActOnSelf(ctx context.Context, actorID int64) error {
 
 // canActOnUsers is CanActOnUsers reading through q.
 func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, targetIDs ...int64) error {
+	ids := otherTargets(ctx, actorID, targetIDs)
+	if len(ids) == 0 {
+		return nil
+	}
+	actor, err := s.grantSet(ctx, q, actorID)
+	if err != nil {
+		return err
+	}
+	return s.targetsWithin(ctx, q, actor, ids)
+}
+
+// otherTargets are the targets CanActOnUsers judges, sorted and distinct:
+// none for the system, and all but the actor itself unless it acts through
+// its access key.
+func otherTargets(ctx context.Context, actorID int64, targetIDs []int64) []int64 {
+	if actorID == 0 {
+		return nil
+	}
 	self := actorID
 	if core.ByAccessKey(ctx, actorID) {
 		self = 0
 	}
 	ids := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == self })
-	if actorID == 0 || len(ids) == 0 {
+	slices.Sort(ids)
+	return slices.Compact(ids)
+}
+
+// targetsWithin fails unless actor, a grantSet, may act on the users ids
+// (CanActOnUsers). Tests without a database have no role keys, so peer
+// protection is not checked there.
+func (s *Service) targetsWithin(ctx context.Context, q store.Querier, actor core.PermissionSet, ids []int64) error {
+	if len(ids) == 0 {
 		return nil
 	}
-	slices.Sort(ids)
-	target, err := s.usersRoleSet(ctx, q, slices.Compact(ids))
+	target, roles, err := s.usersRoles(ctx, q, ids)
 	if err != nil {
 		return err
 	}
-	return s.covers(ctx, q, actorID, target, cannotActOn(ctx, target))
+	if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
+		return err
+	}
+	for _, key := range roles {
+		if key != RoleUser && !actor.CanAssign(key) {
+			return cannotActOnPeer(ctx, key)
+		}
+	}
+	return nil
 }

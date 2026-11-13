@@ -45,6 +45,12 @@ function toggleKey(listRef: string[], key: string) {
   else listRef.push(key)
 }
 
+/** Supplier is an add-on role: a supplier is a user too, so checking it checks the default role with it. */
+function toggleRole(key: string) {
+  toggleKey(form.role_keys, key)
+  if (key === 'supplier' && form.role_keys.includes('supplier') && !form.role_keys.includes('user')) form.role_keys.push('user')
+}
+
 async function submit() {
   errors.value = {}
   if (!form.email.trim()) errors.value.email = t('common.required')
@@ -89,7 +95,7 @@ async function submit() {
           :model-value="form.role_keys.includes(r.key)"
           :disabled="!roleSelectable(r.key)"
           :label="lt(r.name) || r.key"
-          @update:model-value="toggleKey(form.role_keys, r.key)"
+          @update:model-value="toggleRole(r.key)"
         />
       </div>
       <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>

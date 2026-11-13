@@ -458,7 +458,7 @@ func TestHTTP(t *testing.T) {
 	if code, out = c.do("POST", "/roles", ops, map[string]any{"key": "viewer", "name": map[string]string{"en": "Viewer", "zh": "只读"}, "permission_keys": []string{"user:read"}}); code != 201 {
 		t.Fatalf("create role: %d %v", code, out)
 	}
-	if code, out = c.do("GET", "/roles", ops, nil); code != 200 || len(out["data"].([]any)) != 5 {
+	if code, out = c.do("GET", "/roles", ops, nil); code != 200 || len(out["data"].([]any)) != 6 { // five built-in roles and viewer
 		t.Fatalf("list roles: %d %v", code, out)
 	}
 
