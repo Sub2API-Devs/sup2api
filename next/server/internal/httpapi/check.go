@@ -54,8 +54,10 @@ func CheckRoutes(specs []RouteSpec, rules RouteRules) error {
 		}
 		if s.StepUp != "" && !slices.ContainsFunc(s.Keys, func(k perm.Key) bool { return rules.StepUpKey(string(k)) }) {
 			exempt[s.ID()] = true
-			if _, ok := rules.StepUpExempt[s.ID()]; !ok {
+			if reason, ok := rules.StepUpExempt[s.ID()]; !ok {
 				fail(s, "step-up route without a permission flagged stepUp is not on the exempt list")
+			} else if reason == "" {
+				fail(s, "the step-up exempt list gives no reason")
 			}
 		}
 		if a := s.access(); a != "" {
