@@ -7,6 +7,24 @@ import { asArray } from '../pluginUtil'
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((k) => b.includes(k))
 
 /**
+ * The roles the caller may hand plugin permissions to (install
+ * checkRolesGrantable: role:define, then CanGrantToRoles): the super admin
+ * any role, others only custom roles on their managed list that they do not
+ * hold themselves. The consent page and the review of held-back grants share it.
+ */
+export function useNameableRoles() {
+  const auth = useAuthStore()
+  const managed = useAssignableRoles()
+  const choices = computed<AssignableRole[]>(() => {
+    if (!auth.has('role:define')) return []
+    if (auth.me?.superuser) return managed.roles.value
+    return managed.roles.value.filter((r) => !r.builtin && r.grantable && !auth.me?.roles.includes(r.key))
+  })
+  const canName = (role: string) => choices.value.some((c) => c.key === role)
+  return { choices, canName }
+}
+
+/**
  * The roles the consent page lets the caller give each permission the
  * consent creates (CONTRACTS: new_permission_roles). Only with role:define;
  * the super admin may name any role, others only custom roles on their
@@ -16,18 +34,11 @@ const same = (a: string[], b: string[]) => a.length === b.length && a.every((k) 
  * roles included.
  */
 export function useNewPermissionRoles(review: Ref<PluginReview | null>) {
-  const auth = useAuthStore()
-  const managed = useAssignableRoles()
-  const choices = computed<AssignableRole[]>(() => {
-    if (!auth.has('role:define')) return []
-    if (auth.me?.superuser) return managed.roles.value
-    return managed.roles.value.filter((r) => !r.builtin && r.grantable && !auth.me?.roles.includes(r.key))
-  })
+  const { choices, canName: selectable } = useNameableRoles()
   const perms = computed(() => asArray<ReviewUserPermission>(review.value?.user_permissions).filter((p) => p.new))
   const overrides = ref<Record<string, string[]>>({})
   watch(review, () => (overrides.value = {}))
 
-  const selectable = (role: string) => choices.value.some((c) => c.key === role)
   const initial = (p: ReviewUserPermission) => (p.default_roles || []).filter(selectable)
   const selected = (p: ReviewUserPermission) => overrides.value[p.key] ?? initial(p)
   const changed = (p: ReviewUserPermission) => !!overrides.value[p.key] && !same(overrides.value[p.key], initial(p))

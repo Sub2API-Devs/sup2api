@@ -65,6 +65,7 @@ func TestPluginRoutesStepUp(t *testing.T) {
 		{"POST", "/plugins/upload", true},
 		{"POST", "/plugins/install-from-market", true},
 		{"POST", "/plugins/guard/versions/0.1.0/consent", true},
+		{"POST", "/plugins/guard/versions/0.1.0/role-grants/confirm", true},
 		{"POST", "/publishers", true},
 		{"POST", "/publishers/1/keys", true},
 		{"POST", "/publishers/1/revoke", true},

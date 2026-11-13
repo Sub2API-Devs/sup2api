@@ -226,7 +226,7 @@
 | GET `/plugins/:key/versions/:version/review` | `plugin:read` | 重新获取待确认版本的 `review` |
 | POST `/plugins/:key/versions/:version/consent` `{grants:[{permission, scope?}], denied:[permission], new_permission_roles?:{<本地 key>:[role]}, role_keys_for_new_permissions:[]}`（新权限的角色，省略按 manifest `defaultRoles`，§4） | `plugin:install` + 按风险 `plugin:grant:high`/`plugin:grant:critical` | 确认授权 |
 | POST `/plugins/:key/versions/:version/reject` | `plugin:install` | |
-| POST `/plugins/:key/versions/:version/role-grants/confirm`、`/role-grants/reject` | `plugin:install`，另需与同意页显式指定角色相同的资格（`role:define` + `CanGrantToRoles`） | 确认（写入）或全部拒绝内置插件自动升级暂缓的角色授予 → `{grants:[RoleGrant], confirmed}`；该版本没有待确认项 404；拒绝的每个 (permission, role) 也清除此前其他版本暂缓的同一授予（2026-11-13 权限加固期 4 P4C、P4CFIX） |
+| POST `/plugins/:key/versions/:version/role-grants/confirm`、`/role-grants/reject` | `plugin:install`，另需与同意页显式指定角色相同的资格（`role:define` + `CanGrantToRoles`）；confirm 每次二次验证 `plugin.grant`（与同意页相同，期 4 整合审查），reject 不需要 | 确认（写入）或全部拒绝内置插件自动升级暂缓的角色授予 → `{grants:[RoleGrant], confirmed}`；该版本没有待确认项 404；拒绝的每个 (permission, role) 也清除此前其他版本暂缓的同一授予（2026-11-13 权限加固期 4 P4C、P4CFIX） |
 | POST `/plugins/:key/enable`、`/disable` | `plugin:manage` | 发起发布 → `rollout` |
 | POST `/plugins/:key/upgrade` `{version}` | `plugin:manage` | 发起升级 → `rollout` |
 | GET `/plugins/:key/rollouts/current`，POST `/plugins/:key/rollouts/:id/cancel` | `plugin:read` / `plugin:manage` | |
@@ -7028,7 +7028,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `user.security.reset` | DELETE `/users/:id/security`（含本人） | `user:password:reset` |
 | `user.delete` | DELETE `/users/:id` | `user:delete` |
 | `plugin.install` | POST `/plugins/upload`、`/plugins/install-from-market` | `plugin:install` |
-| `plugin.grant` | POST `/plugins/:key/versions/:version/consent` | `plugin:install`（及授出所需的 `plugin:grant:*`） |
+| `plugin.grant` | POST `/plugins/:key/versions/:version/consent`、`/role-grants/confirm` | `plugin:install`（及授出所需的 `plugin:grant:*`） |
 | `publisher.manage` | 发布者与公钥的写操作 | `publisher:manage` |
 | `system.update` | POST `/system/upgrades`、升级计划与节点的 recover 操作、`/system/releases/import` | `system:update:execute` / `recover` |
 | `system.update` | PUT `/system/update-source`（更新源决定下一次升级运行的代码；期 4 R0） | `settings:manage` |

@@ -4,7 +4,7 @@ export default {
     title: '有待确认的新授权',
     short: '{n} 项授权待确认',
     hint: '自动升级暂缓了这些授予：它们是敏感权限，或授予 admin、operator、supplier 以外的角色。确认后授予，拒绝则全部放弃。',
-    hintNoRight: '自动升级暂缓了这些授予。确认需要 plugin:install 与 role:define 权限。',
+    hintNoRight: '自动升级暂缓了这些授予。确认需要 plugin:install 与 role:define 权限，并且能修改列出的每个角色（内置角色只有超级管理员能改）。',
     confirm: '确认',
     rejectConfirm: '拒绝全部这些授予？拒绝后不会再提示。',
     rejectAll: '全部拒绝',
