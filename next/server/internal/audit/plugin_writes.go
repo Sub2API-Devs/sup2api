@@ -100,6 +100,11 @@ func (p *PluginWrites) AuditPluginWrite(ctx context.Context, w core.PluginWrite)
 	if len(w.Body) > 0 {
 		detail["body"] = bodySummary(w.Body)
 	}
+	// A write through an access key says so (CONTRACTS §80): the plugin is
+	// not told, the audit row is.
+	if k, ok := core.AccessKey(ctx); ok && k.UserID == w.UserID {
+		detail["via"], detail["access_key_id"] = "access_key", k.KeyID
+	}
 	select {
 	case p.queue <- pluginWriteRow{userID: w.UserID, plugin: w.Plugin, clientIP: w.ClientIP, detail: detail}:
 	default:

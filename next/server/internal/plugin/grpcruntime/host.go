@@ -392,7 +392,7 @@ func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequ
 			return nil, err
 		}
 	}
-	ok, err := h.i.rt.o.Authorizer.Can(ctx, in.GetUserId(), key)
+	ok, err := h.i.rt.o.Authorizer.Can(h.i.callers.narrow(ctx, in.GetUserId()), in.GetUserId(), key)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -420,7 +420,7 @@ func (h *hostServer) AccountScopeCheck(ctx context.Context, in *pluginv1.Account
 	if !ok {
 		return nil, status.Error(codes.Unavailable, "account access unavailable")
 	}
-	all, allowed, err := access.AccountsInScope(ctx, in.GetUserId(), in.GetAction(), ids)
+	all, allowed, err := access.AccountsInScope(h.i.callers.narrow(ctx, in.GetUserId()), in.GetUserId(), in.GetAction(), ids)
 	if err != nil {
 		return nil, toStatus(err)
 	}

@@ -709,7 +709,7 @@
 - 影响对象：
   - 控制台（S5 待做）：上面改为 proof 的接口在前端接入 StepUpDialog 之前一律 403 `verification_required`，不能和 S5 分开发布。会话调用这些接口，每次都要先完成二次验证。
   - 访问密钥：勾了对应权限后，可以调用原先只允许会话的权限与路由，高危的每次还要 proof（只能用 2FA 或密码）。只有 `self:*` 也勾上，访问密钥才能调用自助接口。插件路由按插件权限放行。
-  - 插件：经访问密钥调用时，插件拿到的仍是用户 id；插件内部按用户 id 问宿主的权限判断不受密钥收窄（设计接受，核心侧审计）。
+  - 插件：经访问密钥调用时插件拿到的仍是用户 id。插件处理请求期间问宿主的 `AuthzCheck`、`AccountScopeCheck` 按该用户在途请求的密钥收窄（`grpcruntime.callerSet.narrow`；同一用户多个密钥请求在途时取交集，失败收紧；同时有会话请求在途时会话的回调也被收窄，属可接受的偏严）。admin 写操作审计（`audit.PluginWrites`）记 `via`、`access_key_id`。代理不再把 `X-Verify-Proof` 转发给插件。
 - 已知与接受：
   - proof 绑定的是 URL，不含请求体：超管移交的 `target_user_id` 不在绑定内（同主体、一次性、5 分钟）。
   - 路由级 proof 在处理函数之前消费，处理函数随后因请求体校验失败时 proof 也已用掉；`PUT /me/password` 已改为先校验。

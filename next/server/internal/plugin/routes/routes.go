@@ -98,6 +98,7 @@ var (
 var strippedRequestHeaders = map[string]bool{
 	"authorization":       true,
 	"cookie":              true,
+	"x-verify-proof":      true, // a step-up proof is the core's (CONTRACTS §80.2)
 	"proxy-authorization": true,
 	"connection":          true,
 	"keep-alive":          true,
@@ -172,7 +173,8 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		// A JWT or an access key; the route's permission is checked as the
 		// key narrows it (CONTRACTS §80). A route without a permission
 		// matches nothing and is denied. The plugin is not told the call
-		// came through a key: core audits it.
+		// came through a key: the admin write audit records it, and the
+		// plugin's AuthzCheck/AccountScopeCheck are narrowed by it.
 		if !httpapi.Authenticate(c, h.tokens) {
 			return
 		}

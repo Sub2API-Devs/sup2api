@@ -51,7 +51,8 @@ type refusingTokens struct {
 }
 
 // Code execution and trust roots take a step-up proof (CONTRACTS §80.2):
-// installing, consenting and the publishers' writes.
+// installing, consenting and the publishers' writes; rejecting, enabling,
+// uninstalling and reading do not.
 func TestPluginRoutesStepUp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -68,6 +69,11 @@ func TestPluginRoutesStepUp(t *testing.T) {
 		{"POST", "/publishers/1/keys", true},
 		{"POST", "/publishers/1/revoke", true},
 		{"POST", "/publisher-keys/k/revoke", true},
+		// Not these (no database here: they fail further on, not with 403).
+		{"POST", "/plugins/guard/versions/0.1.0/reject", false},
+		{"POST", "/plugins/guard/enable", false},
+		{"DELETE", "/plugins/guard", false},
+		{"GET", "/publishers", false},
 	} {
 		code, out := h.do(tc.method, tc.path, "admin", nil)
 		e, _ := out["error"].(map[string]any)

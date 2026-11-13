@@ -217,14 +217,14 @@
 | POST `/plugins/:key/upgrade` `{version}` | `plugin:manage` | 发起升级 → `rollout` |
 | GET `/plugins/:key/rollouts/current`，POST `/plugins/:key/rollouts/:id/cancel` | `plugin:read` / `plugin:manage` | |
 | DELETE `/plugins/:key?purge=true` | `plugin:uninstall` | |
-| GET/PUT `/plugins/:key/settings` | `plugin:read` / `plugin:manage` | |
+| GET/PUT `/plugins/:key/settings` | `self:plugin_ui`（§80.1），处理函数里再要 `plugin:read` / `plugin:manage` 或插件的设置权限（§75.1） | |
 | GET `/plugins/:key/grants`，DELETE `/plugins/:key/grants/:permission` | `plugin:read` / `plugin:manage` | |
 | PUT `/plugins/:key/resources` `{memory_mb, cpu, max_threads, max_open_files}` | `plugin:manage` | |
 | PUT `/plugins/:key/egress-policy` `{policy}` | `plugin:manage` | |
 | GET `/plugins/:key/egress`（`?from=&to=`） | `plugin:egress:read` | 按域名汇总 + 明细 |
 | GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `task:run`🔐 | 手动运行与 POST `/system/tasks/:name/run` 同口径（2026-11-12 权限加固 W4-A4，此前为 `plugin:manage`）；审计动作仍是 `plugin.job.run` |
 | GET `/plugins/:key/events` | `plugin:read` | 游标、积压、死信 |
-| GET `/ui/plugins` | auth | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
+| GET `/ui/plugins` | `self:plugin_ui`（§80.1：会话天然持有，访问密钥须勾选） | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
 | GET `/nodes` | `node:read` | |
 | GET `/market/sources`、GET `/market/plugins?source_id=` | `plugin:market:read` | |
 | GET/POST `/publishers`，POST `/publishers/:id/keys`，POST `/publishers/:id/revoke`，POST `/publisher-keys/:key_id/revoke` | `publisher:read` / `publisher:manage` | |
@@ -703,7 +703,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 
-GET `/plugins/:key/settings`（`plugin:read`）→
+GET `/plugins/:key/settings`（`plugin:read` 或插件的设置权限；路由本身要 `self:plugin_ui`，§80.1）→
 
 | 字段 | 说明 |
 |---|---|
@@ -715,13 +715,13 @@ GET `/plugins/:key/settings`（`plugin:read`）→
 | `values` | 当前配置值（解密后）；敏感字段非空时为 `"******"` |
 | `secret_fields` | 敏感字段名（Schema 顶层属性中 `writeOnly: true`、`format: "password"` 或 `x-sensitive: true` 的），排序 |
 
-PUT `/plugins/:key/settings`（`plugin:manage`）请求 `{values:{...}}`：
+PUT `/plugins/:key/settings`（`plugin:manage` 或插件的设置权限；路由本身要 `self:plugin_ui`，§80.1）请求 `{values:{...}}`：
 - `values` 是**完整**配置，整体替换（省略的键会被删除）；敏感字段传 `"******"` 表示保留原值。
 - `mode=schema` 时按 Schema 校验，失败返回 `invalid_argument`，`details.fields[].field` 为 `values` + JSON Pointer（如 `values/api_key`），`code` 为 `schema`。
 - 成功后返回与 GET 相同的结构；审计只记录变更的键名；并在 `plugin:events` 广播配置变更。
 - 插件没有可用版本时 GET/PUT 都返回 404（`plugin has no version`）。
 
-GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation 中已启用且声明了 `ui` 的插件：
+GET `/ui/plugins`（`self:plugin_ui`，会话天然持有，§80.1）→ 不分页数组，只含当前 generation 中已启用且声明了 `ui` 的插件：
 
 | 字段 | 说明 |
 |---|---|
@@ -6389,7 +6389,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **字段**：`ui.settings.permission`，值是插件自己 `userPermissions` 里的一个 key（插件内的本地 key，例如 `moderation:manage`）。
   - 应当是**管理级**权限（`*:manage` 一类）：持有它的人能改插件的全部设置，包括地址类设置（webhook、`base_url`）。不要用只读或日常操作级的权限。
   - `manifest/check` 校验：必须是已声明的 `userPermissions`（否则 `ui.settings.permission` `unknown`）；只有 `ui.settings` 可以写，账号类型表单等其他表单写了报 `unsupported`。
-- **核心接口**：`GET|PUT /plugins/:key/settings` 改为登录即可进入，处理函数里再判断：
+- **核心接口**：`GET|PUT /plugins/:key/settings` 改为登录即可进入（2026-11-13 期 4 起路由要 `self:plugin_ui`，会话天然持有，§80.1），处理函数里再判断：
   - `GET`：`plugin:read` **或** `plugin.<key>:<permission>`；
   - `PUT`：`plugin:manage` **或** `plugin.<key>:<permission>`。
   - 都没有时 403 `permission_denied`，`details.permission` 为核心权限。权限先于其他检查：插件不存在时，没有核心权限的人同样得到 403（不暴露插件是否存在），有核心权限的人得到 404；`PUT` 的请求体也在权限检查之后才读。
@@ -6927,7 +6927,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 **用户定的规则：访问密钥的权限只能是用户自己权限的子集；任何权限都可以配给密钥，用户有这个权限而密钥没配就不能用。** 访问密钥（`sak_` 开头）让脚本和工具以用户身份调用控制台 API。调用模型用的 API Key（`/me/api-keys`）是另一回事，两者互不通用。
 
-- **`Authorization: Bearer sak_…`**：核心路由（`httpapi`）和插件路由（`/api/v1/p/:key/*`，期 4 S4 起）都接受，走 `core.AuthenticateBearer`。插件拿到的调用者仍是用户 id，不知道经由密钥；插件内部再按用户 id 问宿主的权限判断不受密钥收窄（设计接受，核心侧审计）。
+- **`Authorization: Bearer sak_…`**：核心路由（`httpapi`）和插件路由（`/api/v1/p/:key/*`，期 4 S4 起）都接受，走 `core.AuthenticateBearer`。插件拿到的调用者仍是用户 id，不知道经由密钥；但插件在处理该请求期间问宿主的 `AuthzCheck`、`AccountScopeCheck`（SDK `RequirePermission`、`RequireAccounts`）会按该用户在途请求的密钥收窄（同一用户有多个密钥请求在途时取它们的交集，失败收紧）；admin 写操作审计行记 `via: "access_key"`、`access_key_id`。不在请求处理期间（后台任务）问到的仍是用户本身的权限。`X-Verify-Proof` 不转发给插件。
 - **一条规则**：密钥能做什么 = 用户实时权限 ∩ 密钥选中的权限（`core.RestrictToAccessKey`）。创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）；每次检查权限时取交集，所以用户失去权限，密钥立刻跟着失去；重新获得（含插件重新启用）时也恢复（`GET /me/access-keys` 的 `lost` 列出暂时失效的）。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn` 看到的也是这个限制后的集合；“能对谁做”（`UserGuard`）按用户本身的角色算（§43.6）。只限制密钥所属用户，查询其他用户的权限不受影响。此前（2026-11-12 至期 4）有一份“只认会话”的权限清单（`session_only`、`authz.KeyAllowed`），期 4 S3 删除：那些权限现在都可以选，高危接口改为二次验证。
 - **只允许登录会话**（结构性风险，不是配置问题）：访问密钥自身的管理（`/me/access-keys*`，否则密钥能给自己续命或扩权）、登录会话管理（`/me/sessions*`、`POST /auth/logout`，否则密钥能把主人踢下线）。用 `Router.SessionOnly().Handle` 注册，密钥 403 `access keys cannot use this endpoint`。
 - **只读自助接口**：`GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`、`/lookup/:kind`、`/me/verify/methods`（`AuthedRead`）接受任意密钥，返回按密钥收窄后的内容（`/me/assignable-roles` 在密钥下为 `[]`）。
