@@ -19,6 +19,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -46,10 +47,14 @@ type Entity struct {
 	Status string // optional column, returned as stored
 	Live   string // optional condition leaving out soft-deleted rows
 
-	// Read reaches every row. OwnRead, its "own" counterpart (CONTRACTS §21),
-	// reaches the caller's rows only: a holder of OwnRead alone is narrowed
-	// by Mine instead of refused.
+	// Read reaches every row. OwnRead, a narrower permission, reaches the
+	// caller's rows only: a holder of OwnRead alone is narrowed by Mine
+	// instead of refused.
 	Read, OwnRead string
+	// Table makes Read a scoped action (CONTRACTS §21.0): the caller sees
+	// the rows of its scope of Read, any scope will do, and OwnRead is
+	// unused.
+	Table *core.ScopeTable
 	// Mine serves mine=true; nil when no row of the kind is the caller's own.
 	Mine *Mine
 
@@ -139,6 +144,17 @@ func (s *Service) lookup(c *gin.Context) {
 	if e.Live != "" {
 		f.And(e.Live)
 	}
+	if e.Table != nil {
+		scope, err := core.Scope(ctx, s.authz, perm.Key(e.Read))
+		if err == nil && scope.Empty() {
+			err = core.ErrPermissionDenied.WithDetails(map[string]any{"permission": e.Read})
+		}
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		f.And(e.Table.Cond(), e.Table.Args(scope)...)
+	}
 	hint := e.Hint
 	if own {
 		uid, _ := core.UserID(ctx)
@@ -176,6 +192,9 @@ func (s *Service) lookup(c *gin.Context) {
 // lookup is limited to the caller's own rows. When ok is false the error has
 // been rendered.
 func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (own, ok bool) {
+	if e.Table != nil { // checked and narrowed by its scope
+		return mine, true
+	}
 	if !mine {
 		if !httpapi.CanAny(c, s.authz, e.Read, e.OwnRead) {
 			return false, false

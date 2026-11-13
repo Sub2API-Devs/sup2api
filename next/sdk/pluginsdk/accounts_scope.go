@@ -13,9 +13,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
-// Account scope (HostService.AccountScopeCheck; CONTRACTS §21.1). A console
-// user reaches every account with account:<action>, or
-// only the accounts they created with account:own:<action>. The core decides
+// Account scope (HostService.AccountScopeCheck; CONTRACTS §21.0). A console
+// user reaches every account with account:<action>, or the accounts of a
+// narrower scope of it (own, groups, ids: account:<action>:own,
+// account:<action>:group/12 …). The core decides
 // which: a plugin route that acts on accounts asks it instead of trusting the
 // ids in the request.
 //
@@ -106,8 +107,8 @@ func ResolveAccountScope(ctx context.Context, h Host, req *pluginv1.HTTPRequest,
 // RequireAccounts checks that req's caller may do action to every account in
 // ids and returns nil when so. Otherwise it returns the answer to send, the
 // same the core gives on its own account routes: 401 without a user, 403
-// without either account key, and 404 for an account outside the user's own
-// (as if it did not exist). A caller limited to their own accounts must name
+// without any scope of account:<action>, and 404 for an account outside the
+// user's scope (as if it did not exist). A caller with a narrower scope must name
 // at least one: with no ids only a user reaching every account passes (403).
 // A host that cannot answer is a 503. An unknown action or an id that is not
 // positive is the plugin's mistake and a 400, whatever the user holds.

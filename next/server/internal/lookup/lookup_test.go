@@ -44,11 +44,7 @@ func (a fakeAuthz) Can(ctx context.Context, uid int64, permission string) (bool,
 	return set.Has(permission), err
 }
 func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
-	set := core.PermissionSet{Keys: map[string]struct{}{}}
-	for _, k := range a[uid] {
-		set.Keys[k] = struct{}{}
-	}
-	return core.RestrictToAccessKey(ctx, uid, set), nil
+	return core.RestrictToAccessKey(ctx, uid, core.PermissionSetOf(a[uid]...)), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 
@@ -129,7 +125,7 @@ func newFixture(t *testing.T) *fixture {
 	authz := fakeAuthz{
 		f.admin: {"user:read", "group:read", "usage:all:read", "account:read", "account:own:read", "price:read", "proxy:read", "proxy:own:read"},
 		f.alice: {"apikey:self:manage", "account:own:read", "proxy:own:read"},
-		f.carol: {"account:group:bind"},
+		f.carol: {"account:group:bind", fmt.Sprintf("account:read:group/%d", f.zeta)},
 	}
 	r := httpapi.NewRouter(engine, fakeTokens{}, authz)
 	New(f.db, authz).RegisterRoutes(r)
@@ -234,6 +230,7 @@ func TestLookup(t *testing.T) {
 		{"accounts", f.admin, "accounts?q=lk", []string{"lk acct a", "lk acct b", "lk acct c"}, false},
 		{"accounts of the preferred group first", f.admin, "accounts?q=lk&prefer_group_id=" + zeta, []string{"lk acct b", "lk acct c", "lk acct a"}, false},
 		{"accounts with the own permission", f.alice, "accounts", []string{"lk acct a"}, false},
+		{"accounts with a group scope", f.carol, "accounts", []string{"lk acct b", "lk acct c"}, false},
 		{"accounts mine under the full permission", f.admin, "accounts?mine=true", []string{"lk acct b"}, false},
 		{"proxies", f.admin, "proxies", []string{"lk proxy a", "lk proxy b"}, false},
 		{"proxies with the own permission", f.alice, "proxies", []string{"lk proxy a"}, false},

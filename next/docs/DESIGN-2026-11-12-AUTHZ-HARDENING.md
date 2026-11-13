@@ -918,3 +918,19 @@
   - `proxy_url` 被拒时 `details.permission` 变为 `proxy:manage:own`。
   - 其余对 own 与全部范围的行为不变。
 - 回滚：revert。
+
+## 期 4 R5：插件与 lookup 跟随范围
+
+- 改动：
+  - `lookup`：`Entity.Table`。账号、代理两类的 `Read` 作为可带范围的动作：先按调用者的范围（`core.Scope` 加 `Table.Cond`）过滤，范围为空时 403。`mine` 只再加创建者条件，`OwnRead` 只用于分组（`account:group:bind`）。
+  - SDK：
+    - `host.proto` 的 `AccountScopeCheck` 注释、生成代码中对应的注释行（只改注释，描述符不变）、`manifest.RouteAccounts`、`pluginsdk/accounts_scope.go` 的注释改为“范围”口径。
+    - manifest 校验：插件权限 key 的最后一段不能是 `own`（`validUserPermKey`）。现有插件没有这样的 key。
+  - `core.AccountAccess` 注释改为“范围”口径。
+  - `/me` 输出旧 own 别名已在 R2a 实现（`perm.WithLegacyOwn`）。
+- 测试：
+  - lookup `TestLookup` 新增分组范围用例，测试替身改为规范化的 `PermissionSetOf`。
+  - sdk `TestUserPermissionKeyNotAScope`。
+  - account `TestGroupScopedAccounts` 新增 `core.AuthorizeAccounts` 用例，插件账号路由与宿主 RPC 都走这条路径：范围内放行，范围外或未指定 id 时拒绝。
+- 未做，交给 R8 / 插件：插件 UI 宿主的 `hasAction` / `scope` API 与 moderation `host.ts` 的检查属于前端代码，兼容期内旧别名仍然有效。
+- 回滚：revert。

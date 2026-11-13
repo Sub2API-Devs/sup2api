@@ -32,3 +32,16 @@ func TestUserPermissionDefaultRolesAndInheritFrom(t *testing.T) {
 		}
 	}
 }
+
+// A key ending in :own would read as a scope in the core (CONTRACTS §21.0).
+func TestUserPermissionKeyNotAScope(t *testing.T) {
+	m := minimal()
+	m.UserPermissions = []manifest.UserPermission{
+		{Key: "reset:own", Label: manifest.LocalizedText{"en": "Reset"}},
+		{Key: "own:reset", Label: manifest.LocalizedText{"en": "Reset"}, InheritFrom: []string{"reset:own"}},
+	}
+	got := codes(Validate(m, nil, ValidateOptions{Tooling: true}))
+	if got["userPermissions[0].key"] != "invalid_format" || got["userPermissions[1].inheritFrom[0]"] != "invalid_value" || got["userPermissions[1].key"] != "" {
+		t.Fatalf("codes = %v", got)
+	}
+}

@@ -102,11 +102,11 @@ service HostService {
   rpc AuthzCheck(AuthzCheckRequest) returns (AuthzCheckResponse);
 
   // accounts.read: which accounts may the caller of a request act on? The
-  // answer is the core's own account ownership rule (CONTRACTS §21.1), so a
+  // answer is the core's own account scope rule (CONTRACTS §21.0), so a
   // plugin route applies it instead of deciding by itself. user_id must be
   // the Caller of an HTTPService.HandleHTTP request this plugin is serving
   // when it asks; any other user is PERMISSION_DENIED, as is a user holding
-  // neither account:<action> nor account:own:<action>.
+  // account:<action> with no scope at all.
   rpc AccountScopeCheck(AccountScopeCheckRequest) returns (AccountScopeCheckResponse);
 
   // ledger.credit / ledger.debit: bounded by the approved scope
@@ -644,11 +644,12 @@ message AccountScopeCheckRequest {
 }
 
 message AccountScopeCheckResponse {
-  // The user holds account:<action>: every account is in scope and
-  // allowed_ids is empty.
+  // The user holds account:<action> for every account: every account is in
+  // scope and allowed_ids is empty.
   bool all = 1;
-  // Otherwise (account:own:<action>): the ids among account_ids that are
-  // live accounts the user created, in request order, once each.
+  // Otherwise (a narrower scope: own, groups, ids): the ids among
+  // account_ids that are live accounts in the user's scope, in request
+  // order, once each.
   repeated int64 allowed_ids = 2;
 }
 

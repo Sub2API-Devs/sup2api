@@ -109,6 +109,11 @@ func TestGroupScopedAccounts(t *testing.T) {
 	require.Equal(t, []int64{inH, loose}, ids)
 	_, _, err = e.svc.AccountsInScope(ctx, picker, "update", []int64{inH})
 	require.Error(t, err)
+	// What a plugin route with accounts (manifest.RouteAccounts) and the host
+	// RPC run: the same range.
+	require.NoError(t, core.AuthorizeAccounts(ctx, e.svc, mgr, "update", []int64{inG, inGH}))
+	require.Error(t, core.AuthorizeAccounts(ctx, e.svc, mgr, "update", []int64{inG, inH}))
+	require.Error(t, core.AuthorizeAccounts(ctx, e.svc, mgr, "update", nil), "no ids: every account needed")
 
 	// A rebinding by someone else moves the account at once (no cache).
 	_, err = e.db.Pool.Exec(ctx, `INSERT INTO account_groups (account_id, group_id) VALUES ($1, $2)`, inH, k)

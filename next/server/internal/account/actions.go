@@ -26,8 +26,7 @@ type AccountAction struct {
 	// AccountType restricts the action to a specific account type; empty means all types of the plugin.
 	AccountType string `json:"account_type,omitempty"`
 	// Permission is what seeing and invoking the action takes: empty for
-	// nothing, otherwise account:update or, on the caller's own accounts,
-	// account:own:update.
+	// nothing, otherwise account:update with a scope reaching the account.
 	Permission string `json:"permission,omitempty"`
 }
 

@@ -105,11 +105,11 @@ type HostServiceClient interface {
 	// need authz.read.
 	AuthzCheck(ctx context.Context, in *AuthzCheckRequest, opts ...grpc.CallOption) (*AuthzCheckResponse, error)
 	// accounts.read: which accounts may the caller of a request act on? The
-	// answer is the core's own account ownership rule (CONTRACTS §21.1), so a
+	// answer is the core's own account scope rule (CONTRACTS §21.0), so a
 	// plugin route applies it instead of deciding by itself. user_id must be
 	// the Caller of an HTTPService.HandleHTTP request this plugin is serving
 	// when it asks; any other user is PERMISSION_DENIED, as is a user holding
-	// neither account:<action> nor account:own:<action>.
+	// account:<action> with no scope at all.
 	AccountScopeCheck(ctx context.Context, in *AccountScopeCheckRequest, opts ...grpc.CallOption) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
@@ -677,11 +677,11 @@ type HostServiceServer interface {
 	// need authz.read.
 	AuthzCheck(context.Context, *AuthzCheckRequest) (*AuthzCheckResponse, error)
 	// accounts.read: which accounts may the caller of a request act on? The
-	// answer is the core's own account ownership rule (CONTRACTS §21.1), so a
+	// answer is the core's own account scope rule (CONTRACTS §21.0), so a
 	// plugin route applies it instead of deciding by itself. user_id must be
 	// the Caller of an HTTPService.HandleHTTP request this plugin is serving
 	// when it asks; any other user is PERMISSION_DENIED, as is a user holding
-	// neither account:<action> nor account:own:<action>.
+	// account:<action> with no scope at all.
 	AccountScopeCheck(context.Context, *AccountScopeCheckRequest) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.

@@ -1082,6 +1082,11 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
   - 账号表单（POST/PATCH `/accounts`、预备容器、类型 models/fetch、ccgateway 草稿）可引用的代理统一为 `core.ProxyRefScope`：账号动作是全部时为全部代理，否则为 `proxy:read` 与 `proxy:manage` 范围的并集。
   - 不持有任何 `proxy:manage` 时 `proxy_url` 返回 403，`details.permission` 为 `proxy:manage:own`（此前为 `proxy:own:manage`）。
   - ccgateway 账号运行时路由改为 `PermScoped(account:read|update)`；PUT（请求日志）仍只对全量 `account:update` 开放。
+- **插件与 lookup（期 4 R5）**：
+  - 插件账号路由（manifest `accounts`）与宿主 RPC `AccountScopeCheck` 都经 `AccountsInScope`，自动跟随范围。`all` 表示全部；否则 `allowed_ids` 是落在调用者范围内的 id。proto 与 SDK 注释已更新，接口形状不变。
+  - `GET /lookup/accounts`、`/lookup/proxies` 按调用者 `account:read` / `proxy:read` 的范围过滤（任意范围都可调用），`mine=true` 在范围内再收窄。`/lookup/groups` 不变。
+  - 插件 manifest 的 `userPermissions[].key`（及 `inheritFrom`）最后一段不能是 `own`，否则 400 `invalid_format`（会被读成范围）。
+  - `GET /me` 的 `permissions` 除规范 key 外附带旧 own 别名，兼容一个小版本。插件页面可继续检查 `account:own:read`，新代码应改用“动作的任意范围”。
 
 ### 21.1 权限（§4 表同步更新）
 
