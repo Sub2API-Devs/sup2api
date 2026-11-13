@@ -247,9 +247,6 @@ func (p *Plugin) sendBackend(ctx context.Context, id int64, c credentials, metho
 	r, err := pluginsdk.SendAccountRequest(ctx, p.host, &pluginv1.SendAccountRequestRequest{
 		AccountId: id, Method: method, Url: p.ep.ChatGPT + path, Headers: h, Body: body,
 	})
-	if status.Code(err) == codes.Unimplemented {
-		return nil, pluginsdk.Unavailable("the core cannot send account requests; it needs core 0.1.269 or later / 核心不支持代发账号请求，需要核心 0.1.269 或更高版本")
-	}
 	if err != nil {
 		p.log.Warn("codex: send an account request", "account_id", id, "path", path, "error", err.Error())
 		return nil, pluginsdk.Unavailable("the core could not send the request / 核心无法发送请求: " + err.Error())
