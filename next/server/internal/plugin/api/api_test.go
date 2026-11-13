@@ -78,7 +78,7 @@ func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type noopPerms struct{}
 
-func (noopPerms) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef, []string) error {
+func (noopPerms) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef) error {
 	return nil
 }
 func (noopPerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error { return nil }

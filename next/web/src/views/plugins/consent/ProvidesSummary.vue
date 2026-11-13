@@ -26,6 +26,12 @@ const tr = useOptionalT()
 const { colon } = useConsentLabels()
 const listSep = computed(() => t('plugins.listSep'))
 
+/** A role's display name when the caller may list roles, else its key. */
+function roleName(key: string): string {
+  const r = props.roles.find((x) => x.key === key)
+  return (r && lt(r.name)) || key
+}
+
 const reviewPlatforms = computed(() => platformsOf(props.review))
 const reviewAccountTypes = computed(() => accountTypesOf(props.review))
 
@@ -201,6 +207,7 @@ const hasProvides = computed(() => {
               {{ lt(p.label) || p.key }}
               <span class="font-mono opacity-70">({{ p.key }})</span>
               <SIcon v-if="p.sensitive" name="lock" class="h-3 w-3" />
+              <span v-if="p.default_roles?.length" class="opacity-70">{{ t('plugins.consent.defaultRoles', { roles: p.default_roles.map(roleName).join(listSep) }) }}</span>
             </SBadge>
           </li>
         </ul>

@@ -1,6 +1,27 @@
 package manifest
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
+
+// BuiltinRoleKeys are the built-in roles a plugin permission may name in
+// defaultRoles (the core's built-in roles but the super admin; a core test
+// keeps the lists in step).
+var BuiltinRoleKeys = []string{"admin", "operator", "supplier", "user"}
+
+// DefaultPermissionRoles are the roles of a permission declaring no
+// defaultRoles.
+var DefaultPermissionRoles = []string{"admin"}
+
+// Roles reports the built-in roles the permission is granted to when first
+// created: DefaultRoles, or DefaultPermissionRoles when it declares none.
+func (up UserPermission) Roles() []string {
+	if len(up.DefaultRoles) == 0 {
+		return slices.Clone(DefaultPermissionRoles)
+	}
+	return slices.Clone(up.DefaultRoles)
+}
 
 // PermissionModule is the RBAC module of a plugin's permissions:
 // "plugin.<pluginKey>".

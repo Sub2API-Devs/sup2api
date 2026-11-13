@@ -181,6 +181,7 @@
   "userPermissions": [
     {
       "key": "claude_oauth:manage",
+      "defaultRoles": ["admin", "operator"],
       "label": {
         "en": "Manage Claude OAuth accounts",
         "zh": "管理 Claude OAuth 账号"

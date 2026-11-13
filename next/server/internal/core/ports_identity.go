@@ -231,15 +231,22 @@ type PermissionDef struct {
 	Description LocalizedText
 	Sensitive   bool
 	Sort        int
+	// GrantRoles are the roles a plugin permission is granted to when the
+	// catalog first creates it (super admin roles are skipped).
+	GrantRoles []string
+	// InheritFrom are permission keys whose holders get a plugin
+	// permission when the catalog first creates it.
+	InheritFrom []string
 }
 
 // PermissionCatalog is used by the plugin runtime to manage plugin-owned
 // permissions ("plugin.<key>:<local>"). Every mutation bumps the authz version
 // and broadcasts authz:changed.
 type PermissionCatalog interface {
-	// SyncPlugin upserts the plugin's permissions (install/upgrade), deleting
-	// ones no longer declared, and grants newly created ones to roleKeys.
-	SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []PermissionDef, grantNewToRoleKeys []string) error
+	// SyncPlugin upserts the plugin's permissions (install/upgrade), grants
+	// newly created ones to their GrantRoles and to the holders of their
+	// InheritFrom keys, then deletes ones no longer declared.
+	SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []PermissionDef) error
 	// SetPluginActive flips status active/disabled (enable/disable).
 	SetPluginActive(ctx context.Context, tx pgx.Tx, pluginKey string, active bool) error
 	// DeletePlugin removes the plugin's permissions and grants (uninstall).

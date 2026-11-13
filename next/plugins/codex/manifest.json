@@ -105,6 +105,7 @@
   "userPermissions": [
     {
       "key": "codex:manage",
+      "defaultRoles": ["admin", "operator"],
       "label": { "en": "Authorize ChatGPT (Codex) accounts", "zh": "授权 ChatGPT（Codex）账号" },
       "description": {
         "en": "Run the device code and Sign in with ChatGPT authorizations that create or re-authorize ChatGPT (Codex) accounts",
@@ -113,6 +114,7 @@
     },
     {
       "key": "codex:reset",
+      "defaultRoles": ["admin", "operator"],
       "label": { "en": "Use the official ChatGPT (Codex) usage resets", "zh": "使用 ChatGPT（Codex）官方用量重置次数" },
       "description": {
         "en": "List a Codex device code account's official usage resets and spend one to reset its used-up usage windows. Spending a reset uses up one of the account's resets granted by OpenAI and cannot be undone",

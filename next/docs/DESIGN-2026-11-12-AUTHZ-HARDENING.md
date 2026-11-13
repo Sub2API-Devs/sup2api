@@ -505,3 +505,27 @@
 - 影响对象：没有 `settings:manage` 的人（含只有 `account:create` 的运营）同时打开的新建草稿不能超过 3 个，own 级用户（`account:own:create`）同时进行的预备容器不能超过 3 个；此前不限，每个草稿占一个运行环境容器直到被采用、删除或被清理任务回收（草稿超时、预备容器 2 小时过期）。控制台一次只开一个草稿，关闭编辑器会删除，正常使用不会碰到；碰到时删掉一个或等回收后即可再建。并发请求下可能多出 1 个（已接受）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
+## T58 P3：插件权限的默认角色与继承（manifest defaultRoles / inheritFrom）
+
+- 改动：
+  - SDK：`manifest.UserPermission` 增加 `defaultRoles`（首次登记时授予的内置角色，省略为 `admin`，`UserPermission.Roles()`）与 `inheritFrom`（首次登记时授予持有本插件这些旧本地 key 的角色）。`manifest.BuiltinRoleKeys = admin, operator, supplier, user`，与 `authz` 的内置角色（去掉超管）由 `TestManifestBuiltinRoleKeysMatchBuiltinRoles` 双向对照。校验：`defaultRoles` 只能取这四个（`invalid_value`，所以永远不含 `super_admin`）；`inheritFrom` 须是合法的本地 key 且不是自己（`invalid_value`；旧 key 通常已不再声明，所以不要求声明）。
+  - 核心：`core.PermissionDef` 增加 `GrantRoles`、`InheritFrom`；`SyncPlugin(ctx, tx, pluginKey, defs)` 去掉 `grantNewToRoleKeys` 参数：新插入的 key 授予 `GrantRoles`（照旧排除超管角色），再调用核心同步已有的 `grantInherited` 授予持有 `InheritFrom` 的角色，两种都写 `authz.sync.grant` 审计（`via` 为 `default` / `inherit`，后者带 `from`），全部在删除不再声明的旧 key 之前执行（`TestSyncPluginGrantRolesAndInheritFrom` 用改名锁定顺序）。此前插件新权限的角色授予不写审计。
+  - 安装：`roleGrants(m, req)` 按本地 key 给出新权限的角色：`ConsentRequest.new_permission_roles`（新字段，按 key 覆盖，空数组表示不授予）> 旧字段 `role_keys_for_new_permissions`（非空时作用于其余新权限）> manifest `defaultRoles`。`PermissionDefs(m, grants)` 与 `ApplyDefaults(ctx, tx, m, grants)` 共用它；`new_permission_roles` 指向未声明的权限时 400（`new_permission_roles.<key>` `unknown`）。内置插件启动时发空请求，按 manifest 默认授予，删除硬编码的 `admin`；协调器激活仍传 nil（新 key 在同意时已登记）。审核视图 `user_permissions[]` 增加 `default_roles`、`inherit_from`。`checkRoleGrantRights` 只检查请求显式指定的角色（manifest 默认属于系统目录默认，T59 再细化）。
+  - 控制台同意页：不再默认勾选 `admin`，每个新权限旁显示“默认授予：…”；勾选角色即覆盖默认（仍发旧字段 `role_keys_for_new_permissions`）。
+  - 插件 manifest（不升版本）：payment `recharge:use` → user/supplier/operator/admin，`config:manage` → admin；codex `codex:manage`、`codex:reset` 与 claude-oauth `claude_oauth:manage` → admin/operator。其余插件在 T60。
+- 影响对象：只影响此后首次登记的插件权限：
+  - 新装插件或升级新增的权限按 manifest 默认授予，可能不止 admin（例如 payment 的 `recharge:use` 直接给到 user，普通用户首次安装后即可充值，此前需要管理员手工给 user 角色勾选）；控制台默认不再把一切新权限交给 admin。
+  - 已存在的权限、角色授予不变，不做回填。需要让存量环境与新默认一致的，按需执行（示例，先确认插件已安装）：
+    ```sql
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p
+    WHERE r.key IN ('user','supplier','operator','admin') AND p.key = 'plugin.payment:recharge:use'
+    ON CONFLICT DO NOTHING;
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p
+    WHERE r.key = 'operator' AND p.key IN ('plugin.codex:codex:manage','plugin.codex:codex:reset','plugin.claude_oauth:claude_oauth:manage')
+    ON CONFLICT DO NOTHING;
+    ```
+    手工 SQL 不写审计，也不会递增 `authz_meta.version`，各节点的权限缓存要到下一次权限变更或重启才刷新；更推荐在角色页勾选（立即生效并带审计）。
+  - 旧控制台（仍发 `role_keys_for_new_permissions: ["admin"]`）照旧只给 admin。
+- 回滚：revert 这个提交即可，无迁移；已按新默认授出的角色权限保留，需要时在角色页取消。

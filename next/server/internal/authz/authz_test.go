@@ -319,7 +319,7 @@ func TestResetBuiltinRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read"}}, []string{RoleOperator})
+		return s.SyncPlugin(ctx, tx, "guard", withRoles([]core.PermissionDef{{Key: "stats:read"}}, RoleOperator))
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -730,7 +730,7 @@ func TestGrantViewCountsDisabledPermissions(t *testing.T) {
 		}
 	}
 	tx(func(tx pgx.Tx) error {
-		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Label: lt("View stats", "查看统计")}}, []string{RoleAdmin})
+		return s.SyncPlugin(ctx, tx, "guard", withRoles([]core.PermissionDef{{Key: "stats:read", Label: lt("View stats", "查看统计")}}, RoleAdmin))
 	})
 	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "guardian", Name: lt("Guardian", "守卫"),
 		PermissionKeys: []string{"plugin.guard:stats:read"}}); err != nil {
@@ -838,7 +838,7 @@ func TestPluginCatalog(t *testing.T) {
 	}
 	// First install: the plugin is not running, so its keys start disabled
 	// and enabling turns them on.
-	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", defs, []string{RoleAdmin}) })
+	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", withRoles(defs, RoleAdmin)) })
 	if got := permissionStatus(t, db, "plugin.guard:stats:read"); got != "disabled" {
 		t.Fatalf("permission of an installed plugin: %s", got)
 	}
@@ -871,7 +871,7 @@ func TestPluginCatalog(t *testing.T) {
 
 	// Upgrade drops rules:manage, adds audit:read (granted to user only).
 	defs = []core.PermissionDef{{Key: "stats:read", Label: lt("View stats", "查看统计")}, {Key: "plugin.guard:audit:read"}}
-	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", defs, []string{RoleUser}) })
+	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", withRoles(defs, RoleUser)) })
 	eventually(t, func() bool { ok, _ := s.Can(ctx, user, "plugin.guard:audit:read"); return ok })
 	mustCan(t, s, admin, "plugin.guard:stats:read", true) // kept grant
 	mustCan(t, s, admin, "plugin.guard:audit:read", false)
@@ -905,7 +905,7 @@ func TestSyncPluginNewPermissionFollowsPluginStatus(t *testing.T) {
 	running := []string{install.StatusEnabled, install.StatusUpgrading}
 	sync := func(key string, defs ...core.PermissionDef) {
 		t.Helper()
-		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, key, defs, nil) }); err != nil {
+		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, key, defs) }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -970,14 +970,14 @@ func TestSyncPluginSort(t *testing.T) {
 	// Rows as the old numbering left them: the first permission at 0 was
 	// taken for unset and given 10, the second kept its 1.
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Sort: 10}, {Key: "rules:manage", Sort: 1}}, nil)
+		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Sort: 10}, {Key: "rules:manage", Sort: 1}})
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if got := sorts(); got != "plugin.guard:rules:manage=1,plugin.guard:stats:read=10" {
 		t.Fatalf("old numbering: %s", got)
 	}
-	if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", install.PermissionDefs(m), nil) }); err != nil {
+	if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", install.PermissionDefs(m, nil)) }); err != nil {
 		t.Fatal(err)
 	}
 	if got := sorts(); got != "plugin.guard:stats:read=10,plugin.guard:rules:manage=20" {
@@ -1017,10 +1017,10 @@ func TestMenus(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read"}}, []string{RoleAdmin}); err != nil {
+		if err := s.SyncPlugin(ctx, tx, "guard", withRoles([]core.PermissionDef{{Key: "stats:read"}}, RoleAdmin)); err != nil {
 			return err
 		}
-		return s.SyncPlugin(ctx, tx, "mod", []core.PermissionDef{{Key: "mod:read"}}, []string{RoleAdmin})
+		return s.SyncPlugin(ctx, tx, "mod", withRoles([]core.PermissionDef{{Key: "mod:read"}}, RoleAdmin))
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1316,4 +1316,13 @@ func (taskRecorder) Trigger(context.Context, string) error                      
 func (taskRecorder) Enqueue(context.Context, string, any, core.EnqueueOpts) error { return nil }
 func (taskRecorder) EnqueueTx(context.Context, pgx.Tx, string, any, core.EnqueueOpts) error {
 	return nil
+}
+
+// withRoles sets the GrantRoles of every def.
+func withRoles(defs []core.PermissionDef, roles ...string) []core.PermissionDef {
+	out := slices.Clone(defs)
+	for i := range out {
+		out[i].GrantRoles = roles
+	}
+	return out
 }

@@ -75,9 +75,11 @@ describe('plugin consent page', () => {
     await flushPromises()
     // Low risk is granted automatically (no checkbox); the high-risk one starts
     // unticked and has to be ticked. The provides card comes first, so its admin
-    // role checkbox (already ticked) is the first one in the DOM.
+    // role checkbox is the first one in the DOM: ticking it overrides the
+    // manifest default roles of the new permissions.
     const boxes = w.findAll('input[type="checkbox"]')
     expect(boxes.length).toBe(2)
+    await boxes[0].setValue(true)
     await boxes[1].setValue(true)
     await w.get('[data-testid="consent-approve"]').trigger('click')
     await flushPromises()
@@ -87,6 +89,18 @@ describe('plugin consent page', () => {
       role_keys_for_new_permissions: ['admin']
     })
     expect(mocks.push).toHaveBeenCalledWith({ path: '/plugins/demo', query: { consented: '1.2.0' } })
+  })
+
+  it('leaves the new permissions to their manifest default roles unless a role is ticked', async () => {
+    const w = render(review({ user_permissions: [{ key: 'demo.read', label: { en: 'Read', zh: '读取' }, default_roles: ['admin'] }] }))
+    await flushPromises()
+    expect(w.text()).toContain('默认授予：管理员')
+    const boxes = w.findAll('input[type="checkbox"]')
+    expect((boxes[0].element as HTMLInputElement).checked).toBe(false)
+    await boxes[1].setValue(true)
+    await w.get('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post.mock.calls[0][1].role_keys_for_new_permissions).toEqual([])
   })
 
   it('keeps a scope on the grant it belongs to', async () => {

@@ -120,6 +120,10 @@ type ReviewUserPerm struct {
 	Label       core.LocalizedText `json:"label"`
 	Description core.LocalizedText `json:"description,omitempty"`
 	Sensitive   bool               `json:"sensitive"`
+	// DefaultRoles are the roles the permission goes to when first created
+	// unless the consent overrides them (manifest defaultRoles or admin).
+	DefaultRoles []string `json:"default_roles"`
+	InheritFrom  []string `json:"inherit_from,omitempty"`
 }
 
 type ReviewDatabase struct {
@@ -303,7 +307,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 	}
 	for _, up := range m.UserPermissions {
 		r.UserPermissions = append(r.UserPermissions, ReviewUserPerm{Key: up.Key, Label: core.LocalizedText(up.Label),
-			Description: core.LocalizedText(up.Description), Sensitive: up.Sensitive})
+			Description: core.LocalizedText(up.Description), Sensitive: up.Sensitive, DefaultRoles: up.Roles(), InheritFrom: up.InheritFrom})
 	}
 	if m.Database != nil {
 		r.Database = &ReviewDatabase{Schema: m.Database.Schema, Migrations: pkg.MigrationFiles(files, m.Database.Migrations)}

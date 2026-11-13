@@ -1,6 +1,9 @@
 package manifest
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestPermissionKey(t *testing.T) {
 	cases := []struct{ name, local, want string }{
@@ -41,5 +44,20 @@ func TestLocalPermission(t *testing.T) {
 		if ok != c.ok || (ok && got != c.want) {
 			t.Errorf("%s: LocalPermission(shop, %q) = %q, %v, want %q, %v", c.name, c.key, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+func TestUserPermissionRoles(t *testing.T) {
+	if got := (UserPermission{}).Roles(); !slices.Equal(got, []string{"admin"}) {
+		t.Fatalf("default roles %v", got)
+	}
+	up := UserPermission{DefaultRoles: []string{"user", "admin"}}
+	got := up.Roles()
+	got[0] = "x"
+	if up.DefaultRoles[0] != "user" {
+		t.Fatal("Roles aliases DefaultRoles")
+	}
+	if slices.Contains(BuiltinRoleKeys, "super_admin") {
+		t.Fatal("super_admin is never a default role")
 	}
 }

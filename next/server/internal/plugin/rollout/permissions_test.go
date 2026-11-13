@@ -51,9 +51,9 @@ func TestPermissionCatalogFollowsRollouts(t *testing.T) {
 		t.Helper()
 		var defs []core.PermissionDef
 		for _, m := range ms {
-			defs = append(defs, install.PermissionDefs(m)...)
+			defs = append(defs, install.PermissionDefs(m, nil)...)
 		}
-		if err := h.db.Tx(ctx, func(tx pgx.Tx) error { return az.SyncPlugin(ctx, tx, h.key, defs, nil) }); err != nil {
+		if err := h.db.Tx(ctx, func(tx pgx.Tx) error { return az.SyncPlugin(ctx, tx, h.key, defs) }); err != nil {
 			t.Fatal(err)
 		}
 	}

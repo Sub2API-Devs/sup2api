@@ -106,7 +106,6 @@ async function loadRoles() {
   try {
     const items = await fetchFirstPage<Role>('/roles')
     roles.value = items
-    roleKeys.value = items.some((x) => x.key === 'admin') ? ['admin'] : []
   } catch {
     roles.value = []
   }

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -780,6 +781,17 @@ func (v *validator) userPermissions() {
 		seen[up.Key] = true
 		if firstText(up.Label) == "" {
 			v.add(f+".label", "required", "label is required")
+		}
+		for j, r := range up.DefaultRoles {
+			if !slices.Contains(manifest.BuiltinRoleKeys, r) {
+				v.add(fmt.Sprintf("%s.defaultRoles[%d]", f, j), "invalid_value", "role %q is not one of %v", r, manifest.BuiltinRoleKeys)
+			}
+		}
+		// Old keys are usually no longer declared (a rename or a split).
+		for j, from := range up.InheritFrom {
+			if from == up.Key || !userPermKeyRe.MatchString(from) {
+				v.add(fmt.Sprintf("%s.inheritFrom[%d]", f, j), "invalid_value", "inheritFrom %q must be a local permission key other than the permission's own", from)
+			}
 		}
 	}
 }

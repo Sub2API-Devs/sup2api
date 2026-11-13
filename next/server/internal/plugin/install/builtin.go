@@ -165,7 +165,7 @@ func (s *Service) ensureBuiltin(ctx context.Context, b *builtinPkg, installOnly 
 		if err != nil {
 			return err
 		}
-		req := ConsentRequest{RoleKeysForNewPermissions: []string{"admin"}}
+		var req ConsentRequest // new permissions go to their manifest defaultRoles
 		for _, hp := range m.HostPermissions {
 			req.Grants = append(req.Grants, GrantInput{Permission: hp.ID})
 		}

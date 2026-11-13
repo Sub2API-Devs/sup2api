@@ -880,6 +880,15 @@ type UserPermission struct {
 	Label       LocalizedText `json:"label"`
 	Description LocalizedText `json:"description,omitempty"`
 	Sensitive   bool          `json:"sensitive,omitempty"`
+	// DefaultRoles are the built-in roles (BuiltinRoleKeys) the permission
+	// is granted to when the catalog first creates it; omitted means
+	// DefaultPermissionRoles. The super admin role holds every permission
+	// and is never listed.
+	DefaultRoles []string `json:"defaultRoles,omitempty"`
+	// InheritFrom are local keys of this plugin's permissions whose holders
+	// get this permission when the catalog first creates it: a renamed or
+	// split permission keeps its holders.
+	InheritFrom []string `json:"inheritFrom,omitempty"`
 }
 
 // Route is a plugin-owned console endpoint under /api/v1/p/<key>.
