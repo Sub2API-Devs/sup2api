@@ -4,7 +4,8 @@ import { createPinia } from 'pinia'
 import { i18n } from '@/i18n'
 
 const perms = vi.hoisted(() => ({ held: new Set<string>() }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (k: string) => perms.held.has(k) }) }))
+// holds: membership in the /me list; has (with the superuser shortcut) must not be used.
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ holds: (k: string) => perms.held.has(k), has: () => true }) }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 enableAutoUnmount(afterEach)
 
@@ -38,6 +39,7 @@ describe('PluginIframe permissions.check (T83)', () => {
   it('refuses more than 50 keys or no array', async () => {
     expect((await ask('permissions.check', { keys: Array.from({ length: 51 }, (_, i) => `k${i}:read`) })).error.code).toBe('invalid_argument')
     expect((await ask('permissions.check', { keys: 'stats:read' })).error.code).toBe('invalid_argument')
+    expect((await ask('permissions.check', { keys: ['stats:read', ['stats:read']] })).error.code).toBe('invalid_argument')
     expect((await ask('permissions.check', { keys: Array.from({ length: 50 }, (_, i) => `k${i}:read`) })).result).toBeDefined()
   })
 })

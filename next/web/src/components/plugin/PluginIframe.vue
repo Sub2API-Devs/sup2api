@@ -70,14 +70,16 @@ function pluginPath(raw: unknown): string | null {
 }
 
 /**
- * A local permission key of this plugin ("stats:read") the caller holds, as
- * host.can decides; a qualified key ("plugin.<key>:...") or anything else is
- * false, so the frame learns nothing about other plugins or the core.
+ * A local permission key of this plugin ("stats:read") the caller holds; a
+ * qualified key ("plugin.<key>:...") is false, so the frame learns nothing
+ * about other plugins or the core. Membership in the /me list (auth.holds),
+ * not auth.has: a superuser's shortcut would answer true for keys the plugin
+ * never declared and tell the frame the caller is the super admin.
  */
-function localAllowed(k: unknown): boolean {
-  if (typeof k !== 'string' || k === '' || k.startsWith('plugin.')) return false
+function localAllowed(k: string): boolean {
+  if (k === '' || k.startsWith('plugin.')) return false
   const key = pluginPermissionKey(props.pluginKey, k)
-  return key !== '' && auth.has(key)
+  return key !== '' && auth.holds(key)
 }
 
 async function handleRequest(id: string, method: string, params: any) {
@@ -102,10 +104,10 @@ async function handleRequest(id: string, method: string, params: any) {
       }
       case 'permissions.check': {
         const keys = params?.keys
-        if (!Array.isArray(keys) || keys.length > BRIDGE_MAX_PERMISSION_KEYS) {
-          return reply(undefined, { code: 'invalid_argument', message: `keys must be an array of at most ${BRIDGE_MAX_PERMISSION_KEYS} keys` })
+        if (!Array.isArray(keys) || keys.length > BRIDGE_MAX_PERMISSION_KEYS || keys.some((k) => typeof k !== 'string')) {
+          return reply(undefined, { code: 'invalid_argument', message: `keys must be an array of at most ${BRIDGE_MAX_PERMISSION_KEYS} strings` })
         }
-        return reply(Object.fromEntries(keys.map((k) => [String(k), localAllowed(k)])))
+        return reply(Object.fromEntries(keys.map((k: string) => [k, localAllowed(k)])))
       }
       case 'toast': {
         const kind = ['success', 'error', 'info', 'warning'].includes(params?.kind) ? params.kind : 'info'

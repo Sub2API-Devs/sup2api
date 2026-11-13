@@ -35,6 +35,15 @@ export const useAuthStore = defineStore('auth', () => {
     return list.some((p) => permSet.value.has(p))
   }
 
+  /**
+   * `perm` is in the /me permission list itself, with no superuser shortcut:
+   * for a superuser the list is every active permission, so a key that is
+   * not one says nothing about who the caller is (the plugin iframe bridge).
+   */
+  function holds(perm: string): boolean {
+    return permSet.value.has(perm)
+  }
+
   /** Returns the flow token when the account asks for a second factor; the login is not done yet. */
   async function login(email: string, password: string): Promise<string | undefined> {
     const r = await api.post<TokenResponse>('/auth/login', { email, password }, { anonymous: true })
@@ -118,6 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired,
     permissionsEpoch,
     has,
+    holds,
     login,
     loginSecondFactor,
     loginWithPasskey,

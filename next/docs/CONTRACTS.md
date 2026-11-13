@@ -1258,7 +1258,7 @@ type ProxyResolver interface {
 - 自动带 `Authorization`、`Accept-Language`；401 自动刷新一次并重试（多标签页串行，§14.2）；204 返回 `null`。（原 403 `step_up_required` 弹密码确认重试的逻辑与 `noStepUp` 选项随二次验证删除，§3.3。）
 - 失败抛 `ApiError {status, code, message, details, fields}`：`fields` 是 `details.fields[]` 折平后的 `{field: message}`（`invalid_argument`，§3.1；message 为 `{en,zh}` 时按当前语言取），用 `isApiError(e)` 判断。响应没有 `error.code` 时按 HTTP 状态映射（400 `invalid_argument`、401 `unauthenticated`、403 `permission_denied`、404 `not_found`、409 `conflict`、429 `rate_limited`、503 `unavailable`，其余 `internal`）。
 - `listAll<T>(client, path, {query?, max?})`（UI 3.3）：按核心最大页长 200 逐页读完一个分页列表（`page`、`page_size` 由它填，`query` 是其余筛选），读到短页、`page.total` 或 `max` 条（缺省不限）为止；任何一页失败都整体 reject，不返回半截列表。插件读核心分组等整表时用它（moderation、dynweight）。
-- 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关；2026-11-13 T83 增加请求 `permissions.check` `{keys}` → `{[key]: boolean}`：只认本插件的本地 key，至多 `BRIDGE_MAX_PERMISSION_KEYS` = 50 个，超出或不是数组 `invalid_argument`；带 `plugin.` 前缀的 key 一律 false，与原生 `host.can` 同一判断；老核心回 `not_found`）。
+- 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关；2026-11-13 T83 增加请求 `permissions.check` `{keys}` → `{[key]: boolean}`：只认本插件的本地 key，至多 `BRIDGE_MAX_PERMISSION_KEYS` = 50 个，超出或不是数组 `invalid_argument`；带 `plugin.` 前缀的 key（含本插件自己的）一律 false；判断看 `/me` 的权限列表本身而不走超管捷径（超管的列表是全部有效权限），所以未声明的 key 对超管也是 false，iframe 无从得知调用者是否超管；老核心回 `not_found`）。
 
 `useList`（`useList.ts`，分页列表状态，控制台的列表页和插件的列表页共用）：
 
