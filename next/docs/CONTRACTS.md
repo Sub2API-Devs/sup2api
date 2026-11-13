@@ -1189,7 +1189,7 @@ type ProxyResolver interface {
 | overview 概览（§90 起叫“控制台”） | 100 | 仪表盘（§90 起还有 API 密钥、模型与价格、用量概览、使用日志、全站概览、全站日志） | |
 | gateway 网关 | 200 | 分组、账号、平台、代理、模型价格（§90 起使用记录移到控制台；§90 第四版起只剩账号、代理） | 模型目录（anthropic 0.2.9–0.3.0，0.3.1 删除）、动态权重（dynweight；只有 0.5.4 在 `system` 区） |
 | security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
-| finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`；§90 第四版起没有核心项，余额流水从用户列表打开） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
+| finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`；§90 第四版取消、2026-11-13 T80 恢复） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
 | users 用户与权限（§90 起叫“用户”） | 500 | 用户、角色与权限 | |
 | plugins 插件 | 600 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
 | system 系统 | 700 | 集群节点、定时任务、核心升级、审计日志、设置（§90 起设置排在最后，侧栏单独显示为“系统设置”，分组、模型价格从它进入） | 动态权重（只有 dynweight 0.5.4） |
@@ -7417,14 +7417,14 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | --- | --- | --- |
 | gateway 网关 | 账号、代理 | 动态权重（dynweight；只有 0.5.4 在 `system` 区） |
 | security 安全 | 无 | 请求守卫、提示词审核 |
-| finance 财务 | 无 | 增长管理 |
+| finance 财务 | 余额流水（`balance:all:read`，T80） | 增长管理 |
 | users 用户（标签“用户 / Users”） | 用户、用户组（§97 起）、角色与权限 | |
 | plugins 插件 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
 | system 系统（标签“系统 / System”） | 集群节点、定时任务、核心升级、审计日志、系统设置 `/settings` | |
 
 - 分组（`/groups`，`group:read`）、模型价格（`/prices`，`price:read`）没有菜单项，由控制台列在系统设置视图里（90.2）；CCGateway（`/system/ccgateway`，`settings:read`）没有菜单项，从已安装插件列表里 ccgateway 一行的“设置”按钮打开；页面、地址、权限和接口不变。有 `settings:read` 而没有 `plugin:read` 的自定义角色只能凭地址或账号授权对话框里的链接打开它。
 - 用户组（§97 起）：id `segments`，标签“用户组 / User groups”，图标 `publisher`，地址 `/segments`，持有 `segment:read` 才返回；排在“用户”之后、“角色与权限”之前，和它们一起进“用户”目录（90.3）。分组一侧的授权、专属倍率和分组内定价没有单独的菜单项，在分组页（系统设置视图，90.2）里。
-- 余额流水（`/ledger`，`balance:all:read`）没有菜单项，从用户列表的行操作打开；页面和接口不变。有 `balance:all:read` 而没有 `user:read` 的自定义角色只能凭地址打开它。
+- 余额流水（`/ledger`，`balance:all:read`）在核心 `finance` 区有菜单项“余额流水”（2026-11-13 权限加固 T80，决策 D24），也可从用户列表的行操作打开；页面和接口不变。
 - 平台页取消，没有菜单项（地址见 90.4）；接口 `GET /platforms`、`GET /me/platforms` 不变，控制台的平台列表一律取 `GET /me/platforms`。
 - 模型目录：anthropic 0.3.1 去掉了菜单 `anthropic-models`、页面 `models` 和宿主权限 `ui.menu`；插件接口 `GET /api/v1/p/anthropic/models` 和权限 `model_catalog:read` 保留。
 - 系统设置：id `settings`，是 `system` 区最后一个核心项，持有 `settings:read`、`sticky:read`、`group:read`、`price:read` 任意一个就返回：后两个是因为分组、模型价格从系统设置视图进入，内置运维角色有它们而没有 `settings` / `sticky` 权限。`section:"system"` 的插件菜单仍并入 `system` 区，排在 `/settings` 之后（如 dynweight 0.5.4 的动态权重），和其余项一起进“系统”目录。

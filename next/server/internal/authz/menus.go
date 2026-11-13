@@ -70,9 +70,10 @@ var coreMenus = []coreMenuSection{
 	}},
 	// No core items: request guards and moderation are plugins and join it.
 	{"security", lt("Security", "安全"), nil},
-	// No core items: the balance ledger is opened from the users list, and
-	// plugins (growth) join the section.
-	{"finance", lt("Finance", "财务"), nil},
+	// The site-wide balance ledger; plugins (growth, payment) join the section.
+	{"finance", lt("Finance", "财务"), []coreMenuItem{
+		{"ledger", lt("Balance ledger", "余额流水"), "balance", "/ledger", []string{"balance:all:read"}},
+	}},
 	// Roles are part of managing users, and so are the user groups they
 	// belong to (CONTRACTS §97).
 	{"users", lt("Users", "用户"), []coreMenuItem{

@@ -338,6 +338,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/me/usage': 'usage:self:read',
   '/me/usage/overview': 'usage:self:read',
   '/me/wallet': 'balance:self:read',
+  '/ledger': 'balance:all:read',
   '/p/guard/dashboard': 'plugin.guard:stats:read',
   '/p/dynweight/dashboard': 'plugin.dynweight:dynweight:read'
 }
@@ -380,6 +381,11 @@ const MENUS = [
       { id: 'guard:guard', label: L('Guard', '请求守卫'), icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' },
       { id: 'moderation:moderation', label: L('Prompt Moderation', '提示词审核'), icon: 'shield', path: '/p/moderation/dashboard', plugin_key: 'moderation' }
     ]
+  },
+  {
+    section: 'finance',
+    label: L('Finance', '财务'),
+    items: [{ id: 'ledger', label: L('Balance ledger', '余额流水'), icon: 'balance', path: '/ledger' }]
   },
   {
     section: 'users',

@@ -72,7 +72,7 @@ const children: RouteRecordRaw[] = [
   // The old usage statistics page.
   { path: 'me/stats', redirect: '/me/usage/overview' },
   // Opened from a row of the users list.
-  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger', parent: '/users' } },
+  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: '/me/wallet' },
   { path: 'me/balance', redirect: '/me/wallet' },
   { path: 'sticky', redirect: { path: '/settings', query: { tab: 'sticky' } } },

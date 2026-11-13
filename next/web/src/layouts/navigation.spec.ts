@@ -170,7 +170,7 @@ describe('sidebar', () => {
 
   it('lights up the menu entry of the page, else of its nearest parent page, else of a path it starts with', async () => {
     expect(current((await mountSidebar(operatorMenu, '/accounts')).wrapper)).toEqual(['accounts'])
-    // The balance ledger has no entry: it is opened from the users list.
+    // A page whose menu (here) has no entry of its own lights up its parent's.
     const ledger = await mountSidebar(operatorMenu, '/ledger?user_id=3')
     expect(current(ledger.wrapper)).toEqual(['users'])
     expect(ledger.wrapper.get('[data-testid="nav-submenu-users"]').attributes('aria-expanded')).toBe('true')
