@@ -952,7 +952,7 @@ function b64Len(s: string) {
 }
 
 on('GET', '/publishers', (req) => paginate(publishers, req.query))
-on('POST', '/publishers', (req) => {
+on('POST', '/publishers', stepUp('publisher.manage', (req) => {
   const b = req.body || {}
   if (!String(b.name || '').trim()) return invalid('name', 'name is required')
   if (!['official', 'verified', 'community'].includes(b.trust_level)) return invalid('trust_level', 'invalid trust level')
@@ -960,8 +960,8 @@ on('POST', '/publishers', (req) => {
   const p: MockPublisher = { id: nextId(), name: b.name, trust_level: b.trust_level, status: 'active', created_at: now(), revoked_at: null, keys: [] }
   publishers.push(p)
   return p
-})
-on('POST', '/publishers/:id/keys', (req) => {
+}))
+on('POST', '/publishers/:id/keys', stepUp('publisher.manage', (req) => {
   const p = publishers.find((x) => x.id === Number(req.params.id))
   if (!p) return fail(404, 'not_found', 'publisher not found')
   const b = req.body || {}
@@ -971,16 +971,16 @@ on('POST', '/publishers/:id/keys', (req) => {
   const k: MockPublisherKey = { key_id: b.key_id, public_key: b.public_key, status: 'active', not_before: b.not_before || null, not_after: b.not_after || null, created_at: now() }
   p.keys.push(k)
   return k
-})
-on('POST', '/publishers/:id/revoke', (req) => {
+}))
+on('POST', '/publishers/:id/revoke', stepUp('publisher.manage', (req) => {
   const p = publishers.find((x) => x.id === Number(req.params.id))
   if (!p) return fail(404, 'not_found', 'publisher not found')
   p.status = 'revoked'
   p.revoked_at = now()
   p.keys.forEach((k) => (k.status = 'revoked'))
   return p
-})
-on('POST', '/publisher-keys/:key_id/revoke', (req) => {
+}))
+on('POST', '/publisher-keys/:key_id/revoke', stepUp('publisher.manage', (req) => {
   for (const p of publishers) {
     const k = p.keys.find((x) => x.key_id === req.params.key_id)
     if (k) {
@@ -989,4 +989,4 @@ on('POST', '/publisher-keys/:key_id/revoke', (req) => {
     }
   }
   return fail(404, 'not_found', 'key not found')
-})
+}))

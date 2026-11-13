@@ -67,7 +67,8 @@ func TestManifest(t *testing.T) {
 	}
 	// hostCompat: defaultRoles (an empty list included) and inheritFrom
 	// need the authz-hardening core, 0.1.286, which also ships UI 3.15
-	// (permissions.hasAction, resource scopes); before that, the blocked
+	// (permissions.hasAction, resource scopes; the UI feature-detects it, so
+	// ^3.15 is declared for clarity, not need); before that, the blocked
 	// users table opens a row from its reason cell
 	// (STable expandToggle false + toggleExpand, UI 3.13, 0.11.1), first
 	// shipped with core 0.1.281; the settings form uses UI 3.12 (the

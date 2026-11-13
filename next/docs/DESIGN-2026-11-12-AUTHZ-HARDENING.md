@@ -15,7 +15,7 @@
 3. **资源范围两步走**：本版本是 R2a（0103 只新增，8 个旧 own key 作为别名保持 active）。R2b 在确认全部节点都已升级后的下一版本做：按旧 own 行重新同步新表 → 目录把旧 key 标 removed → 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥中的旧写法与冗余旧行（写审计）→ 前端删除 `LEGACY_OWN`（`implies.ts` 的别名表与 Go `Parse` 的别名表保留）。见“期 4 资源范围（R0–R7）发布说明”。
 4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。旧节点上 admin（0099 收回超管专属权限）与 operator（0102 收回 `role:define`）暂时不能管理角色，由超管处理；旧节点重启时会把 `role:manage` 等目录行的状态改回，新节点重启后恢复。托管升级先停副本再迁移，没有新旧混跑阶段。
 5. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.286`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.286 开始（moderation `hostUICompat ^3.15`）。发布号不是 0.1.286 时，把 `grep -rn 0.1.286 next/plugins next/sdk/manifest` 的结果与 `web/packages/ui/README.md`“UI SDK 3.15”一节一并改掉。dynweight 取 0.5.9（develop 已发布 0.5.8）。
-6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 在原生 UI 未构建时会加 `--allow-missing-ui`，开发包可以，正式包不行（五个插件的原生 UI 需各自 `npm ci && npm run build`）。
+6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
 7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。发布前按运维清单第 8 条查；有安装时先卸载再装，或由用户决定一次性改 `publisher_id`（写审计）。
 8. **存量多超管**：0098 遇到多个超管时停止启动，错误只列 user id。先 `sub2api admin recover-superadmin --email <要保留的那个>` 再启动（运维清单第 1 条）。
 9. **跨域部署**：服务端需 `Access-Control-Expose-Headers: X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）。
@@ -25,7 +25,7 @@
 
 | 迁移 | 内容 | 任务（提交） | 可重跑 | 回滚 |
 |---|---|---|---|---|
-| 0097 | `role_assignable_roles`、`roles.assign_custom`，`role:manage` 持有者等价授予 | T13（2da8c978bc）、T09（934b1c5b23） | 是 | 表与列可留；托管见下 |
+| 0097 | `role_assignable_roles`、`roles.assign_custom`，`role:manage` 持有者等价授予 | T13（2da8c978bc） | 是 | 表与列可留；托管见下 |
 | 0098 | 超管唯一：唯一索引 + 延迟触发器；软删除用户的超管行删除；多超管停启动 | T18（2e03d308fb）、P4F2（c0d59634a9） | 是 | `DROP TRIGGER user_roles_one_superuser ON user_roles; DROP FUNCTION user_roles_one_superuser(); DROP INDEX roles_one_superuser;`（不删也可） |
 | 0099 | 收回内置 admin、operator 的超管专属权限（审计 `authz.reclaim.super_only`） | T54（e6deef074e） | 是 | 不自动恢复；按审计补回（见 T54） |
 | 0100 | `accounts.admin_locked` | T63（7aa8c6654d） | 是 | 列可留 |
@@ -33,7 +33,7 @@
 | 0102 | 收回内置 operator 的 `role:define`（审计 `authz.reclaim`，`via = migration 0102`） | P4F1（f9632c2896） | 是 | 不自动恢复；超管在角色页重新勾选 |
 | 0103 | `permissions.scope_type`、`role_permission_scopes`；旧 own 授予逐字复制为 `:own`；密钥补新写法 | R2a（d2e33448e7） | 是 | 新表、新列旧代码不读 |
 
-- 全部迁移都 `SET LOCAL lock_timeout = '10s'` 并先锁 `authz_meta`，有写入才推进 authz 版本，各节点约 30 秒内重新加载权限。
+- 0099、0101–0103 设 `SET LOCAL lock_timeout = '10s'` 并先锁 `authz_meta`，有写入才推进 authz 版本，各节点约 30 秒内重新加载权限；0100 只设 `lock_timeout`；0097、0098 两者都不设。
 - **托管部署回滚核心**：旧核心启动时发现库里有它不认识的迁移会拒绝启动（`database includes migrations unknown to this core`），所以必须先删除迁移记录：`DELETE FROM schema_migrations WHERE id IN ('0097_role_assignable.sql','0098_one_super_admin.sql','0099_reclaim_super_only.sql','0100_account_admin_locked.sql','0101_operator_assignable.sql','0102_operator_reclaim_role_define.sql','0103_scoped_permissions.sql');`。删了记录的迁移在再次升级时会重跑：0099、0101、0102 会再次收回期间由超管设回的授权（写审计）；删了 `admin_locked` 列等对象而没删记录则不会重建。非托管部署可以不删记录。
 - 回滚核心时插件也回滚到上一版本（新版本插件的 `hostCompat` 不接受旧核心）。访问密钥里新增的规范写法旧代码忽略，旧写法仍在。回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
 
@@ -46,7 +46,7 @@
 | 3 | 授予检查在事务内读库、计入 disabled 插件权限 | 角色写入 | T07（e9946e2b21） |
 | 4 | `role:manage` 拆为 `role:define` + `role:assign`；内置 operator 只有 `role:assign` | 角色管理者 | T09（934b1c5b23）、P4F1（f9632c2896） |
 | 5 | 超管全局唯一、角色冻结、只能本人移交（密码 + 第二因素）；服务器 CLI 恢复超管 | 超管 | T12、T16、T17、T18（2e03d308fb） |
-| 6 | 分配角色受“可管理角色”清单约束，撤销同样；作用于用户 = 操作权限 + 目标的非默认角色都在清单内且权限 ⊆ 操作者（含本人；不能禁用、删除自己，不能撤销自己的超管） | 用户管理者 | T13–T15、T56、FU6（fec1698e1b）、期 3 R1（ec3b6de722） |
+| 6 | 分配角色受“可管理角色”清单约束，撤销同样；作用于用户 = 操作权限 + 目标的非默认角色都在清单内且权限 ⊆ 操作者（含本人；不能禁用、删除自己，不能撤销自己的超管） | 用户管理者 | T13–T15、T56、FU6（fec1698e1b）、期 3 整合审查（ec3b6de722） |
 | 7 | 内置角色（含新增的 supplier）声明化，名称、权限、清单只允许超管改；admin 默认不含超管专属权限（存量收回）；operator 按白名单 | admin、operator | T50–T55 |
 | 8 | 访问密钥 = 用户实时权限 ∩ 密钥权限，可勾任何权限（含插件权限、`self:*`）；只有管理访问密钥本身与登录会话只允许会话 | 访问密钥 | S2（826eab1049）、S3（9bde44b7f2）、S4（5835a65248） |
 | 9 | 高危操作每次二次验证（通行密钥 / 2FA / 无强方式时密码，proof 5 分钟一次性，绑定用户、会话或密钥、scope、`METHOD path`）：明文回显、超管移交、本人改密码/邮箱/2FA/通行密钥（含开启 2FA）、改他人密码、清他人 2FA、删用户、插件上传/安装/同意/确认暂缓授予、发布者、核心升级与更新源、ccgateway 装码与拨号；改密码等接口不再收当前密码字段 | 控制台用户、脚本 | S1（dd8f66cbb9）、S3、S5（5626d84d91）、R0（8927849f66）、p4-review |
@@ -114,6 +114,8 @@ JOIN permissions p ON p.key = 'plugin.' || d.plugin_key || ':' || regexp_replace
 JOIN roles r ON r.key = d.role
 WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id)
 ORDER BY 1, 2, 3;
+
+-- 7. gateway tokenless 开关：不是 SQL，见代码块后的说明
 
 -- 8. claude-oauth 的发布者（见发布约束 7）
 SELECT pl.key, pl.publisher_id, pub.name, pub.trust_level, pl.active_version
@@ -1127,7 +1129,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
   - 本版本可以滚动发布，不需要停机。0103 只做新增。
   - 前端（R8）上线前，旧控制台角色页的权限树里没有 `…:own` 这类规范 key，own 授予可能显示不出来。后端照常接受 `account:own:*` 与新写法。
 - 回滚：
-  - revert 代码即可，新表与新列旧代码都不读。托管部署（托管核心启动时核对迁移清单）回滚核心前还要按文首“发布说明 · 回滚”删除 `schema_migrations` 里 0097–0103 的记录，否则旧核心拒绝启动。
+  - revert 代码即可，新表与新列旧代码都不读。托管部署（托管核心启动时核对迁移清单）回滚核心前还要按文首“发布说明”第 2 节“迁移与回滚”删除 `schema_migrations` 里 0097–0103 的记录，否则旧核心拒绝启动。
   - 访问密钥里的新写法在旧代码下被忽略，旧写法仍在，按审计 before 可还原。
   - 回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
 
@@ -1257,7 +1259,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
   - 分组或 id 范围暂时只能经 API 使用：控制台路由守卫、账号运行时、分组编辑与插件 UI（moderation、dynweight `host.ts`）按 key 原文精确比较，持有这类范围的人能看到菜单却进不了页面（fail-closed）。
   - 旧控制台的角色页不认识 `…:own` 等规范 key，own 授予可能显示不出来，但后端照常接受新旧两种写法。
   - 账号页、代理页的“自己的”判断仍按旧别名（`/me` 仍输出旧别名），可以继续工作。
-- 回滚：revert 代码即可（新表、新列旧代码不读；访问密钥中的旧写法仍在）。回滚期间写入的分组或 id 范围授予不生效。托管部署（托管核心启动时核对迁移清单）回滚核心前还要按文首“发布说明 · 回滚”删除 `schema_migrations` 里 0097–0103 的记录，否则旧核心拒绝启动。
+- 回滚：revert 代码即可（新表、新列旧代码不读；访问密钥中的旧写法仍在）。回滚期间写入的分组或 id 范围授予不生效。托管部署（托管核心启动时核对迁移清单）回滚核心前还要按文首“发布说明”第 2 节“迁移与回滚”删除 `schema_migrations` 里 0097–0103 的记录，否则旧核心拒绝启动。
 - 混跑分析只适用于非托管的多节点部署：托管升级先停副本再迁移，没有新旧节点同库的阶段。
 
 ## 期 4 R8：控制台的资源范围（判断、路由、范围选择、密钥、摘要、mock）
@@ -1383,4 +1385,4 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - **共享向量 `allows`**：`sdk/permvectors/vectors.json` 新增行判断用例，Go `DataScope.AllowsRow` 与 TS `scopeAllowsRow` 各跑一遍（CONTRACTS §21.6）。
 - **其他**：e2e `guardTestVersion` 改为 0.2.9-test（与 guard overlay 一致）；`PLUGIN-CODEX.md` 补 0.1.4；mock 的明文回显、删除用户、插件上传/市场安装/同意也走二次验证；二次验证弹窗补 `host.install` 文案（R0 新增的 scope 原来显示原文）；期 4 条目按任务组重排并标注被后续任务改写的地方；R2a 与资源范围发布说明补托管部署的回滚步骤。
 - 审查确认无问题的：proof 绑定（用户、会话或密钥、scope、`METHOD path`）与一次性消费；无验证器时失败收紧；`X-Verify-Proof` 不转发给插件；`Restrict`/`Implies` 不会让密钥宽于用户；`Router.Self` 与 `withSelf` 只给有效用户；`KeyAllowed`、`sessionOnly`、`SelfConfirmation` 已删干净；0102/0103 在生产形态数据上可执行且可重跑；T84 版本与测试包版本一致。
-- 留给用户决定（未改）：见文首“发布说明 · 待决定”。
+- 留给用户决定（未改）：见文首“发布说明”第 6 节“待用户决定”。

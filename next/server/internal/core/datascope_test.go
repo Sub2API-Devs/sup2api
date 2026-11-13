@@ -86,15 +86,15 @@ func TestAllowsRowVectors(t *testing.T) {
 	t.Parallel()
 	var v struct {
 		Allows []struct {
-			Have   []string
-			Action string
-			Me     int64
+			Have   []string `json:"have"`
+			Action string   `json:"action"`
+			Me     int64    `json:"me"`
 			Row    struct {
 				ID        int64   `json:"id"`
 				CreatedBy *int64  `json:"created_by"`
 				GroupIDs  []int64 `json:"group_ids"`
-			}
-			OK bool
+			} `json:"row"`
+			OK bool `json:"ok"`
 		}
 	}
 	if err := json.Unmarshal(permvectors.JSON, &v); err != nil || len(v.Allows) == 0 {

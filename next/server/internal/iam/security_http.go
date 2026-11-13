@@ -182,7 +182,7 @@ func (s *Service) handleTwoFactor(c *gin.Context) {
 func (s *Service) handleTwoFactorSetup(c *gin.Context) {
 	out, err := s.StartTwoFactor(c.Request.Context(), actor(c))
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
