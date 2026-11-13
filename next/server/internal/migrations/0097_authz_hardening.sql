@@ -1,7 +1,7 @@
 -- Authz hardening (docs/DESIGN-2026-11-12-AUTHZ-HARDENING.md), the final
 -- state in one transaction: a release that stops every node first
 -- (maintenance), so no core of the previous version reads this database
--- again. Reversed by deploy/rollback/0.1.285-authz-down.sql.
+-- again. Reversed by deploy/rollback/0.1.286-authz-down.sql.
 --
 --   1. One super admin (decisions 1, 2): an upgraded database must have
 --      exactly one, a unique index and a commit-time trigger keep it so.

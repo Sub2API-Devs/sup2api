@@ -1,10 +1,10 @@
--- Reverses core migration 0097_authz_hardening.sql (core 0.1.285): puts the
--- database back in the shape core 0.1.284 runs on (migrations through
+-- Reverses core migration 0097_authz_hardening.sql (core 0.1.286): puts the
+-- database back in the shape core 0.1.285 runs on (migrations through
 -- 0096). Run it with every node stopped, as the database owner, in one go:
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 0.1.285-authz-down.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 0.1.286-authz-down.sql
 --
--- What it does, in one transaction (see 0.1.285-authz-down.md):
+-- What it does, in one transaction (see 0.1.286-authz-down.md):
 --   1. Grants: <action>:own becomes the former own-level key again, also
 --      where the migration found it redundant next to the full key (from
 --      its audit, while the role still holds that key); group and id scopes
@@ -15,7 +15,7 @@
 --   2. Access keys: the same renames; group and id scopes are dropped.
 --   3. Schema: the tables, columns, index, trigger and function the
 --      migration added go, and so does its schema_migrations row.
--- Every change is audited by the system with via "rollback 0.1.285"; the
+-- Every change is audited by the system with via "rollback 0.1.286"; the
 -- authz version moves.
 
 BEGIN;
@@ -34,7 +34,7 @@ BEGIN
     END IF;
 END $$;
 
--- The keys core 0.1.284 has and 0.1.285 replaced, each with its
+-- The keys core 0.1.285 has and 0.1.286 replaced, each with its
 -- replacement (an action, with a scope or '' for every row). Its sync
 -- writes their labels again on start.
 CREATE TEMP TABLE authz_retired (old_key text, action text, scope text, label jsonb, sensitive boolean) ON COMMIT DROP;
@@ -85,14 +85,14 @@ WITH now_held AS (
 )
 INSERT INTO audit_logs (user_id, action, target_type, target_id, detail)
 SELECT NULL, 'authz.grant.migrate', 'role', r.role_id::text,
-    jsonb_build_object('via', 'rollback 0.1.285', 'key', p.key,
+    jsonb_build_object('via', 'rollback 0.1.286', 'key', p.key,
         'from', (SELECT jsonb_agg(DISTINCT h.key) FROM now_held h WHERE h.role_id = r.role_id AND h.old_key = p.key))
 FROM restored r JOIN permissions p ON p.id = r.permission_id;
 
 -- Group and id scopes: no former spelling, dropped with the table below.
 INSERT INTO audit_logs (user_id, action, target_type, target_id, detail)
 SELECT NULL, 'authz.grant.migrate', 'role', rs.role_id::text,
-    jsonb_build_object('via', 'rollback 0.1.285', 'dropped', p.key || ':' || rs.scope)
+    jsonb_build_object('via', 'rollback 0.1.286', 'dropped', p.key || ':' || rs.scope)
 FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id
 WHERE rs.scope <> 'own';
 
@@ -107,7 +107,7 @@ WITH returned AS (
     RETURNING role_id, permission_id
 )
 INSERT INTO audit_logs (user_id, action, target_type, target_id, detail)
-SELECT NULL, 'authz.grant.migrate', 'role', r.role_id::text, jsonb_build_object('via', 'rollback 0.1.285', 'key', p.key)
+SELECT NULL, 'authz.grant.migrate', 'role', r.role_id::text, jsonb_build_object('via', 'rollback 0.1.286', 'key', p.key)
 FROM returned r JOIN permissions p ON p.id = r.permission_id;
 
 -- 2. Access keys: former keys for their replacements, group and id scopes
@@ -125,7 +125,7 @@ WITH keys AS (
 )
 INSERT INTO audit_logs (user_id, action, target_type, target_id, detail)
 SELECT NULL, 'user.access_key.migrate', 'user', user_id::text,
-    jsonb_build_object('via', 'rollback 0.1.285', 'access_key_id', id, 'before', to_jsonb(before), 'after', to_jsonb(after))
+    jsonb_build_object('via', 'rollback 0.1.286', 'access_key_id', id, 'before', to_jsonb(before), 'after', to_jsonb(after))
 FROM rekeyed;
 
 -- role:define and role:assign go, their grants with them.

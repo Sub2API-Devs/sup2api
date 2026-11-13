@@ -45,7 +45,7 @@ const SPMWindowFirstCore = "0.1.276"
 // with no account check at all. The accounts the core infers for a route an
 // account action posts to (manifest.EffectiveRouteAccounts) have no field
 // to look for; such a plugin keeps older cores out by its own hostCompat.
-const RouteAccountsFirstCore = "0.1.285"
+const RouteAccountsFirstCore = "0.1.286"
 
 // ConvertMatrixFirstCore is the first core of the protocol conversion
 // matrix (CONTRACTS §88), which adds the openai.responses -> openai.chat

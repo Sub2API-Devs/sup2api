@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	// lastReleased is the last core migration of 0.1.284, the release before
+	// lastReleased is the last core migration of 0.1.285, the release before
 	// the authz hardening.
 	lastReleased = "0096_usage_base_cost.sql"
 	hardening    = "0097_authz_hardening.sql"
 )
 
-// hardeningDB is a database as core 0.1.284 leaves it, with the authz data
+// hardeningDB is a database as core 0.1.285 leaves it, with the authz data
 // its sync and administrators wrote (see seed).
 type hardeningDB struct {
 	t   *testing.T
@@ -53,7 +53,7 @@ func (h *hardeningDB) migrate() error {
 	return err
 }
 
-// seed writes what 0.1.284 leaves: the built-in roles with their former
+// seed writes what 0.1.285 leaves: the built-in roles with their former
 // defaults (admin every permission, operator all but the plugin modules,
 // both with role:manage and every former own-level key next to the full
 // one), custom roles holding former own-level keys alone or next to the
@@ -165,7 +165,7 @@ func (h *hardeningDB) syncCore() {
 	require.NoError(h.t, authz.New(authz.Deps{DB: h.db}).SyncCore(h.ctx))
 }
 
-// The migration on a 0.1.284 database writes the final state: former
+// The migration on a 0.1.285 database writes the final state: former
 // own-level grants become own scopes (only audited when redundant next to
 // the full key), role:manage its halves (the built-in operator role:assign
 // only) with an assignable list, the super-only permissions leave the
@@ -246,7 +246,7 @@ func TestAuthzHardeningNeedsOneSuperAdmin(t *testing.T) {
 	}
 }
 
-// The rollback script puts the database back in the shape 0.1.284 runs on:
+// The rollback script puts the database back in the shape 0.1.285 runs on:
 // the schema of a database migrated through 0096, the former grants of
 // every role and access key (own scopes, the redundant ones the migration
 // only audited, role:manage, the super-only permissions taken back), with
@@ -259,21 +259,21 @@ func TestAuthzHardeningRollback(t *testing.T) {
 	require.NoError(t, h.migrate())
 	h.syncCore()
 	upgraded := h.roleGrants("admin", "operator", "user", "seller", "mixed", "delegator", "updater")
-	// Written after the upgrade: a group scope, which 0.1.284 cannot express.
+	// Written after the upgrade: a group scope, which 0.1.285 cannot express.
 	h.exec(`INSERT INTO role_permission_scopes (role_id, permission_id, scope)
         SELECT r.id, p.id, 'group/12' FROM roles r, permissions p WHERE r.key = 'seller' AND p.key = 'account:test'`)
 	h.exec(`UPDATE user_access_keys SET permissions = permissions || '{account:test:group/12}' WHERE name = 'seller@x'`)
 
-	down, err := os.ReadFile(filepath.Join("..", "..", "..", "deploy", "rollback", "0.1.285-authz-down.sql"))
+	down, err := os.ReadFile(filepath.Join("..", "..", "..", "deploy", "rollback", "0.1.286-authz-down.sql"))
 	require.NoError(t, err)
 	h.exec(string(down))
 
 	require.Equal(t, schema, h.schema())
-	// 0.1.284 grants nothing for the permissions only 0.1.285 has (its sync
+	// 0.1.285 grants nothing for the permissions only 0.1.286 has (its sync
 	// marks them removed); the supplier role is new and left alone.
 	require.Equal(t, grants, filterGrants(h.roleGrants("admin", "operator", "user", "seller", "mixed", "delegator", "updater", "super_admin"), grants))
 	require.Equal(t, keys, h.accessKeys())
-	require.Equal(t, "1", h.text(`SELECT count(*)::text FROM audit_logs WHERE detail->>'via' = 'rollback 0.1.285' AND detail->>'dropped' = 'account:test:group/12'`))
+	require.Equal(t, "1", h.text(`SELECT count(*)::text FROM audit_logs WHERE detail->>'via' = 'rollback 0.1.286' AND detail->>'dropped' = 'account:test:group/12'`))
 
 	_, err = h.db.Pool.Exec(h.ctx, string(down))
 	require.ErrorContains(t, err, "nothing to roll back")
@@ -284,7 +284,7 @@ func TestAuthzHardeningRollback(t *testing.T) {
 }
 
 // filterGrants keeps the grants of got whose permission appears in want: the
-// permissions 0.1.284 knows.
+// permissions 0.1.285 knows.
 func filterGrants(got, want string) string {
 	known := map[string]bool{}
 	for _, g := range strings.Split(want, ", ") {

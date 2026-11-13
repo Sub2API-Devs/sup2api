@@ -427,10 +427,10 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"^3.14", ">=0.1.281 <0.2.0", true},
 		{"^3.14", ">=0.1.283 <0.2.0", true},
 		{"^3.14", ">=0.1.284 <0.2.0", false},
-		// UI 3.15 starts at core 0.1.285; 0.1.284 is the last core with 3.14.
+		// UI 3.15 starts at core 0.1.286; 0.1.285 is the last core with 3.14.
 		{"^3.15", ">=0.1.283 <0.2.0", true},
-		{"^3.15", ">=0.1.284 <0.2.0", true},
-		{"^3.15", ">=0.1.285 <0.2.0", false},
+		{"^3.15", ">=0.1.285 <0.2.0", true},
+		{"^3.15", ">=0.1.286 <0.2.0", false},
 	}
 	for _, tc := range cases {
 		c := uiCodes(uiNativeManifest(tc.ui, tc.host))
@@ -682,7 +682,7 @@ func TestAccountActions(t *testing.T) {
 	}
 	// A route that declares accounts itself must still read what the console
 	// posts.
-	m = withAccountAction(">=0.1.285 <0.2.0", good)
+	m = withAccountAction(">=0.1.286 <0.2.0", good)
 	m.Routes[2].Accounts = &manifest.RouteAccounts{Action: "update", From: []string{"body:account_id"}}
 	if c := uiCodes(m); c["ui.accountActions[0].route"] != "accounts_mismatch" {
 		t.Errorf("an action route whose accounts miss body:account_ids must be rejected: %v", c)

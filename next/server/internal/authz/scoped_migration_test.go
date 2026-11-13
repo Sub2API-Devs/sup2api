@@ -62,9 +62,9 @@ func reach(t *testing.T, db *store.DB, users []int64) map[string][]int64 {
 }
 
 // The rewrite of the former own-level keys (migration 0097) is word for
-// word: on a 0.1.284 database whose custom roles and access keys hold them,
+// word: on a 0.1.285 database whose custom roles and access keys hold them,
 // alone or next to the full key, every user and every key reaches after it
-// exactly the rows 0.1.284 gave them: what they created for an own-level
+// exactly the rows 0.1.285 gave them: what they created for an own-level
 // key, every row for a full one, and an access key no more than its user.
 func TestRetiredOwnKeysReachTheSameRows(t *testing.T) {
 	db := testutil.DBThrough(t, "0096_usage_base_cost.sql")
