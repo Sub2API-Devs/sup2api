@@ -81,9 +81,10 @@ type noopPerms struct{}
 func (noopPerms) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef) error {
 	return nil
 }
-func (noopPerms) CanGrantToRoles(context.Context, pgx.Tx, int64, []string) error { return nil }
-func (noopPerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error    { return nil }
-func (noopPerms) DeletePlugin(context.Context, pgx.Tx, string) error             { return nil }
+func (noopPerms) CanGrantToRoles(context.Context, pgx.Tx, int64, []string) error        { return nil }
+func (noopPerms) GrantPluginPermission(context.Context, pgx.Tx, string, []string) error { return nil }
+func (noopPerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error           { return nil }
+func (noopPerms) DeletePlugin(context.Context, pgx.Tx, string) error                    { return nil }
 
 type rollout struct {
 	db *store.DB
@@ -715,4 +716,46 @@ func TestSettingsWithoutSchemaAreAllMasked(t *testing.T) {
 	plain, err := cipher.Decrypt(enc, ConfigAAD("guard"))
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"api_key":"k-1","upstream":{"url":"https://u.example","token":"t-1"},"note":"n"}`, string(plain))
+}
+
+// The plugin page lists the role grants an automatic upgrade withheld
+// (role_grants_to_review); plugin:install rejects (or confirms) them, which
+// clears the list.
+func TestAPIRoleGrantsToReview(t *testing.T) {
+	h, root := newHarness(t)
+	ctx := context.Background()
+	if code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(pkgtest.Guard("guard", "0.1.0", "sub2api"), root))); code != 200 {
+		t.Fatalf("upload = %d %v", code, out)
+	}
+	if _, err := h.db.Pool.Exec(ctx, `
+INSERT INTO roles (key, name, builtin) VALUES ('user', '{}', true) ON CONFLICT (key) DO NOTHING;
+INSERT INTO permissions (key, module, label, source, plugin_key, status) VALUES ('plugin.guard:rules:export', 'plugin.guard', '{}', 'plugin', 'guard', 'active');
+INSERT INTO audit_logs (action, target_type, target_id, detail) VALUES ('plugin.consent.auto', 'plugin', 'guard',
+  '{"version":"0.1.0","granted":[],"pending":[{"permission":"plugin.guard:rules:export","role":"user","sensitive":false,"via":"default","needs_consent":true}],"review_required":true}')`); err != nil {
+		t.Fatal(err)
+	}
+	pending := func() []any {
+		t.Helper()
+		code, out := h.do("GET", "/plugins/guard", "admin", nil)
+		list, ok := data(out)["role_grants_to_review"].([]any)
+		if code != 200 || !ok {
+			t.Fatalf("get = %d %v", code, out)
+		}
+		return list
+	}
+	if got := pending(); len(got) != 1 || got[0].(map[string]any)["role"] != "user" || got[0].(map[string]any)["version"] != "0.1.0" {
+		t.Fatalf("to review %v", got)
+	}
+	if code, _ := h.do("POST", "/plugins/guard/versions/0.1.0/role-grants/reject", "viewer", nil); code != http.StatusForbidden {
+		t.Fatalf("viewer reject = %d", code)
+	}
+	if code, out := h.do("POST", "/plugins/guard/versions/0.1.0/role-grants/reject", "admin", nil); code != 200 || data(out)["confirmed"] != false {
+		t.Fatalf("reject = %d %v", code, out)
+	}
+	if got := pending(); len(got) != 0 {
+		t.Fatalf("after reject %v", got)
+	}
+	if code, _ := h.do("POST", "/plugins/guard/versions/0.1.0/role-grants/confirm", "admin", nil); code != http.StatusNotFound {
+		t.Fatalf("confirm with nothing pending = %d", code)
+	}
 }

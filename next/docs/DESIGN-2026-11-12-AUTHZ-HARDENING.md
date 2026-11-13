@@ -657,3 +657,14 @@
 - 测试：authz `TestAssignCustomExcludesOwnRole`（lead 对自己与其他 lead 403、对 staff 持有者与普通用户放行、不能分配 lead、不能建带 `assign_custom` 的角色、不能把自己列进清单、对另一个通配角色的持有者 403；超管照常；超管把 lead 按名字列进 lead 的清单后，lead 管理自己与其他 lead 并可分配 lead）；`TestSetRoleAssignable` 的展开结果不再含角色自己。
 - 影响对象：带 `assign_custom` 的自定义角色的持有者，经管理接口作用于自己或同角色的其他持有者、分配该角色、交出 `assign_custom` 由成功变为 403。内置 admin（`assign_custom`，不持有自定义角色）不受影响；admin 同时持有自定义角色时，该角色同样不被它的通配覆盖。生产库没有自定义角色，无影响。前端 `GET /me/assignable-roles` 随之不再列出自己的角色。无迁移。CONTRACTS §43.6、§15.7 角色对象、FU2 段同步。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
+
+- 改动：`plugin/install/rolegrants.go`。`planRoleGrants` 复用 `catalogKeys` + `roleGrants`，列出一次不覆盖角色的同意会做的授予（目录里还没有的权限的 `defaultRoles`，以及当下持有其 `inheritFrom` 旧 key 的角色；超管角色不计），`sensitive` 或授予对象不是内置 `admin`/`operator`/`supplier` 的标为需要同意。`Review.resolveDefaultRoles` 一并填 `new_role_grants`、`role_grants_need_consent`。
+  - 上传或市场升级：`carryOverConsent` 在需要同意时不沿用；同意事务里（`autoRoleGrants`，与写入同一快照）再判断一次，需要同意就回滚、版本留在 `awaiting_consent`。沿用时写 `plugin.consent.auto`。
+  - 内置插件（系统同意）：版本照常 `approved`（`BuiltinsReady`/`BuiltinsCommitted` 需要，否则节点不就绪、托管升级无法提交），需要同意的授予不写入：涉及的权限改为按名字授予其余不需同意的角色、不再走 `inheritFrom`（持有者已在同一事务里解析），暂缓的授予写进 `plugin.consent.auto` 的 `pending`。插件列表与详情 `role_grants_to_review` 从这些审计算出；`POST …/role-grants/confirm` 需要同意页显式指定角色的同样资格（`checkRolesGrantable`：`role:define` + `CanGrantToRoles`），经新增的 `core.PermissionCatalog.GrantPluginPermission` 写入（`authz.sync.grant`，`via: review`，移动 authz 版本）；`…/reject` 不写入，只清除提示。均写审计（`plugin.role_grants.confirm`/`reject`）。不加迁移。
+  - 首次安装与操作者自己点同意不变。
+- 测试：install `TestUpgradeRoleGrantsNeedConsent`（新增 sensitive 授予、新增授予给 user、经 inheritFrom 授予自定义角色 → 不沿用，版本 `awaiting_consent`；只给 admin/operator/supplier 的非敏感授予 → 沿用并有审计；之后操作者同意照常授予）、`TestBuiltinUpgradeWithholdsRoleGrants`（EnsureBuiltin 升级批准版本，只写不需同意的授予，暂缓项列出；无 `role:define` 或角色不可改时 confirm 403；confirm 写入并清空；下一次升级再暂缓，reject 清空且不写入）；authz `TestGrantPluginPermission`；plugin/api `TestAPIRoleGrantsToReview`。
+- 影响对象：升级时 manifest 新增敏感权限或把新权限给 user、自定义角色的插件——上传不再自动批准，要有人在同意页确认；内置插件这类授予要在插件页确认后才生效（之前随升级直接生效）。前端（插件页提示与确认按钮、同意页展示 `new_role_grants`）由期 4 前端任务做；在此之前可直接调接口。
+- 回滚：revert 这个提交即可；回滚后暂缓的授予不会被自动补上（审计里有清单，需要时手工授予）。
+

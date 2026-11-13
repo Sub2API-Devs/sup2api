@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -49,6 +50,8 @@ type fakePerms struct {
 	// checked records CanGrantToRoles calls; denyRoles fails them.
 	checked   [][]string
 	denyRoles error
+	// granted records GrantPluginPermission calls as "key=role,...".
+	granted []string
 }
 
 func (f *fakePerms) SyncPlugin(_ context.Context, _ pgx.Tx, key string, defs []core.PermissionDef) error {
@@ -71,6 +74,14 @@ func (f *fakePerms) CanGrantToRoles(_ context.Context, _ pgx.Tx, _ int64, roles 
 	defer f.mu.Unlock()
 	f.checked = append(f.checked, roles)
 	return f.denyRoles
+}
+func (f *fakePerms) GrantPluginPermission(_ context.Context, tx pgx.Tx, key string, roles []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.granted = append(f.granted, key+"="+strings.Join(roles, ","))
+	_, err := tx.Exec(context.Background(), `INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = ANY($1) AND p.key = $2 ON CONFLICT DO NOTHING`, roles, key)
+	return err
 }
 func (f *fakePerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error { return nil }
 func (f *fakePerms) DeletePlugin(_ context.Context, _ pgx.Tx, key string) error {

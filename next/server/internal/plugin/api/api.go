@@ -71,6 +71,8 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/plugins/:key/versions/:version/review", PermRead, a.review)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/consent", PermInstall, a.consent)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/reject", PermInstall, a.reject)
+	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/role-grants/confirm", PermInstall, a.reviewRoleGrants(true))
+	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/role-grants/reject", PermInstall, a.reviewRoleGrants(false))
 	r.Perm(http.MethodPost, "/plugins/:key/enable", PermManage, a.enable)
 	r.Perm(http.MethodPost, "/plugins/:key/disable", PermManage, a.disable)
 	r.Perm(http.MethodPost, "/plugins/:key/upgrade", PermManage, a.upgrade)

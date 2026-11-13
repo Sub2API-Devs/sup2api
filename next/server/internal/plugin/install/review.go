@@ -45,7 +45,13 @@ type Review struct {
 	ExternalServices []string            `json:"external_services"`
 	HostPermissions  []ReviewHostPerm    `json:"host_permissions"`
 	Diff             *ReviewDiff         `json:"diff,omitempty"`
-	UploadedAt       time.Time           `json:"uploaded_at"`
+	// NewRoleGrants are the roles the permissions this version creates go
+	// to without overrides (manifest defaultRoles and the holders of their
+	// inheritFrom keys now); RoleGrantsNeedConsent is set when one of them
+	// needs consent, so an upgrade is not carried over (rolegrants.go).
+	NewRoleGrants         []RoleGrant `json:"new_role_grants"`
+	RoleGrantsNeedConsent bool        `json:"role_grants_need_consent"`
+	UploadedAt            time.Time   `json:"uploaded_at"`
 }
 
 // ReviewEndpoint is a gateway endpoint of a declared platform. In
@@ -356,7 +362,8 @@ func diffGrants(m *manifest.Manifest, current map[string]Grant) *ReviewDiff {
 }
 
 // resolveDefaultRoles sets each user permission's DefaultRoles to what a
-// consent naming no roles grants it given the catalog now (roleGrants).
+// consent naming no roles grants it given the catalog now (roleGrants), and
+// the role grants that consent makes (planRoleGrants).
 func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *manifest.Manifest) error {
 	existing, err := catalogKeys(ctx, q, m)
 	if err != nil {
@@ -365,6 +372,14 @@ func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *ma
 	grants := roleGrants(m, ConsentRequest{}, existing)
 	for i := range r.UserPermissions {
 		r.UserPermissions[i].DefaultRoles = grants[r.UserPermissions[i].Key]
+	}
+	plan, err := planRoleGrants(ctx, q, m, existing, grants)
+	if err != nil {
+		return err
+	}
+	r.NewRoleGrants, r.RoleGrantsNeedConsent = plan, needConsent(plan)
+	if r.NewRoleGrants == nil {
+		r.NewRoleGrants = []RoleGrant{}
 	}
 	return nil
 }
