@@ -76,10 +76,9 @@
 - 前端权限目录（期 4 T69）：`web/src/generated/permissions.ts` 由核心目录生成，内容包括：
   - `P`：每个核心与 `self` 权限一个常量，名字由 key 转成驼峰。
   - `SCOPE_TYPE`：可带范围的动作及其资源。
-  - `LEGACY_OWN`：可带范围动作的旧 own 别名，R2b 删除别名时随之删除。
   - `PERMISSIONS`：每个 key 的 module、sensitive、stepUp、requires 和中英 description。
   - `ROLE_KEY_PATTERN`。
-  - 类型 `PermKey`、`ScopedPermKey`、`LegacyOwnKey`、`PluginPermKey`、`PermRef`。
+  - 类型 `PermKey`、`ScopedPermKey`、`PluginPermKey`、`PermRef`。
 
   生成方式：`sub2api permissions-ts` 输出到 stdout，或 `UPDATE_GOLDEN=1 go test ./internal/authz -run TestGeneratedPermissionsTS` 直接写文件。golden 测试 `TestGeneratedPermissionsTS` 在文件过期时失败，所以 CI 能拦住。
 
@@ -88,17 +87,17 @@
 
 ## 4. 权限清单（核心）
 
-模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`step_up`，2026-11-13 期 4 起，取代此前的 `session_only`“只认会话”）表示使用它的部分高危接口每次要先完成二次验证（§80.2），会话与访问密钥一样；仅为展示标记，`GET /permissions` 返回 `step_up`，规则以路由为准。另有 `self` 虚拟权限模块（§80.1），不在本表和角色编辑器里。👑（`superOnly`，2026-11-12，决策 D2）表示超管专属：不在任何内置角色的默认权限里（新库、新增权限的自动授予、恢复默认都不给），默认只有超级管理员持有；授予检查只要求操作者自己持有（§43.6），所以委派总是从超级管理员开始（超管把它授给某个角色后，该角色的持有者若有 `role:define`、`role:assign` 也能继续授出，全程审计）；`GET /permissions` 不返回这个标记。存量库里内置 `admin`、`operator` 角色上的这 5 个权限由迁移 `0099_reclaim_super_only.sql` 回收一次（每条写审计 `authz.reclaim.super_only`，actor 为系统，`detail {role, key}`；自定义角色不动），之后超管可再显式授回。
+模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`step_up`，2026-11-13 期 4 起，取代此前的 `session_only`“只认会话”）表示使用它的部分高危接口每次要先完成二次验证（§80.2），会话与访问密钥一样；仅为展示标记，`GET /permissions` 返回 `step_up`，规则以路由为准。另有 `self` 虚拟权限模块（§80.1），不在本表和角色编辑器里。👑（`superOnly`，2026-11-12，决策 D2）表示超管专属：不在任何内置角色的默认权限里（新库、新增权限的自动授予、恢复默认都不给），默认只有超级管理员持有；授予检查只要求操作者自己持有（§43.6），所以委派总是从超级管理员开始（超管把它授给某个角色后，该角色的持有者若有 `role:define`、`role:assign` 也能继续授出，全程审计）；`GET /permissions` 不返回这个标记。存量库里内置 `admin`、`operator` 角色上的这 5 个权限由迁移 `0097_authz_hardening.sql` 回收一次（每条写审计 `authz.reclaim.super_only`，actor 为系统，`detail {via, role, key}`；自定义角色不动），之后超管可再显式授回。
 
 | 模块 | 权限 |
 |---|---|
 | user | `user:read` `user:create` `user:update` `user:delete`🔐🔑 `user:password:reset`🔐🔑 |
-| role | `role:read` `role:define`🔐 `role:assign`🔐（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
+| role | `role:read` `role:define`🔐 `role:assign`🔐（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色。迁移 `0097_authz_hardening.sql` 把存量 `role:manage` 授予改写为两者（内置 operator 只得 `role:assign`，决策 D3），然后删除 `role:manage`） |
 | apikey | `apikey:self:manage`🔐🔑（查看明文每次二次验证 `apikey.reveal`，期 4 收尾 F2） |
 | group | `group:read` `group:manage`🔐 |
 | segment | `segment:read` `segment:manage`（用户组，§97.7） |
-| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐🔑，均可带范围（`:own`、`:group/<g>`、`:group/<g>/account/<a>`、`:account/<a>`；create 不接受 id，§21.0；旧 key `account:own:<x>` 为 `account:<x>:own` 的别名，R2a 期间保留）；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
-| proxy | `proxy:read` `proxy:manage`🔐🔑，可带范围 `:own`、`:proxy/<id>`（§21.0；旧 key `proxy:own:<x>` 为别名） |
+| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐🔑，均可带范围（`:own`、`:group/<g>`、`:group/<g>/account/<a>`、`:account/<a>`；create 不接受 id，§21.0；旧 key `account:own:<x>` 已由迁移改写为 `account:<x>:own` 并删除，不再接受）；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
+| proxy | `proxy:read` `proxy:manage`🔐🔑，可带范围 `:own`、`:proxy/<id>`（§21.0；旧 key `proxy:own:<x>` 已改写并删除） |
 | price | `price:read` `price:manage`🔐 |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` `usage:settle`🔐 |
@@ -111,7 +110,7 @@
 | settings | `settings:read` `settings:manage`🔐🔑 |
 | system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
-内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `account:credential:view:own` 与 `user` 角色的默认权限（全量 key 蕴含 own 范围，因此能授出 supplier，期 4 R2a 起不再重复列出 own key）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12；期 4 R2a 起写作 `account:read:own` `account:create:own` `account:update:own` `account:delete:own` `account:test:own` `account:credential:view:own` `proxy:read:own` `proxy:manage:own`，核心默认权限只有这些（插件权限按 manifest `defaultRoles` 授予，payment 的 `recharge:use`、growth 的 `growth:use` 列了 supplier），暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。新登记的插件权限授予 manifest `userPermissions[].defaultRoles` 列出的内置角色（`admin`、`operator`、`supplier`、`user`，即 `manifest.BuiltinRoleKeys`；省略或 `null` 时为 `admin`，显式 `[]` 表示不授予任何角色；超管角色本来拥有全部权限，不写入），以及持有本插件 `inheritFrom` 所列旧 key 的角色（改名、拆分不丢授权，先授予再删除不再声明的旧 key）。声明了 `inheritFrom` 且目录里已有其中某个旧 key 时视为改名或拆分，只按继承授予、不叠加 `defaultRoles`；全新安装没有旧 key，才按 `defaultRoles`；每一条都写 `authz.sync.grant` 审计（`detail.via` 为 `default` 或 `inherit`）。同意请求可以显式覆盖：`new_permission_roles: {<本地 key>: [角色 key]}` 优先（空数组表示不授予任何角色，`inheritFrom` 照常生效），其次旧字段 `role_keys_for_new_permissions`（非空时作用于其余全部新权限），都没有时按 manifest 默认；已存在的权限不受影响（2026-11-12 权限加固 T58）。manifest 默认属于系统目录默认，同意时不要求操作者的任何权限（审计操作者为系统）；显式指定的角色要求操作者持有 `role:define`，且每个角色都必须是操作者能修改的角色（与 `PUT /roles/:id/permissions` 的 `editableRole` 同一判断：内置角色只有超管，自定义角色的现有权限须在操作者权限之内），并且必须在操作者的可分配清单内（与 `PUT /users/:id/roles` 的可分配判断相同，访问密钥没有可分配清单；不在清单内 403，`details.role`），非超管也不能指定自己持有的角色（即使清单按名字列出了它，403，`details.role`），超管角色一律 403，未知角色 400（字段为请求里的字段：`new_permission_roles.<本地 key>` 或 `role_keys_for_new_permissions`，`code: unknown`；`new_permission_roles` 为目录已有的权限写的未知角色同样 400，不再静默忽略，期 4 P4F4）；新权限本身不要求操作者持有（这一点与 PUT `/roles/:id/permissions` 不同，那里新增的权限须在操作者之内），但因为不能指定自己持有的角色，操作者无法借此给自己新增权限。只有本次真正新建的权限才检查，升级不新增权限时带了角色也不需要 `role:define`（T59）。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `account:credential:view:own` 与 `user` 角色的默认权限（全量 key 蕴含 own 范围，因此能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12；`account:read:own` `account:create:own` `account:update:own` `account:delete:own` `account:test:own` `account:credential:view:own` `proxy:read:own` `proxy:manage:own`，核心默认权限只有这些（插件权限按 manifest `defaultRoles` 授予，payment 的 `recharge:use`、growth 的 `growth:use` 列了 supplier），暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。新登记的插件权限授予 manifest `userPermissions[].defaultRoles` 列出的内置角色（`admin`、`operator`、`supplier`、`user`，即 `manifest.BuiltinRoleKeys`；省略或 `null` 时为 `admin`，显式 `[]` 表示不授予任何角色；超管角色本来拥有全部权限，不写入），以及持有本插件 `inheritFrom` 所列旧 key 的角色（改名、拆分不丢授权，先授予再删除不再声明的旧 key）。声明了 `inheritFrom` 且目录里已有其中某个旧 key 时视为改名或拆分，只按继承授予、不叠加 `defaultRoles`；全新安装没有旧 key，才按 `defaultRoles`；每一条都写 `authz.sync.grant` 审计（`detail.via` 为 `default` 或 `inherit`）。同意请求可以显式覆盖：`new_permission_roles: {<本地 key>: [角色 key]}` 优先（空数组表示不授予任何角色，`inheritFrom` 照常生效），其次旧字段 `role_keys_for_new_permissions`（非空时作用于其余全部新权限），都没有时按 manifest 默认；已存在的权限不受影响（2026-11-12 权限加固 T58）。manifest 默认属于系统目录默认，同意时不要求操作者的任何权限（审计操作者为系统）；显式指定的角色要求操作者持有 `role:define`，且每个角色都必须是操作者能修改的角色（与 `PUT /roles/:id/permissions` 的 `editableRole` 同一判断：内置角色只有超管，自定义角色的现有权限须在操作者权限之内），并且必须在操作者的可分配清单内（与 `PUT /users/:id/roles` 的可分配判断相同，访问密钥没有可分配清单；不在清单内 403，`details.role`），非超管也不能指定自己持有的角色（即使清单按名字列出了它，403，`details.role`），超管角色一律 403，未知角色 400（字段为请求里的字段：`new_permission_roles.<本地 key>` 或 `role_keys_for_new_permissions`，`code: unknown`；`new_permission_roles` 为目录已有的权限写的未知角色同样 400，不再静默忽略，期 4 P4F4）；新权限本身不要求操作者持有（这一点与 PUT `/roles/:id/permissions` 不同，那里新增的权限须在操作者之内），但因为不能指定自己持有的角色，操作者无法借此给自己新增权限。只有本次真正新建的权限才检查，升级不新增权限时带了角色也不需要 `role:define`（T59）。
 
 ## 5. REST API（`/api/v1`）
 
@@ -767,7 +766,7 @@ GET `/ui/plugins`（`self:plugin_ui`，会话天然持有，§80.1）→ 不分�
 | `proxy_id` | 可为 `null`（直连） |
 | `status` | `active` \| `disabled` |
 | `status_reason` | 手动禁用时，全量范围（`account:update`）写 `"disabled by administrator"`，own 范围（`account:own:update`）写 `"disabled by owner"`；重新启用时清空 |
-| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 0100）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 且账号仍是 `disabled` 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`（账号已是其他状态时视为残留的锁，不拦截，属主启用或重置时清除），其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
+| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 `0097_authz_hardening.sql`）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`（锁随 `disabled` 写入，全量范围让账号恢复的每条路径都清除它，自动状态不作用于 `disabled` 账号，所以上锁的账号总是 `disabled`），其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
 | `schedulable`、`priority`、`max_concurrency` | `max_concurrency=0` 表示不限 |
 | `in_use` | 当前占用的并发槽位数（集群实时） |
 | `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
@@ -1069,20 +1068,19 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 ## 21. 账号与代理的所有权授权、受限设置（base_url）、保存账号时自动关联代理（2026-09-25，用户要求）
 
-> 期 4 R1–R7 起，所有权改为带范围的权限 key（§21.0）。本节及全文其他位置的 `account:own:<x>`、`proxy:own:<x>` 均读作 `account:<x>:own`、`proxy:<x>:own`（R2a 期间旧写法仍是有效别名），“全部级 / 自己级”读作“全部范围 / 受限范围”，`PermAny(all, own)` 与 `core.OwnerScope` 读作 `PermScoped(动作)` 与 `core.Scope`。
+> 期 4 R1–R7 起，所有权改为带范围的权限 key（§21.0）。本节及全文其他位置的 `account:own:<x>`、`proxy:own:<x>` 均读作 `account:<x>:own`、`proxy:<x>:own`（旧写法 0.1.285 起由迁移改写并删除，不再接受），“全部级 / 自己级”读作“全部范围 / 受限范围”，`PermAny(all, own)` 与 `core.OwnerScope` 读作 `PermScoped(动作)` 与 `core.Scope`。
 
 背景：需要"供应商"角色只维护自己创建的账号和代理、不能改 base_url（只能用官方地址）；"只读"角色能看全部账号但不能改、看不到密钥；保存账号时能直接填代理串，后端自动解析并复用已有代理或新建再关联。旧 sub2api 没有所有者模型，本节为新设计。
 
-### 21.0 带范围的权限 key（期 4 R1–R2a，取代下文的 own/all 成对 key；R7 重写本节）
+### 21.0 带范围的权限 key（期 4 R1–R7，取代下文的 own/all 成对 key；0.1.285 发布前去掉旧写法）
 
 - **语法**：`<动作>[:<范围>]`，范围 = `*` | `own` | 路径。账号动作（`account:read/create/update/delete/test/credential:view`）的路径为 `group/<g>`、`group/<g>/account/<a>`、`account/<a>`（`<g>` 可为 `*`，表示绑定在任意分组下）；代理动作（`proxy:read/manage`）为 `proxy/<id>`。id 为不带前导 0 的正整数。省略范围 = `*` = 全部行；其余动作不接受范围。`account:create` 只接受 `*`、`own`、`group/…`（不接受 id）。最后一段是 `*`、`own` 或含 `/` 时才视为范围。
-- **规范形式**（`perm.Canonical`，唯一入口）：全部范围不带后缀（存量 key 一字不改）；结尾的 `/*` 只在跟着本资源的行类型或单独出现时去掉（`group/12/*` → `group/12`，`group/12/account/*` → `group/12`，`account/*` → 全部；`group/*` 保留）；8 个旧 key `account:own:<x>`、`proxy:own:<x>` 是 `<动作>:own` 的别名。不合法的 key 400 `permission_keys`（或 `permissions`）`invalid`。
+- **规范形式**（`perm.Canonical`，唯一入口）：全部范围不带后缀（存量 key 一字不改）；结尾的 `/*` 只在跟着本资源的行类型或单独出现时去掉（`group/12/*` → `group/12`，`group/12/account/*` → `group/12`，`account/*` → 全部；`group/*` 保留）。8 个旧 key `account:own:<x>`、`proxy:own:<x>` 不是别名：它们只是不存在的无范围 key，角色写入 400 `unknown`，访问密钥 403 `missing`。不合法的 key 400 `permission_keys`（或 `permissions`）`invalid`。
 - **蕴含**（`perm.Implies`，纯语法，不按账号当前所在分组推导）：全部 ⊇ 一切；own 只蕴含 own；`group/*` ⊇ 任何 `group/…`；`group/G` ⊇ `group/G/account/X`；`account/X` ⊇ `group/…/account/X`；`group/*/account/X` ⊇ `group/G/account/X`。共享测试向量 `next/sdk/permvectors/vectors.json`（Go 与控制台 TS 共用）。
 - **匹配**：`PermissionSet.Has(k)` = 持有的某个模式蕴含 k，所以只持有 `account:read:own` 时 `Has("account:read")` 为 false（“全量才能做”的判断保持全量语义）；`HasAction(a)` = 持有 a 的任意范围。路由 `Router.PermScoped(method, path, h, actions...)` 要求任一动作的任意范围，并把每个动作的 `core.DataScope` 放进 ctx（`core.Scope(ctx, az, action)` 取用）；全部范围的动作也记入 `Granted`。
 - **数据范围**：`core.DataScope{All, Owner, Groups, IDs, PairG, PairID}` 由用户在该动作上的全部模式编译（`Compile`），谓词 `core.AccountRows` / `core.ProxyRows` 的 `SQL(n)` / `Cond()` / `Args(scope)`：文本固定，id 只是数组参数；分组成员关系实时读 `account_groups`（任一分组匹配即在范围内），不进缓存。
 - **存储**：`permissions.scope_type`（`''`/`account`/`proxy`）；全部范围的授予在 `role_permissions`，带范围的在 `role_permission_scopes(role_id, permission_id, scope)`。访问密钥仍是 `text[]`，存规范 key。
-- **两步升级（滚动发布）**：R2a（本版本）旧 own key 保持 active，作为别名被读取；写入带 own 范围的授予时同时写旧 own key 行（`mirrorLegacyOwn`），访问密钥同时存两种写法，旧节点照常工作；`GET /permissions` 不再列出旧 own key，每项新增 `scope_type`；`GET /me` 的 `permissions` 输出规范 key 并附带旧 own 别名（兼容一个小版本）。R2a 期间，旧 own key 仍为 active 时，以旧行为准（`ownShadowed`）：旧节点撤销 own 授予（只删旧行）后所有节点一致。R2b（下一版本，所有节点升级后）：先按旧行重新同步新表的 own 行（写审计），再把 8 个旧 key 标 removed，最后删除镜像、密钥里的旧写法与 `/me` 别名。
-- **迁移 0103**：建表加列；每个未 removed 的旧 own 授予若角色未持有对应全量 key，则写入 `(动作, 'own')`（审计 `authz.scope.migrate`，`via: migration 0103`、`from`、`key`；冗余的只记一次 `redundant: true`）；访问密钥在旧写法旁补上 `<动作>:own`（审计 `user.access_key.migrate`，含 before/after）；有写入才推进 authz 版本；可重复执行；不删除也不修改 `role_permissions`。
+- **迁移 `0097_authz_hardening.sql`**（0.1.285，停服发布，单事务，见 DESIGN-2026-11-12-AUTHZ-HARDENING 发布说明）：建表加列；每个旧 own 授予改写为 `(动作, 'own')`，角色已持有对应全量 key 时只记审计（`redundant: true`）；访问密钥里的旧写法换成 `<动作>:own`（`role:manage` 换成 `role:define` + `role:assign`）；然后删除旧 key 的 permission 行。审计 `authz.grant.migrate`（`via: migration 0097`、`from`、`key`、`redundant`）、`user.access_key.migrate`（before/after）；有写入才推进 authz 版本；可重复执行。`GET /permissions` 每项带 `scope_type`；`GET /me` 只输出规范 key。回滚脚本 `deploy/rollback/0.1.285-authz-down.sql` 把 own 范围与审计里的冗余授予改回旧 key、分组与 id 范围删除（写审计）。
 - **访问密钥取交集**：创建/修改时每个 key 须被用户蕴含；运行时 `Restrict` 逐模式取较窄者（存量不带后缀的 key 遇到只有 own 的用户收窄为 own），不可比（如 `group/12` 与 `own`）丢弃。
 - **内置角色默认**：supplier = 8 个 `…:own`；operator 去掉冗余 own key，加 `account:credential:view:own`。
 - **账号（期 4 R3）**：列表、详情、写、删、测试、凭证、统计、汇总、动作、`AccountsInScope`（插件账号路由与宿主 RPC）都按调用者在对应动作上的范围过滤，越权一律 404。`mine=true`、`created_by=<id>` 在范围内再收窄（此前 own 级忽略 `created_by`）。受限档（范围不是全部）沿用 own 级的全部限制（并发默认与上限、管理员锁、受限设置、relay、绑定分组）。
@@ -1105,14 +1103,14 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
     - 不能操作持有这些范围的人。
     - own 是相对语义：持有 own 的人可以把 own 授给别人。
   - 拒绝时 `details.missing` 列出未被蕴含的规范 key。
-  - 访问密钥：创建或修改时每个 key 都要被用户蕴含，否则 403，`missing` 为规范 key。存储时规范化并附带旧写法，列表与审计显示规范 key。
+  - 访问密钥：创建或修改时每个 key 都要被用户蕴含，否则 403，`missing` 为规范 key。存储、列表与审计都是规范 key。
   - 存量不带后缀的密钥在使用时收窄为用户的范围。
   - 审计 `role.create` / `role.permissions` 的 `permission_keys` 为规范 key。
 - **插件与 lookup（期 4 R5）**：
   - 插件账号路由（manifest `accounts`）与宿主 RPC `AccountScopeCheck` 都经 `AccountsInScope`，自动跟随范围。`all` 表示全部；否则 `allowed_ids` 是落在调用者范围内的 id。proto 与 SDK 注释已更新，接口形状不变。
   - `GET /lookup/accounts`、`/lookup/proxies` 按调用者 `account:read` / `proxy:read` 的范围过滤（任意范围都可调用），`mine=true` 在范围内再收窄。`/lookup/groups` 不变。
   - 插件 manifest 的 `userPermissions[].key`（及 `inheritFrom`）最后一段不能是 `own`，否则 400 `invalid_format`（会被读成范围）。
-  - `GET /me` 的 `permissions` 除规范 key 外附带旧 own 别名，兼容一个小版本。插件页面可继续检查 `account:own:read`，新代码应改用“动作的任意范围”。
+  - `GET /me` 的 `permissions` 只有规范 key。插件页面用宿主的 `hasAction(动作)`（任意范围）或 `has(规范 key)` 判断，不能再检查 `account:own:read`。
 - **相关章节**：目录里哪些动作可带范围（`scope_type`）见 §4；授出范围与可管理目标的防提权按蕴含比较见 §43.6；访问密钥的交集与二次验证见 §80、§80.2。
 
 ### 21.1 权限（§4 表同步更新）
@@ -1121,11 +1119,11 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 模块 | 新增 key | 说明 |
 |---|---|---|
-| account | `account:read:own` `account:create:own` `account:update:own` `account:delete:own`🔐 `account:test:own` `account:credential:view:own`🔐🔑（旧写法 `account:own:<x>`） | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3）；🔑 见 §80.2 |
+| account | `account:read:own` `account:create:own` `account:update:own` `account:delete:own`🔐 `account:test:own` `account:credential:view:own`🔐🔑 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3）；🔑 见 §80.2 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
 | account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
-| proxy | `proxy:read:own` `proxy:manage:own`（旧写法 `proxy:own:<x>`） | 只作用于 `created_by` = 调用者的代理 |
+| proxy | `proxy:read:own` `proxy:manage:own` | 只作用于 `created_by` = 调用者的代理 |
 
 - 全部级 key 覆盖自己级 key：同时拥有时按全部处理。
 - `created_by` 为 `NULL` 的历史数据只有全部级 key 能看到/操作。
@@ -1186,7 +1184,7 @@ own 级用户（只有 `account:own:create` / `account:own:update`，无全部�
    超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
 3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`、用改过上游地址的凭证调用 `POST /accounts/:id/models/fetch`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
 
-4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9）且仍是 `disabled` 时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
+4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9；上锁的账号总是 `disabled`）时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
 
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 
@@ -2805,12 +2803,12 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
   - **安全约束（不是权限规则，不并入可管理目标）**：任何人（含超管）不能禁用或删除自己（409 `you cannot disable or delete yourself`，防止把自己锁在外面）；超级管理员角色不能撤销（含超管本人），只能移交（§43.7）。
   - 用户自助接口（`/me/*`）不经 `UserGuard`，不受影响。
 - 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
-- 两类检查也比较可分配角色（2026-11-12，决策 4、5）：角色可以带一份可分配角色清单（`role_assignable_roles`，永不含超管角色）和“以及全部自定义角色”标志（`roles.assign_custom`）。新增角色或目标用户的角色能分配的角色必须在操作者的可分配范围内，否则 403，`details.missing_assignable` 列出缺的角色、`details.missing_assign_custom = true` 表示缺“全部自定义角色”，与 `details.missing` 分开。因此能分配 admin 的委派者不会被 admin 改动。`assign_custom` 在比较时展开为现有的全部自定义角色，但不含持有者自己持有的角色（按名字列在清单里的除外）：操作者一侧，它不覆盖操作者自己的角色；新建或修改角色时交出的 `assign_custom` 展开为除该角色外的全部自定义角色，所以带 `assign_custom` 的操作者若持有自定义角色，交出通配会因缺自己的角色 403 `details.missing_assignable`，同理不能作用于持有另一个带 `assign_custom` 角色的用户。访问密钥收窄后没有可分配角色（只影响授予与分配；可管理目标按操作者的角色计算，FU6）。内置默认清单（决策 5）：admin = operator、supplier、user 与全部自定义角色；operator = supplier、user；supplier、user 没有。存量库里内置 operator 的清单由迁移 `0101_operator_assignable.sql` 纠正一次为 supplier、user 且不含自定义角色（0097 曾按旧 `role:manage` 等价生成 {operator, user} 与全部自定义角色；审计 `role.assignable`，actor 为系统，`detail.via = "migration 0101"`）。`role:manage` 拆分（启动同步按 `inherits` 授予持有者）不再给内置角色其默认集合没有的那一半（内置 operator 因此只得到 `role:assign`，D3 白名单没有 `role:define`）；已经按旧做法拿到 `role:define` 的内置 operator（本版本更早的启动）由迁移 `0102_operator_reclaim_role_define.sql` 收回一次（审计 `authz.reclaim`，actor 为系统，`detail` = `{via: "migration 0102", role, key}`；有收回才移动 authz 版本；自定义角色不动，2026-11-13 权限加固期 4 P4F1）。升级时新建出的内置角色（如 supplier）由 `SyncCore` 追加到默认清单含它的已有内置角色上（审计 `authz.sync.grant`，via=`assignable`），已有清单的其他项不动。`SyncCore` 新建内置角色时（新库或升级带来的 supplier），它自己的默认权限与可分配清单每一项也写 `authz.sync.grant`（`detail.via` 为 `default`/`assignable`，另带 `role_created: true`；2026-11-13 期 4 P4F3，此前不审计）。
+- 两类检查也比较可分配角色（2026-11-12，决策 4、5）：角色可以带一份可分配角色清单（`role_assignable_roles`，永不含超管角色）和“以及全部自定义角色”标志（`roles.assign_custom`）。新增角色或目标用户的角色能分配的角色必须在操作者的可分配范围内，否则 403，`details.missing_assignable` 列出缺的角色、`details.missing_assign_custom = true` 表示缺“全部自定义角色”，与 `details.missing` 分开。因此能分配 admin 的委派者不会被 admin 改动。`assign_custom` 在比较时展开为现有的全部自定义角色，但不含持有者自己持有的角色（按名字列在清单里的除外）：操作者一侧，它不覆盖操作者自己的角色；新建或修改角色时交出的 `assign_custom` 展开为除该角色外的全部自定义角色，所以带 `assign_custom` 的操作者若持有自定义角色，交出通配会因缺自己的角色 403 `details.missing_assignable`，同理不能作用于持有另一个带 `assign_custom` 角色的用户。访问密钥收窄后没有可分配角色（只影响授予与分配；可管理目标按操作者的角色计算，FU6）。内置默认清单（决策 5）：admin = operator、supplier、user 与全部自定义角色；operator = supplier、user；supplier、user 没有。存量库由迁移 `0097_authz_hardening.sql` 一次写出（0.1.285）：持有 `role:manage` 的角色得到 `role:define` + `role:assign` 与可分配清单（全部内置角色中除超管与 admin 外的 + `assign_custom`），内置 operator 只得到 `role:assign`、清单为 supplier、user 且不含自定义角色（D3、决策 5）；每项写审计（`authz.grant.migrate`、`role.assignable`，actor 为系统，`detail.via = "migration 0097"`），然后删除 `role:manage`。启动同步不再有 `role:manage` 的继承授予。升级时新建出的内置角色（如 supplier）由 `SyncCore` 追加到默认清单含它的已有内置角色上（审计 `authz.sync.grant`，via=`assignable`），已有清单的其他项不动。`SyncCore` 新建内置角色时（新库或升级带来的 supplier），它自己的默认权限与可分配清单每一项也写 `authz.sync.grant`（`detail.via` 为 `default`/`assignable`，另带 `role_created: true`；2026-11-13 期 4 P4F3，此前不审计）。
 - 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、改可分配清单、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余内置角色（`admin`、`operator`、`user` 等）只有超级管理员能改（2026-11-12，决策 6），其他人即使权限覆盖该角色也 403 `only the super admin can change built-in roles`（`details.superuser = true`；访问密钥不是超管，同样 403）；自定义角色当前授予的权限（授予视角，不含已移除的）与可分配角色必须在操作者之内，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限、改可分配清单（PUT `/roles/:id/assignable`）因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限与可分配角色同样已在操作者之内（C-L2）。
 - 分配角色（PUT `/users/:id/roles`、POST `/users`，2026-11-12，决策 1、4）：只比较新增与撤销的角色，无变化直接成功。`super_admin` 任何人（含超管本人、超管的访问密钥）都不能授予或撤销，403 `the super admin role cannot be assigned or revoked; transfer it instead`；系统（actor 0）只能授予初始超管（引导），不能撤销。其余每个新增或撤销的角色都必须在操作者的可分配清单内（超管可分配全部），否则 403 `details.role`；唯一例外是给当前没有任何角色的用户授予默认角色 `user`，所以只有 `user:create` 的人仍能建默认用户。然后检查操作者能作用于目标（可管理目标，本人也按此判断，FU6），再检查新增角色所含权限与可分配角色都在操作者之内（`Missing`）。访问密钥没有可分配角色，不能分配任何角色。
 - 超管移交（POST `/system/super-admin/transfer`，2026-11-12，决策 1）：`super_admin` 换人的唯一路径，`authz.TransferSuperAdmin` 一处实现，控制台与服务器 CLI 共用。`Bump` 之后锁住超管持有行，操作者须是当前持有者（系统 actor 0 = CLI 不受此限，同时修复无超管或多超管）；目标须未删除、启用中、不是操作者本人；其余持有者先删超管行，未删除的补 `admin`（已软删除的不补，恢复该用户不会带回管理权限），再给目标加超管行；记 `superadmin.transfer` 审计（`via` 为 `console` 或 `cli`）。iam 在同一事务里让降级者与目标的全部会话失效，提交后广播。是否要求目标已开启两步验证：不强制，只由前端提示。
 - 服务器 CLI 恢复（`sub2api admin recover-superadmin --email <已有用户> [--reset-password] [--reset-2fa]`，2026-11-12，决策 2）：在服务器上直连配置的数据库，不跑迁移、不连 Redis、不广播，没有对应的 HTTP 入口。`iam.RecoverSuperAdmin` 只组合系统（actor 0）路径：目标被禁用时先启用，再经 `authz.TransferSuperAdmin(actor 0)` 成为唯一超管（其余未删除的持有者降为 `admin`，已软删除的只去掉超管角色，双方会话失效），`--reset-password` 设 24 位随机密码并只在 stdout 打印一次，`--reset-2fa` 清除两步验证与通行密钥；审计 actor 为 0。其他节点最长 30 秒后经版本轮询与状态缓存 TTL 生效（旧会话的访问令牌在此之前仍可能被接受）；重新登录立即可用：令牌携带的 `token_version` 比节点状态缓存里的新时，该缓存项视为过期、当场重读，不会出现登录成功后下一个请求 401。只读写 `roles`、`user_roles`、`users`、`refresh_tokens`、`login_sessions`、`user_totp`、`user_passkeys`、`audit_logs`，因此超管唯一迁移因多超管失败、服务起不来时可用它处理。
-- 超管全局唯一（迁移 0098，2026-11-12，决策 1、2）：`roles_one_superuser` 部分唯一索引保证最多一个超管角色；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser` 在提交时检查最多一个持有者（advisory 锁串行化并发），违反时 23505。迁移先删掉软删除用户的超管行；未删除的持有者（不论启用、禁用）多于一个时报错并只列出 user id（不含邮箱，错误会进启动日志；期 4 P4F2），服务不启动，用上面的 CLI 保留一个后重启。除超管本人的登录会话外没人能改超管：PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles` 对超管目标只经 `CanActOnUser` 判断，非超管缺超管标志，403 `you cannot modify a superuser`（`details.superuser = true`）；超管本人的访问密钥对这些身份类操作 403 `session_only`（FU6，见上文可管理目标）。其中 DELETE `/users/:id/security` 自 T48 起只限登录会话（`user:password:reset`），访问密钥在权限阶段即 403，不到这一判断。（期 1 的“`CanActOnUser` 只对本人的登录会话免检作用于自己、超管密钥按收窄后的权限比较”已由 FU6 取代：本人按同一规则判断，操作者一侧不被密钥收窄。）
+- 超管全局唯一（迁移 `0097_authz_hardening.sql`，2026-11-12，决策 1、2）：`roles_one_superuser` 部分唯一索引保证最多一个超管角色；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser` 在提交时检查最多一个持有者（advisory 锁串行化并发），违反时 23505。迁移先删掉软删除用户的超管行；库里有用户（升级而非新装）时未删除的持有者（不论启用、禁用）必须恰好一个：没有时报 `no super admin`，多于一个时报 `several super admins` 并只列出 user id（不含邮箱，错误会进启动日志；期 4 P4F2），整个迁移回滚、服务不启动，用上面的 CLI 指定或保留一个后重启。除超管本人的登录会话外没人能改超管：PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles` 对超管目标只经 `CanActOnUser` 判断，非超管缺超管标志，403 `you cannot modify a superuser`（`details.superuser = true`）；超管本人的访问密钥对这些身份类操作 403 `session_only`（FU6，见上文可管理目标）。其中 DELETE `/users/:id/security` 自 T48 起只限登录会话（`user:password:reset`），访问密钥在权限阶段即 403，不到这一判断。（期 1 的“`CanActOnUser` 只对本人的登录会话免检作用于自己、超管密钥按收窄后的权限比较”已由 FU6 取代：本人按同一规则判断，操作者一侧不被密钥收窄。）
 - 内置角色的 key 是保留的（2026-11-12，决策 D5）：POST `/roles` 用它们 400 `reserved`（§15.7）。启动时 `SyncCore` 发现自定义角色占用了内置角色的 key（升级带来新内置角色时才可能出现）就报错、服务不启动，错误信息列出角色 id、key 和改名 SQL（`UPDATE roles SET key = '<key>_custom' WHERE id = <id>;`）；它不会把该自定义角色变成内置角色（持有者会凭空得到内置角色的默认权限），也不会跳过不建。
 - 所有授权写操作（角色写入、POST `/roles`、PUT `/users/:id/roles`）的授权检查都放在同一事务的 `Bump` 之后、用该事务读库：`Bump` 串行化了授权变更，检查看到的是最新且不会被并发改动的状态，不读本节点可能落后的缓存。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制（超级管理员角色冻结除外）。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
@@ -4503,7 +4501,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **核心**：读完配置后从进程环境删除秘密（`DATABASE_URL`、`REDIS_URL`、`SUB2API_MASTER_KEY`、`SUB2API_JWT_SECRET`、引导管理员密码、控制令牌、`CCG_ADMIN_KEY`/`CCG_API_KEY` 等，并清空 `/proc/<pid>/environ` 的初始块），Linux 上 `PR_SET_DUMPABLE=0`。外壳同样 `PR_SET_DUMPABLE=0`。
 - **出站隧道**：没有 `net` 授权的插件什么都连不了，只有声明了 `database` 且获授 `db.schema` 的插件可按配置的名字连 PostgreSQL。任何策略（含 `allow_all`）都拒绝私网/回环/链路本地等非公网地址与核心的 Redis/PostgreSQL（按解析后的地址比对，按检查过的地址拨号防 DNS 重绑定）；`dns.sub2api` 不返回非公网地址。`SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE=true` 只用于测试/开发，Redis/PG 仍拒绝。没有 `net` 也没有数据库的插件不注册隧道服务。
 - **数据库角色隔离不再降级**：开启隔离（默认）但核心角色没有 CREATEROLE 时，授予 `db.schema` 与 `Ensure` 都失败，`409 plugin_db_isolation_unavailable`（运维可显式 `SUB2API_PLUGIN_DB_ROLE_ISOLATION=false`）；已存在且不是本库为该插件建的同名角色不接管，`409 plugin_db_role_conflict`。角色加注释 `sub2api plugin role; database=<库>; plugin=<key>` 作归属标记，删除插件时只删自己的角色。
-- **外壳管理 socket 令牌**：外壳每次启动生成 32 字节随机令牌写入 `management_token_file`（默认管理 socket 旁的 `shell.token`，0600），所有管理请求须带 `Authorization: Bearer <64 hex>`，否则 `401 updater_unauthorized`。核心只拿到文件路径 `SUB2API_UPDATER_TOKEN_FILE`，转发升级接口与插件包读写时带上；未设置该变量时不带（兼容旧外壳）。迁移开关 `allow_tokenless_management` / `SUB2API_ALLOW_TOKENLESS_MANAGEMENT=true` 允许不带令牌的请求（错误令牌仍拒绝），仅用于旧核心过渡。开关打开期间可观测（2026-11-12）：管理 socket 的 `/metrics` 输出 `gateway_management_tokenless_enabled`（0/1）与 `gateway_management_tokenless_accepted_total`（本进程启动以来放行的无令牌请求数），`POST /system/upgrades/preflight` 的结果多一个 `warnings: ["tokenless management is enabled; clear it once every core sends the token"]`（不阻断升级；开关关闭时没有这个字段）。计数包含不带令牌读 `/metrics` 的请求本身，所以带令牌读取；计数不再增长即可清除开关。`sub2api-gateway status/pause/...` 本地命令读同一文件。
+- **外壳管理 socket 令牌**：外壳每次启动生成 32 字节随机令牌写入 `management_token_file`（默认管理 socket 旁的 `shell.token`，0600），所有管理请求须带 `Authorization: Bearer <64 hex>`，否则 `401 updater_unauthorized`。核心只拿到文件路径 `SUB2API_UPDATER_TOKEN_FILE`，转发升级接口与插件包读写时带上；未设置该变量时不带（兼容旧外壳）。不带令牌的请求一律拒绝：迁移开关 `allow_tokenless_management` / `SUB2API_ALLOW_TOKENLESS_MANAGEMENT` 及其指标、preflight `warnings` 已随 0.1.285 删除（自 2026-10 起所有核心都带令牌；新外壳读到旧配置键或环境变量时忽略）。`sub2api-gateway status/pause/...` 本地命令读同一文件。
 - **核心环境白名单**：外壳只把进程基础变量与核心实际读取的配置变量（`supervisor.inheritedEnv`）传给核心，另加 `core_env_inherit` 列出的名字；`SUB2API_PEER_AUTH_KEY` 无论如何不传。
 - **部署**：Redis/Valkey 必须 `requirepass`，`REDIS_URL` 带密码（建议十六进制密码免转义）；网关容器 `no-new-privileges`、`cap_drop: [ALL]`。迁移顺序见 `deploy/gateway/ovh/README.md`。
 
@@ -6996,6 +6994,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **`Authorization: Bearer sak_…`**：核心路由（`httpapi`）和插件路由（`/api/v1/p/:key/*`，期 4 S4 起）都接受，走 `core.AuthenticateBearer`。插件拿到的调用者仍是用户 id，不知道经由密钥；但插件在处理该请求期间问宿主的 `AuthzCheck`、`AccountScopeCheck`（SDK `RequirePermission`、`RequireAccounts`）会按该用户在途请求的密钥收窄（同一用户有多个密钥请求在途时取它们的交集，失败收紧）；admin 写操作审计行记 `via: "access_key"`、`access_key_id`。不在请求处理期间（后台任务）问到的仍是用户本身的权限。`X-Verify-Proof` 不转发给插件。
 - **一条规则**：密钥能做什么 = 用户实时权限 ∩ 密钥选中的权限（`core.RestrictToAccessKey`）。创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）；每次检查权限时取交集，所以用户失去权限，密钥立刻跟着失去；重新获得（含插件重新启用）时也恢复（`GET /me/access-keys` 的 `lost` 列出暂时失效的）。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn` 看到的也是这个限制后的集合；“能对谁做”（`UserGuard`）按用户本身的角色算（§43.6）。只限制密钥所属用户，查询其他用户的权限不受影响。此前（2026-11-12 至期 4）有一份“只认会话”的权限清单（`session_only`、`authz.KeyAllowed`），期 4 S3 删除：那些权限现在都可以选，高危接口改为二次验证。
 - **相关章节**：交集按模式逐个求（`PermissionSet.Restrict`，带范围的 key 取较窄者，不可比的组合丢弃，§21.0）；目录里带 `step_up` 标记的权限（§4）经密钥使用时同样每次二次验证（§80.2）；密钥“能对谁做”按用户本身的可管理角色，不被密钥收窄（§43.6）。
+- **存储**：密钥的权限存规范 key（§21.0），列表原样返回。0.1.285 的迁移 `0097_authz_hardening.sql` 把存量密钥里的旧 own 写法换成 `<动作>:own`、`role:manage` 换成 `role:define` + `role:assign`（审计 `user.access_key.migrate`，before/after）；旧写法不再接受（新建、修改时 403 `missing`）。
 - **只允许登录会话**（结构性风险，不是配置问题）：访问密钥自身的管理（`/me/access-keys*`，否则密钥能给自己续命或扩权）、登录会话管理（`/me/sessions*`、`POST /auth/logout`，否则密钥能把主人踢下线）。用 `Router.SessionOnly().Handle` 注册，密钥 403 `access keys cannot use this endpoint`。
 - **只读自助接口**：`GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`、`/lookup/:kind`、`/me/verify/methods`（`AuthedRead`）接受任意密钥，返回按密钥收窄后的内容（`/me/assignable-roles` 在密钥下为 `[]`）。
 
@@ -7022,9 +7021,9 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 | scope | 接口 | 所需权限 |
 |---|---|---|
-| `credential.reveal` | POST `/accounts/:id/credentials/reveal` | `account:credential:view` / `account:own:credential:view` |
+| `credential.reveal` | POST `/accounts/:id/credentials/reveal` | `account:credential:view`（任意范围） |
 | `apikey.reveal` | POST `/me/api-keys/:id/reveal` | `apikey:self:manage` |
-| `proxy.reveal` | POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage` |
+| `proxy.reveal` | POST `/proxies/:id/reveal-url` | `proxy:manage`（任意范围） |
 | `superadmin.transfer` | POST `/system/super-admin/transfer`（密码 + 第二因素） | `self:security`，且是超管本人 |
 | `self.password.change` | PUT `/me/password`、PATCH `/users/:id` 改自己的密码（密码 + 第二因素） | `self:security` / `user:update` |
 | `self.email.change` | PATCH `/users/:id` 只改自己的邮箱 | `user:update` |

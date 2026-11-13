@@ -6,39 +6,42 @@
 
 ## 发布说明（T85 汇总，2026-11-13）
 
-本节是期 1–4 的总览：发布约束、迁移与回滚、行为变化（相对 develop 的最终效果，被后续任务改写的只记最终口径）、运维清单、wontfix 与待决定。各任务的细节、测试与逐条回滚见下文各条目（期 1 T01 起，期 4 见“# 期 4”）。提交号是该任务的主提交，review fixes 紧随其后。
+本节是期 1–4 的总览：发布约束、迁移与回滚、行为变化（相对 develop 的最终效果，被后续任务改写的只记最终口径）、运维清单、wontfix 与待决定。下文各任务条目提到的迁移 0097–0103 已合并为 `0097_authz_hardening.sql`，其中的滚动升级、混跑、R2b 与逐条回滚说明以本节为准。各任务的细节、测试与逐条回滚见下文各条目（期 1 T01 起，期 4 见“# 期 4”）。提交号是该任务的主提交，review fixes 紧随其后。
 
 ### 1. 发布约束
 
-1. **一个版本发布全部迁移 0097–0103**：托管核心要求库里的迁移是本核心清单的连续前缀（`app/managed_checks.go` `appliedPrefix`）。发布前再合一次 develop：develop 若已新增 0097 及以后的迁移，本分支的迁移要整体后移重新编号（0098 的 checksum 已在期 4 P4F2 变过，测试库需重建；生产未跑过）。
-2. **S1–S4、S5、R0、整合审查的 2FA 开启与期 4 收尾 F3、F4 同版本发布**：后端改为 proof 之后，旧控制台的改密码、关 2FA、重新生成备用码、添加通行密钥、开启 2FA、超管移交、ccgateway 远程设置等都会 403 `verification_required`。只回滚其中一部分也会出同样的问题，要一起回滚。
-3. **资源范围两步走**：本版本是 R2a（0103 只新增，8 个旧 own key 作为别名保持 active）。R2b 在确认全部节点都已升级后的下一版本做：按旧 own 行重新同步新表 → 目录把旧 key 标 removed → 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥中的旧写法与冗余旧行（写审计）→ 前端删除 `LEGACY_OWN`（`implies.ts` 的别名表与 Go `Parse` 的别名表保留）。见“期 4 资源范围（R0–R7）发布说明”。
-4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。新旧混跑且最后启动的是新节点时，`role:manage` 已被标为 removed，旧节点上 admin 与 operator 都不能管理角色（旧节点只认 `role:manage`），由超管处理。最后启动的是旧节点时（旧节点重启、或整体回滚只剩旧节点），旧节点把 `role:manage` 改回 active，而 admin、operator 存量的 `role:manage` 授予行从未删除，所以两者在旧节点上都能再新建、改、删角色和分配角色，operator 也重新得到 D3（P4F1/0102）收回的角色定义权，直到某个新节点重启；回滚后的处理见第 2 节。托管升级先停副本再迁移，没有新旧混跑阶段。 同理 `apikey:self:manage` 行的 `sensitive`、`description` 列（期 4 收尾 F2）会被新旧节点重启时来回改写（每次改写推进一次 authz 版本，各节点重新加载权限缓存、控制台重新取权限，只在节点重启时发生），它们只供角色编辑器与访问密钥选择器展示、不参与授权（与 T10/U7 改敏感标记时接受的抖动相同；`step_up` 由代码目录提供，不在库里），全部节点升级后稳定。
-5. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.286`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.286 开始（moderation `hostUICompat ^3.15`）。发布号不是 0.1.286 时，把 `grep -rn 0.1.286 next/plugins next/sdk/manifest` 的结果与 `web/packages/ui/README.md`“UI SDK 3.15”一节一并改掉。dynweight 取 0.5.9（develop 已发布 0.5.8）。
-6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
-7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。2026-11-14 已按用户授权只读核查生产：生产从未安装 claude-oauth（plugins、plugin_versions 均无记录），publishers 仅 id 1 `sub2api`，现有 10 个插件都归它，首次安装 0.2.3 直接归 `sub2api`，**不需要处理**（其他部署仍按运维清单第 8 条核对）。
-8a. **mailer 升到 0.1.2**：本分支改了 next/sdk（host.proto 等），mailer 0.1.1 重新打包内容会与生产已存的 0.1.1 不同，EnsureBuiltin 会保留旧包、拿不到新 SDK；因此 mailer 升一个 patch 版本（功能不变）。
-8. **存量多超管**：0098 遇到多个超管时停止启动，错误只列 user id。先 `sub2api admin recover-superadmin --email <要保留的那个>` 再启动（运维清单第 1 条）。
-9. **跨域部署**：服务端需 `Access-Control-Expose-Headers: X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）。
-10. **gateway 外壳的 tokenless 管理开关**：所有核心都带令牌后清除（运维清单第 7 条）。升级页把 preflight 的 `warnings` 显示为“提醒（不阻断升级）”。
+本版本是核心 **0.1.285**，**maintenance 停服发布**（primary-first：所有节点先停核心，主节点跑迁移，再依次启动），不支持新旧核心混跑、两步发布，也不支持旧核心在新库上直接运行。2026-11-13 发布前去掉了为这些场景准备的兼容层（见文末“发布前去兼容层”），下文各任务条目里关于滚动升级、混跑、R2b 的说明都以本节为准。
+
+1. **一个迁移 `0097_authz_hardening.sql`**：期 1–4 的全部库改动合成一个单事务迁移，直接写出最终状态（清单见第 2 节）。托管核心要求库里的迁移是本核心清单的连续前缀（`app/managed_checks.go` `appliedPrefix`）；发布前若 develop 已新增 0097 及以后的迁移，本迁移要后移重新编号（生产未跑过，测试库重建即可）。
+2. **超管必须恰好一个**：库里有用户（即升级而非新装）时，迁移先删除软删除用户的超管行，再要求未删除的超管持有者正好一个（不论启用、禁用），否则整个迁移回滚、核心停止启动，错误只列 user id 并给出处理办法：`sub2api admin recover-superadmin --email <要保留或要指定的那个>`（运维清单第 1 条）。CLI 不跑迁移，在 0.1.284 形态的库上也能用。
+3. **S1–S4、S5、R0、整合审查的 2FA 开启与期 4 收尾 F3、F4 同版本发布**：后端改为 proof 之后，旧控制台的改密码、关 2FA、重新生成备用码、添加通行密钥、开启 2FA、超管移交、ccgateway 远程设置等都会 403 `verification_required`。只回滚其中一部分也会出同样的问题，要一起回滚。
+4. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.285`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.285 开始（0.1.284 是最后一个带 UI 3.14 的核心；moderation `hostUICompat ^3.15`）。dynweight 取 0.5.9（develop 已发布 0.5.8）。
+5. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
+6. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。2026-11-14 已按用户授权只读核查生产：生产从未安装 claude-oauth（plugins、plugin_versions 均无记录），publishers 仅 id 1 `sub2api`，现有 10 个插件都归它，首次安装 0.2.3 直接归 `sub2api`，**不需要处理**（其他部署仍按运维清单第 8 条核对）。
+7. **mailer 升到 0.1.2**：本分支改了 next/sdk（host.proto 等），mailer 0.1.1 重新打包内容会与生产已存的 0.1.1 不同，EnsureBuiltin 会保留旧包、拿不到新 SDK；因此 mailer 升一个 patch 版本（功能不变）。
+8. **跨域部署**：服务端需 `Access-Control-Expose-Headers: X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）。
+9. **旧写法不再接受**：8 个旧 own key（`account:own:<x>`、`proxy:own:<x>`）与 `role:manage` 由迁移改写后删除，服务端与控制台都只认规范写法（`account:read:own` 等、`role:define` + `role:assign`）。仍用旧写法调用 `PUT /roles/:id/permissions` 或新建访问密钥的脚本会得到 400 `unknown` 或 403 `missing`，要改成规范写法；`/me` 不再输出旧别名。
+10. **gateway 外壳不再有 tokenless 管理开关**：所有核心（含线上 0.1.284）都带管理令牌，本版本不换网关；以后换网关时旧配置里的 `allow_tokenless_management` / `SUB2API_ALLOW_TOKENLESS_MANAGEMENT` 被忽略，不影响启动。
 
 ### 2. 迁移与回滚
 
-| 迁移 | 内容 | 任务（提交） | 可重跑 | 回滚 |
-|---|---|---|---|---|
-| 0097 | `role_assignable_roles`、`roles.assign_custom`，`role:manage` 持有者等价授予 | T13（2da8c978bc） | 是 | 表与列可留；托管见下 |
-| 0098 | 超管唯一：唯一索引 + 延迟触发器；软删除用户的超管行删除；多超管停启动 | T18（2e03d308fb）、P4F2（c0d59634a9） | 是 | `DROP TRIGGER user_roles_one_superuser ON user_roles; DROP FUNCTION user_roles_one_superuser(); DROP INDEX roles_one_superuser;`（不删也可） |
-| 0099 | 收回内置 admin、operator 的超管专属权限（审计 `authz.reclaim.super_only`） | T54（e6deef074e） | 是 | 不自动恢复；按审计补回（见 T54） |
-| 0100 | `accounts.admin_locked` | T63（7aa8c6654d） | 是 | 列可留 |
-| 0101 | 纠正内置 operator 的可分配清单 | T55（ac34dc10b8） | 是 | 按审计 `removed` 经 PUT 设回 |
-| 0102 | 收回内置 operator 的 `role:define`（审计 `authz.reclaim`，`via = migration 0102`） | P4F1（f9632c2896） | 是 | 不自动恢复；超管在角色页重新勾选 |
-| 0103 | `permissions.scope_type`、`role_permission_scopes`；旧 own 授予逐字复制为 `:own`；密钥补新写法 | R2a（d2e33448e7） | 是 | 新表、新列旧代码不读 |
+`0097_authz_hardening.sql`（一个事务，`SET LOCAL lock_timeout = '10s'`，先锁 `authz_meta`；每处写入都以系统身份写审计，`detail.via = "migration 0097"`；本次有写入才推进 authz 版本）：
 
-- 0099、0101–0103 设 `SET LOCAL lock_timeout = '10s'` 并先锁 `authz_meta`，有写入才推进 authz 版本，各节点约 30 秒内重新加载权限；0100 只设 `lock_timeout`；0097、0098 两者都不设。
-- **托管部署回滚核心**：旧核心启动时发现库里有它不认识的迁移会拒绝启动（`database includes migrations unknown to this core`），所以必须先删除迁移记录：`DELETE FROM schema_migrations WHERE id IN ('0097_role_assignable.sql','0098_one_super_admin.sql','0099_reclaim_super_only.sql','0100_account_admin_locked.sql','0101_operator_assignable.sql','0102_operator_reclaim_role_define.sql','0103_scoped_permissions.sql');`。删了记录的迁移在再次升级时会重跑：0099、0101、0102 会再次收回期间由超管设回的授权（写审计）；删了 `admin_locked` 列等对象而没删记录则不会重建。非托管部署可以不删记录。
-- **只回滚核心不行，插件要一起切回上一版本**：十个插件的新版本 `hostCompat` 都是 `>=0.1.286`，旧核心（0.1.285）上它们启动失败（`incompatible with host 0.1.285`），`/healthz` 一直 503；不健康期间旧核心的内置安装器约每 20 秒重试一次上传，每分钟写约 24 条 `plugin.upload` 审计。做法：发布前记下各插件的 `plugins.active_version`（`SELECT key, active_version FROM plugins ORDER BY key;`）；回滚时先启动旧核心，再用旧核心的 `POST /api/v1/plugins/:key/upgrade {"version": "<发布前的版本>"}` 逐个切回本版本升级过的插件（超管会话），几秒内恢复健康。生产备份验证（av_prod 快照）时需要切回的是 6 个：anthropic 0.3.1、ccgateway 0.1.132、codex 0.1.3、dynweight 0.5.8、moderation 0.11.2、volcengine 0.12.6，以发布当天的记录为准。
-- 访问密钥里新增的规范写法旧代码忽略，旧写法仍在。回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
-- **回滚后 operator 重新得到角色管理**：整体回滚（只剩旧节点）后，旧核心把 `role:manage` 改回 active，admin、operator 存量的 `role:manage` 授予仍在，两者在旧版本上都能新建、修改、删除角色并分配角色（operator 也包括 D3 收回的角色定义）。回滚窗口要保持 D3 的效果，由超管在旧版本角色页取消 operator 的 `role:manage`（再次升级时 `role:assign` 已在，不受影响）；不处理时，再次升级后新核心把 `role:manage` 标回 removed，operator 回到只有 `role:assign`（`role:define` 不会被重新继承，生产备份验证已确认）。
+| 步骤 | 内容 | 来源任务 | 审计 |
+|---|---|---|---|
+| 1 | 删除软删除用户的超管行；有用户时超管必须恰好一个（发布约束 2）；`roles_one_superuser` 唯一索引 + `user_roles_one_superuser` 延迟约束触发器 | T18、P4F2 | `user.roles`（`deleted_user`） |
+| 2 | `role_assignable_roles`、`roles.assign_custom` | T13 | — |
+| 3 | `accounts.admin_locked`（存量不加锁） | T63 | — |
+| 4 | `permissions.scope_type`（由启动同步填写）、`role_permission_scopes` 与 scope 索引 | R2a | — |
+| 5 | 收回内置 admin、operator 上的超管专属权限（只在 `role:manage` 仍存在、即库还没被本迁移改写过时执行） | T54 | `authz.reclaim.super_only` |
+| 6 | 旧键改写：角色的 `account:own:<x>`、`proxy:own:<x>` 授予改为 `<action>:own`（角色已有全量键时只记审计、标 `redundant`）；`role:manage` 改为 `role:define` + `role:assign`，内置 operator 只得 `role:assign`（D3）；`role:manage` 的持有者得到可分配清单（内置 operator 为 supplier、user，`assign_custom = false`；其余为全部内置角色中除超管与 admin 外的 + `assign_custom = true`）；访问密钥里的旧写法换成新写法；删除 9 个旧 permission 行 | R2a/R2b、T09、T13、T55、P4F1 | `authz.grant.migrate`、`role.assignable`、`user.access_key.migrate` |
+
+- **可重复执行**：表结构都是 `IF NOT EXISTS`；旧键删除后改写找不到可改的行；超管专属权限的收回以 `role:manage` 仍存在为前提，所以重跑不会再次收回超管事后设回的授权。重跑不写审计、不推进版本（`TestAuthzHardeningMigration`）。
+- **启动同步之后**：0.1.285 的 SyncCore 新建 supplier 角色（带 8 个 own 范围默认值）并加进 admin、operator 的可分配清单；不会再给出 `role:manage`、旧 own key，也不会给 operator `role:define`（`inherits` / `builtinsWithout` 已删除）。
+- **回滚**：`deploy/rollback/0.1.285-authz-down.sql` 与说明 `deploy/rollback/0.1.285-authz-down.md`。步骤：停掉所有 0.1.285 核心 → 跑反向脚本（单事务：范围授予改回旧 own 键，迁移审计里标 `redundant` 的按审计补回，`role:define`/`role:assign` 改回 `role:manage`，按审计恢复收回的超管专属权限，密钥同样改回，分组与 id 范围删除并写审计，删新表、新列、索引、触发器与函数，删 `schema_migrations` 记录）→ 启动 0.1.284（导入 0.1.284 清单）→ 插件切回发布前的版本。`TestAuthzHardeningRollback` 验证表结构与只迁移到 0096 的库一致、旧键授予与升级前一致、再次升级结果相同。
+- **迁移失败时**（例如超管数量检查报错）：事务整体回滚，库仍是 0.1.284 的形态，不要跑反向脚本；处理后恢复同一计划，或 `sub2api-gateway rollback -id <计划>`。
+- **插件要一起切回**：十个插件的新版本 `hostCompat` 都是 `>=0.1.285`，在 0.1.284 上启动失败（`incompatible with host 0.1.284`），`/healthz` 一直 503，旧核心的内置安装器约每 20 秒重试一次上传（每分钟约 24 条 `plugin.upload` 审计）。发布前记下 `SELECT key, active_version FROM plugins ORDER BY key;`，回滚后用 0.1.284 的 `POST /api/v1/plugins/:key/upgrade {"version": "<发布前的版本>"}` 逐个切回（超管会话）。生产备份验证（av_prod 快照）时需要切回的是 6 个：anthropic 0.3.1、ccgateway 0.1.132、codex 0.1.3、dynweight 0.5.8、moderation 0.11.x、volcengine 0.12.6，以发布当天的记录为准。
+- **回滚后 operator 重新能定义角色**：0.1.284 只有 `role:manage`，内置 operator 持有 `role:assign` 就会拿回 `role:manage`。回滚窗口要保持 D3 的效果，由超管在旧版本角色页取消 operator 的 `role:manage`。
 - **回滚再升级后，本版本新增的插件权限不会再自动授予**：回滚插件时旧核心删除新版本才有的插件权限行，授予随外键一起删除（例如 moderation 0.12.0 的 `plugin.moderation:moderation:exempt`，升级时按 `inheritFrom` 自动授予 admin）。再次升级时权限行重新登记，但激活时不按 `defaultRoles`/`inheritFrom` 授予（P4C：激活不授予，只有同意时登记的新权限才授予），admin 因此不再持有。再次升级后由超管在角色页重新授予本版本新增的插件权限，并用运维清单第 6 条核对 manifest 默认角色的差异。
 
 ### 3. 行为变化（最终口径）
@@ -48,7 +51,7 @@
 | 1 | 授予超管角色比较超管标志，访问密钥不能借 super_admin 提权 | 访问密钥 | T01（46f2f183d2） |
 | 2 | 改密码、撤销会话、登出立即生效；用 JWT 且不续期的脚本在改密码后失效 | 会话、第三方脚本 | T06（3e78510840） |
 | 3 | 授予检查在事务内读库、计入 disabled 插件权限 | 角色写入 | T07（e9946e2b21） |
-| 4 | `role:manage` 拆为 `role:define` + `role:assign`；内置 operator 只有 `role:assign` | 角色管理者 | T09（934b1c5b23）、P4F1（f9632c2896） |
+| 4 | `role:manage` 拆为 `role:define` + `role:assign`（迁移改写存量授予后删除 `role:manage`）；内置 operator 只有 `role:assign` | 角色管理者 | T09（934b1c5b23）、P4F1（f9632c2896）、发布前去兼容层 |
 | 5 | 超管全局唯一、角色冻结、只能本人移交（密码 + 第二因素）；服务器 CLI 恢复超管 | 超管 | T12、T16、T17、T18（2e03d308fb） |
 | 6 | 分配角色受“可管理角色”清单约束，撤销同样；作用于用户 = 操作权限 + 目标的非默认角色都在清单内且权限 ⊆ 操作者（含本人；不能禁用、删除自己，不能撤销自己的超管） | 用户管理者 | T13–T15、T56、FU6（fec1698e1b）、期 3 整合审查（ec3b6de722） |
 | 7 | 内置角色（含新增的 supplier）声明化，名称、权限、清单只允许超管改；admin 默认不含超管专属权限（存量收回）；operator 按白名单 | admin、operator | T50–T55 |
@@ -66,7 +69,7 @@
 | 19 | 清他人 2FA 需要 `user:password:reset` | 只有 `user:update` 的角色 | T48 |
 | 20 | 插件权限按 manifest `defaultRoles`/`inheritFrom` 授予；升级新增的敏感授予或给 user、自定义角色的授予需同意，内置插件的这类授予暂缓到插件页确认 | 插件管理者 | T58–T61、P4C（b2ce05e5dc、9954105816） |
 | 21 | 手动运行插件任务需 `task:run` | 插件管理者 | T62 |
-| 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`） | 角色管理者、供应商 | R1–R8 |
+| 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`）；8 个旧 own key 由迁移改写为 `<action>:own` 后删除，不再作为别名接受，`/me` 只输出规范 key | 角色管理者、供应商、脚本 | R1–R8、发布前去兼容层 |
 | 23 | 启动时自检路由表与菜单（不一致拒绝启动）；控制台权限目录由服务端生成 | 运维、开发 | T68（7698df4d65）、T69（bb27dc839f） |
 | 24 | 控制台：X-Authz-Version 与 403 触发重新取权限；用户页、角色页、同意页只给可管理的对象；仪表盘账号状态卡片；财务区“余额流水”菜单；iframe 插件可查本插件权限 | 控制台用户 | T74–T83 |
 | 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级 | 插件管理者 | 期 4 收尾 F1 |
@@ -79,7 +82,7 @@
 ### 4. 运维清单（只读 SQL，执行需用户授权登录生产）
 
 ```sql
--- 1. 超管（0098 只允许一个；软删除用户的超管行会被迁移删除）
+-- 1. 超管（迁移要求恰好一个，否则停止启动；软删除用户的超管行会被迁移删除）
 SELECT u.id, u.status, u.deleted_at IS NOT NULL AS deleted
 FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id
 WHERE r.superuser ORDER BY u.id;
@@ -95,7 +98,7 @@ FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id JOIN role
 WHERE p.source = 'plugin' AND p.plugin_key IN ('codex', 'dynweight', 'volcengine')
 ORDER BY p.plugin_key, p.key, r.key;
 
--- 4. 存量内置 operator 的角色管理权限（0102 之后应只剩 role:assign）
+-- 4. 存量内置 operator 的角色管理权限（迁移前是 role:manage，迁移后只有 role:assign）
 SELECT r.key AS role, p.key, p.status
 FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
 WHERE r.builtin AND r.key = 'operator' AND p.key IN ('role:manage', 'role:define', 'role:assign');
@@ -123,15 +126,13 @@ JOIN roles r ON r.key = d.role
 WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id)
 ORDER BY 1, 2, 3;
 
--- 7. gateway tokenless 开关：不是 SQL，见代码块后的说明
-
--- 8. claude-oauth 的发布者（见发布约束 7）
+-- 8. claude-oauth 的发布者（见发布约束 6）
 SELECT pl.key, pl.publisher_id, pub.name, pub.trust_level, pl.active_version
 FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.key = 'claude_oauth';
 ```
 
 - 第 6 条只列差异。决定回填时（用户授权、写库），在一个事务里按结果逐行授予并推进版本：`INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = '<role>' AND p.key = '<permission>' ON CONFLICT DO NOTHING;`，每行另写一条 `audit_logs`（`action = 'authz.sync.grant'`，`detail = {"via": "manual backfill", "role", "key"}`），最后 `UPDATE authz_meta SET version = version + 1 WHERE id = 1;`。内置角色的授予只应由超管决定。
-- 7. gateway tokenless 开关：外壳配置 `allow_tokenless_management` 或环境变量 `SUB2API_ALLOW_TOKENLESS_MANAGEMENT`；在节点上带令牌读管理 socket 的指标：`curl -s --unix-socket <管理 socket> -H "Authorization: Bearer $(cat <management_token_file>)" http://gateway/metrics | grep gateway_management_tokenless`。`gateway_management_tokenless_enabled 1` 且 `..._accepted_total` 不再增长时即可清除开关（CONTRACTS §54 外壳管理 socket 令牌）。
+- 第 7 条（gateway tokenless 开关）已删除：开关随 0.1.285 删除（发布约束 10）。
 - 只读核查的已知结果（2026-11-12，DECISIONS）：超管 1 个；无 supplier 同名角色、无自定义角色；codex/dynweight/volcengine 的 6 个插件权限只授给内置 admin（0 用户）；operator 0 人；发布者只有 official 的 sub2api。发布前按当日数据重跑。
 
 ### 5. wontfix 与延后（含期 3、期 4 的取舍）
@@ -152,19 +153,19 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 | T78 批量“移入用户组”与“用户组与定价”抽屉未按可管理过滤 | 记录 | 服务端 403 兜底 |
 | `/accounts/summary` 计入已停用插件的账号 | 记录 | 与概览口径一致（产品决定） |
 | TS 中大于 2^53 的 id 丢精度 | 记录 | 实际 id 远小于此 |
-| sdk corefloor 未加 `hostCompat` 下限校验 | 延后 | 会碰大量 pkgtest 夹具；发布约束 5 人工核对 |
+| sdk corefloor 未加 `hostCompat` 下限校验 | 延后 | 会碰大量 pkgtest 夹具；发布约束 4 人工核对 |
 | proof 绑定 URL 不含请求体；路由级 proof 在处理函数前消费（校验失败也已用掉） | 接受 | 同主体、一次性、5 分钟；`PUT /me/password` 先校验再消费 |
 | 插件 `AuthzCheck`/`AccountScopeCheck` 按在途请求的密钥收窄，精确字符串求交，会话请求同时在途时也被收窄 | 接受 | 失败收紧 |
 | 超管密钥里已禁用的插件权限 `Restrict` 仍保留 | 接受 | 此前就有，与已删除的核心权限相同 |
-| `LEGACY_OWN` 与旧别名 | 随 R2b | 服务端 R2b 前仍输出别名 |
+| `LEGACY_OWN` 与旧别名 | 已删除 | 发布前去兼容层：迁移改写存量写法，服务端、共享向量与生成的 `permissions.ts` 不再有别名 |
 | 插件 defaultRoles 存量回填 | 不做（D9） | 运维清单第 6 条给出差异与 SQL |
-| 期 1 PLAN §6 其余延后项（超管登录通知、raw_cost、volcengine own 化、payment 真实验签、/plugin-ui 验签缓存、tokenless 开关删除、refund ActOnOthers、usage:settle 界面、WebSocket 空闲复检） | 延后 | 见 PLAN §6 |
+| 期 1 PLAN §6 其余延后项（超管登录通知、raw_cost、volcengine own 化、payment 真实验签、/plugin-ui 验签缓存、refund ActOnOthers、usage:settle 界面、WebSocket 空闲复检） | 延后 | 见 PLAN §6 |
 
 ### 6. 待用户决定（期 4 整合审查提出，未改）
 
 1. **已定（期 4 收尾 F1，统一为严的）**：插件升级授权的两条路径规则不同：第三方插件升级的同意页里，来自 `defaultRoles`/`inheritFrom` 的需同意授予（敏感、或给 user、自定义角色）只要 `plugin:install` + 二次验证就能批准；内置插件同一授予在插件页确认要 `role:define` + 能修改每个角色（内置角色只有超管）。可以统一为严的（同意页对需同意的计划授予也跑 `checkRolesGrantable`，admin 不能再批这类升级）或宽的（确认只要 `plugin:install`）。→ 同意页对需同意的计划授予也跑 `checkRolesGrantable`，见“期 4 收尾”。
-2. **已定（期 4 收尾 F2，本期就改）**：`apikey:self:manage` 没有 step-up 标记，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。→ 本期加标记与自检，`sensitive` 列滚动发布期间的来回改写见发布约束 4。
-3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。（已定：生产核查无安装记录，不需处理）
+2. **已定（期 4 收尾 F2，本期就改）**：`apikey:self:manage` 没有 step-up 标记，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。→ 本期加标记与自检（本版本停服发布，没有新旧节点来回改写目录行的问题）。
+3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 6）。（已定：生产核查无安装记录，不需处理）
 4. **已定（期 4 收尾 F3，改为二次验证）**：访问密钥的新建与修改仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
 5. **已定（期 4 收尾 F4，要密码 + 第二因素）**：超管只用一个因素就能清掉自己的全部因素（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
 6. **ccgateway 运行时镜像上传**（`runtime/uploads*` 创建与分片）不要二次验证，只有 `load` 要；DECISIONS 原文是“安装与上传”。
@@ -501,6 +502,8 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 ## T45：外壳 tokenless 管理开关的指标与 preflight 警告
 
+> 2026-11-13 发布前去兼容层：开关本身连同这里的指标、preflight `warnings` 一并删除（发布约束 10），本条只作历史记录。
+
 - 改动（`next/gateway/internal/control`）：包级 `tokenlessStats{enabled, accepted}` 由 `RequireManagementToken` 写入（构造时记下开关，每放行一个无令牌请求加一）；管理 socket 的 `/metrics` 追加 `gateway_management_tokenless_enabled` 与 `gateway_management_tokenless_accepted_total`；开关打开时 `POST /system/upgrades/preflight` 的结果附 `warnings`（`Preflight.Warnings`，`omitempty`）。鉴权行为与函数签名不变，开关的删除延后。CONTRACTS §（外壳管理 socket 令牌）同步。
 - 影响对象：只新增输出。开关打开的部署在 preflight 响应里多一个 `warnings` 字段（核心原样转发；升级页目前不展示它，不影响“可以创建”的判断）；抓取 `/metrics` 的监控多两个序列。计数是进程内的，外壳重启归零。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
@@ -731,7 +734,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
   - 持有 `account:update` 的人（admin、operator）之间不互锁：任何全量范围的调用者都能启用。全量范围禁用自己创建的账号不上锁。
   - 存量：迁移前已被管理员禁用的账号不上锁，需要锁住的由管理员重新禁用一次（对已禁用的账号再发一次 `status: disabled` 即可，控制台的按钮不会对已禁用账号发请求，需直接调接口或先启用再禁用）。
   - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
-  - 期 3 审查补：锁只在账号仍是 `disabled` 时拦截。旧节点启用过的上锁账号若随后被网关自动禁用（`auto_disabled`、`error`），此前属主启用与重置状态都会 403；现在放行并清掉残留的锁（服务端 `checkAdminLock` 与控制台 `lockedByAdmin` 同步）。
+  - 期 3 审查补（服务端部分已在发布前去兼容层删除：停服发布没有旧节点，上锁的账号总是 `disabled`）：锁只在账号仍是 `disabled` 时拦截。旧节点启用过的上锁账号若随后被网关自动禁用（`auto_disabled`、`error`），此前属主启用与重置状态都会 403；现在放行并清掉残留的锁（服务端 `checkAdminLock` 与控制台 `lockedByAdmin` 同步）。
 - 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0100_account_admin_locked.sql';`（托管部署必须删：托管核心启动时核对迁移清单，库里有本版本不认识的迁移就拒绝启动；非托管部署不删也可，同 0099、0101）；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`（删列后必须同时删掉上面的 `schema_migrations` 行，否则再次升级不会重建该列）。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截；旧节点启用过的上锁账号会留下一个“运行中但带锁”的残留，属主下次自己禁用时清掉（不会因此被锁住），全量范围的任何启用、重置也会清掉。
 - 已知边界（未处理，需要时另行决定）：锁只管启用与重置状态。有 `account:own:delete` 与 `account:own:create` 的属主可以删除被锁的账号再用同一凭证新建一个；审计里 `account.update` / `account.reset_status` 不单独记录上锁、解锁（可由操作者范围与状态变化推出）。
 
@@ -951,6 +954,8 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 ## 期 4 P4F1 决策 D3：内置 operator 不再持有 role:define（启动同步 + 迁移 0102，产品性收紧）
 
+> 2026-11-13 发布前去兼容层：`role:manage` 的拆分改由迁移直接写出（内置 operator 只得 `role:assign`），启动同步的 `inherits`/`builtinsWithout` 与迁移 0102 已删除。
+
 - 来源：`role:manage` 的拆分由启动同步完成（catalog `role:define`/`role:assign` 的 `inherits`，`grantInherited` 在新 key 首次创建时授予所有持有 `role:manage` 的角色），不是迁移 0097。生产从 develop 升级时，迁移先跑、同步后跑，所以只靠迁移收不回来。
 - 改动：
   1. `authz/sync.go`：核心权限拆分继承时跳过默认集合不含该 key 的内置角色（`builtinsWithout`）。内置角色的核心权限就是其默认集合，旧 key 上的授予来自旧默认、不是管理员选择，所以拆分不带过去；自定义角色照常继承。目前只影响 `role:define` 在内置 operator 上（admin 默认含两半，operator 默认含 `role:assign`；user、supplier 没有 `role:manage`）。插件权限的继承不受影响。
@@ -1069,6 +1074,8 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 影响对象：无行为变化。回滚：revert。
 
 ## 期 4 R2a：带范围授予的存储、迁移 0103 与蕴含匹配（两步走的第一步）
+
+> 2026-11-13 发布前去兼容层：不再两步走。0103 并入 `0097_authz_hardening.sql` 并直接做完 R2b（旧 own 授予改写为 `:own` 后删除旧 key、密钥只存规范写法）；`mirrorLegacyOwn`、`ownShadowed`、`perm.WithLegacyOwn`、`LegacyOwnKey(s)`、目录 `deprecated`、`Parse` 的别名表、`/me` 别名输出均已删除。下文的混跑、R2b 与“两步走”发布说明只作历史记录。
 
 - 改动：
   - **匹配**（core）：
@@ -1250,6 +1257,8 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 ## 期 4 资源范围（R0–R7）发布说明
 
+> 2026-11-13 发布前去兼容层：本节的两步走、滚动发布与混跑说明已作废：本版本停服发布，迁移一次改写到最终状态，回滚用 `deploy/rollback/0.1.285-authz-down.sql`（见文首发布说明第 1、2 节）。以下保留原文作历史记录。
+
 - 两步走，滚动发布：
   - **本版本（R2a）**：迁移 0103 只做新增；8 个旧 own key 保持 active，作为别名使用。
     - 新节点写入时同时写新表与旧行；旧 own key 仍为 active 时，以旧行为准。
@@ -1418,7 +1427,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 改动：目录 `apikey:self:manage` 加 `stepUp`（按不变式 stepUp ⇒ sensitive 一并加 `sensitive`），描述写明查看明文每次需要二次验证；`POST /me/api-keys/:id/reveal` 原本就挂 `StepUp(apikey.reveal)`，授权不变。`httpapi.RouteRules` 新增 `StepUpKey`（`authz.StepUpKey`）与 `StepUpExempt`（`app/routecheck.go` `stepUpExemptRoutes`，路由 ID → 理由）：`CheckRoutes` 要求挂 StepUp 的路由的 `Keys` 至少有一个带 stepUp 标记（只在 `Extra` 里不算），否则须在豁免表中；豁免表里不是这种路由的条目、理由为空的条目也报错（review fixes）。本提交时豁免表为空（F3 登记了访问密钥的两条路由）。前端 `generated/permissions.ts` 重新生成。
 - 测试：httpapi `TestCheckRoutes`（未标记、只在 Extra 里标记、豁免表过期）；authz `TestCatalogFlaggedSets`、`TestGeneratedPermissionsTS`；app `TestManagedRuntime*` 启动真实路由表（去掉这个标记时以 `route POST /me/api-keys/:id/reveal: step-up route without a permission flagged stepUp` 拒绝启动，已验证）。
 - 影响对象：访问密钥选择器与角色编辑器里 `apikey:self:manage` 显示“使用时需二次验证”与敏感标记；开发者新增 StepUp 路由时须引用带标记的权限或登记豁免理由。
-- 发布：`sensitive`、`description` 列滚动发布期间被新旧节点重启时来回改写（发布约束 4），每次推进一次 authz 版本；纯展示，不影响授权（已核对：核心 `sensitive` 只进目录展示，插件同意判断用的是 manifest 的 `sensitive`）。混跑期间新节点上该行可能显示 `step_up` 而无敏感标记。
+- 发布：停服发布（发布约束），启动同步写一次 `sensitive`、`description` 列并推进一次 authz 版本；纯展示，不影响授权（核心 `sensitive` 只进目录展示，插件同意判断用的是 manifest 的 `sensitive`）。
 - 回滚：revert 该提交。无迁移；回滚后下一次启动 SyncCore 把 `sensitive` 改回 false。
 
 ### F3 新建与修改访问密钥改为二次验证（产品性收紧，待决定 4）
@@ -1439,3 +1448,22 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 影响对象：超管本人。脚本化调用这几类操作取 proof 时要同时给密码。旧控制台不带 `context` 取方式时不显示密码栏，提交后得到密码字段错误（发布约束 2：与 S5 同版本发布）。
 - 回滚：revert 该提交（前后端同一提交）。无迁移。
 
+## 发布前去兼容层（2026-11-13，核心 0.1.285）
+
+用户要求“不要考虑兼容性，做好迁移脚本”：本版本停服发布，不再支持新旧核心混跑、两步发布和旧核心在新库上运行。删除或改动的兼容层：
+
+| 兼容层 | 处理 |
+|---|---|
+| 迁移 0097–0103（先加后收：0097 等价授予、0101 纠正 operator 清单、0102 收回 operator 的 `role:define`、0103 只复制旧 own 授予） | 合并为 `0097_authz_hardening.sql`，直接写最终状态；加超管恰好一个的前置检查与审计 |
+| 8 个旧 own key：`perm.legacyOwn`/`LegacyOwnKeys`/`LegacyOwnKey`/`WithLegacyOwn`、`Parse` 别名、目录 `deprecated` 与 `legacyOwnPerms`、`mirrorLegacyOwn`、`ownShadowed`、`ListPermissions` 过滤、`/me` 与访问密钥的旧写法 | 删除；迁移改写库里的存量写法；守护测试 `TestNoLegacyOwnLiterals` 不再有例外文件 |
+| `role:manage`：目录 `inherits`、`builtinsWithout`、启动同步的继承授予 | 删除（`grantInherited` 只留给插件 manifest 的 `inheritFrom`）；迁移改写后删除 `role:manage` 行 |
+| 访问密钥列表读出时规范化（为旧写法） | 删除：库里只有规范写法 |
+| 共享向量 `sdk/permvectors/vectors.json` 的别名用例 | 删除或改为规范写法；生成的 `web/src/generated/permissions.ts` 去掉 `LEGACY_OWN`、`LegacyOwnKey` |
+| 控制台 `implies.ts` 的别名表与 mock、单测里的旧写法 | 删除、改为规范写法（`vue-tsc -b` 与全部 vitest 通过） |
+| gateway 外壳 tokenless 管理开关（含 T45 指标与 preflight `warnings`） | 删除：线上核心 0.1.284 已带令牌，本版本不换网关，以后的网关忽略旧配置键与环境变量 |
+| 管理员禁用锁的“残留锁”处理（旧节点启用过的上锁账号：`checkAdminLock` 只拦 disabled、受限档禁用时清锁、重置时清锁的特例） | 删除：上锁的账号总是 disabled；受限档从不改锁 |
+| 插件 `hostCompat`/UI 3.15 下限 0.1.286 | 改为 0.1.285 |
+
+保留：核心在 `SUB2API_UPDATER_TOKEN_FILE` 未设置时不带令牌（develop 既有，线上网关会设置）；`web/packages/ui/README.md` 给插件作者的 `hasAction?.() ?? has('account:own:read')` 回退（只对 UI 3.14 及更早的控制台、即 0.1.284 及更早的核心有效）。
+
+测试：`migrations` `TestAuthzHardeningMigration`（从 0096 形态的库：旧 own 授予（角色与密钥、冗余与非冗余）、`role:manage`（admin、operator、自定义角色）、超管专属权限的改写，审计条数、版本只推进一次，重跑不变，启动同步后不回退）、`TestAuthzHardeningNeedsOneSuperAdmin`（0 个、2 个超管报错且库不变）、`TestAuthzHardeningRollback`（反向脚本后表结构与 0096 一致、旧键授予恢复、再升级结果相同）；authz `TestRetiredOwnKeysReachTheSameRows`（每个用户、每把密钥在 8 个动作上可达的账号、代理与 0.1.284 的 own 语义一致）。

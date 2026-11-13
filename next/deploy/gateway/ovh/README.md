@@ -893,7 +893,7 @@
 
 实际做法与下面步骤的差异：核心 v0.1.86 起已带令牌支持，所以没开迁移开关；外壳没用 `roll-gateway.py`（它的容器名假定与线上不符），而是重标 `sup2api-gateway:local` 后逐个 `docker compose up -d --no-deps sup2api-N`（2→3→4→1）；Redis 镜像保持 `redis:7`（`~/sup2api/.env` 中 `CACHE_IMAGE=redis:7`）。设密码前清掉了 Redis 内遗留的 `redis-cli monitor` 连接。
 
-内容见[网关 README“隔离加固”](../README.md#隔离加固2026-10-10)：管理 socket 令牌、核心环境白名单、Redis 密码、`no-new-privileges`/`cap_drop`。线上的 Redis 是 `sup2api` 项目（`deploy/single/compose.yml`）的 `sup2api-redis-1`，四个节点由 `~/sup2api-managed/compose.yml` 管理。顺序要求：**先让所有客户端带上密码，再给 Redis 设密码**；**先让核心支持令牌，再换新网关**（或换网关时临时打开迁移开关）。
+内容见[网关 README“隔离加固”](../README.md#隔离加固2026-10-10)：管理 socket 令牌、核心环境白名单、Redis 密码、`no-new-privileges`/`cap_drop`。线上的 Redis 是 `sup2api` 项目（`deploy/single/compose.yml`）的 `sup2api-redis-1`，四个节点由 `~/sup2api-managed/compose.yml` 管理。顺序要求：**先让所有客户端带上密码，再给 Redis 设密码**；**先让核心支持令牌，再换新网关**（当时可临时打开迁移开关；该开关已随 0.1.285 删除，现在所有核心都带令牌）。
 
 1. **准备密码**：`openssl rand -hex 32` 生成 `REDIS_PASSWORD`，同时写入 `~/sup2api/.env` 与 `~/sup2api-managed/.env`（600，不打印）。确认缓存支持 `HELLO`（Valkey 9 / Redis ≥ 6）：`docker exec sup2api-redis-1 valkey-cli INFO server | grep -E '^(valkey|redis)_version'`。
 2. **核心先支持令牌（推荐）**：发布含核心配合改动（读 `SUB2API_UPDATER_TOKEN_FILE`、带 `Authorization`）的核心版本，照常 `build-core.sh` → `import` → `upgrade_observe.py`。旧网关不设该变量，新核心就不带令牌，照常工作。若必须先换网关，在 `~/sup2api-managed/.env` 设 `SUB2API_ALLOW_TOKENLESS_MANAGEMENT=true`，第 5 步完成后再清空并再滚动一次网关。
