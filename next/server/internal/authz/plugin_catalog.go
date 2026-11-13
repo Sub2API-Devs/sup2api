@@ -104,10 +104,13 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 // CanGrantToRoles implements core.PermissionCatalog: actorID may hand new
 // plugin permissions to each role of roleKeys, which is a change of that
 // role (editableRole: built-in roles are the super admin's alone, a custom
-// role must be within the actor's grantSet). Super admin roles already hold
-// every permission and are refused; unknown keys are invalid. Like every
-// role write it bumps tx (serializing with other role changes) and locks the
-// roles; the SyncPlugin that follows publishes the new version.
+// role must be within the actor's grantSet) and must be on the actor's
+// assignable list (CanAssign, T59), which leaves out the actor's own roles:
+// the new permissions need not be held, so without it an actor could hand
+// itself what PUT /roles/:id/permissions refuses. Super admin roles already
+// hold every permission and are refused; unknown keys are invalid. Like
+// every role write it bumps tx (serializing with other role changes) and
+// locks the roles; the SyncPlugin that follows publishes the new version.
 func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error {
 	if roleKeys = dedupe(roleKeys); len(roleKeys) == 0 {
 		return nil
@@ -119,6 +122,10 @@ func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64,
 	if err != nil {
 		return err
 	}
+	actor, err := s.grantSet(ctx, tx, actorID)
+	if err != nil {
+		return err
+	}
 	for _, r := range roles {
 		if r.superuser {
 			return core.ErrPermissionDenied.WithMessage(t(ctx,
@@ -127,6 +134,9 @@ func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64,
 		}
 		if _, err := s.editableRole(ctx, tx, actorID, r.id); err != nil {
 			return err
+		}
+		if !actor.CanAssign(r.key) {
+			return notAssignable(ctx, r.key)
 		}
 	}
 	return nil

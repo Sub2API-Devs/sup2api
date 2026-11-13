@@ -155,8 +155,9 @@ func TestSyncPluginInheritsOnlyEarlierGrants(t *testing.T) {
 }
 
 // Handing new plugin permissions to a role is a change of that role
-// (editableRole): a custom role within the actor only, built-in roles the
-// super admin alone, super admin roles never; unknown roles are invalid.
+// (editableRole) on the actor's assignable list (T59): a custom role within
+// the actor and on its list only, never one it holds itself, built-in roles
+// the super admin alone, super admin roles never; unknown roles are invalid.
 func TestCanGrantToRoles(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -164,11 +165,23 @@ func TestCanGrantToRoles(t *testing.T) {
 	ctx := context.Background()
 	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
 	ops := addUser(t, s, "ops@x.com", RoleOperator)
-	for key, perms := range map[string][]string{"small": {"user:read"}, "big": {"user:read", "role:define"}} {
-		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt(key, key), PermissionKeys: perms}); err != nil {
+	installerPerms := []string{"user:read", "role:define", "plugin:install"}
+	for _, in := range []CreateRoleInput{
+		{Key: "small", PermissionKeys: []string{"user:read"}},
+		{Key: "other", PermissionKeys: []string{"user:read"}},
+		{Key: "big", PermissionKeys: append([]string{"user:update"}, installerPerms...)},
+		// installer may assign small, big and the built-in user role;
+		// crew may assign every custom role but its own.
+		{Key: "installer", PermissionKeys: installerPerms, AssignableRoleKeys: []string{"small", "big", RoleUser}},
+		{Key: "crew", PermissionKeys: installerPerms, AssignCustom: true},
+	} {
+		in.Name = lt(in.Key, in.Key)
+		if _, err := s.CreateRole(ctx, root, in); err != nil {
 			t.Fatal(err)
 		}
 	}
+	installer := addUser(t, s, "installer@x.com", "installer")
+	crew := addUser(t, s, "crew@x.com", "crew")
 	can := func(actor int64, roles ...string) string {
 		t.Helper()
 		var code string
@@ -186,13 +199,19 @@ func TestCanGrantToRoles(t *testing.T) {
 		roles []string
 		want  string
 	}{
-		{"custom within", ops, []string{"small", "small"}, ""},
-		{"custom wider", ops, []string{"small", "big"}, "permission_denied"},
+		{"custom within and assignable", installer, []string{"small", "small"}, ""},
+		{"custom not assignable", installer, []string{"small", "other"}, "permission_denied"},
+		{"custom wider", installer, []string{"small", "big"}, "permission_denied"},
+		{"built-in assignable", installer, []string{RoleUser}, "permission_denied"},
+		{"own role", installer, []string{"installer"}, "permission_denied"},
+		{"every custom role but its own", crew, []string{"small", "other"}, ""},
+		{"own role under every custom role", crew, []string{"crew"}, "permission_denied"},
+		{"custom without assignable list", ops, []string{"small"}, "permission_denied"},
 		{"built-in", ops, []string{RoleUser}, "permission_denied"},
 		{"super admin role", ops, []string{RoleSuperAdmin}, "permission_denied"},
 		{"unknown", ops, []string{"nope"}, "invalid_argument"},
 		{"none", ops, nil, ""},
-		{"super admin on built-in and custom", root, []string{RoleAdmin, RoleUser, "big"}, ""},
+		{"super admin on built-in and custom", root, []string{RoleAdmin, RoleUser, "big", "installer", "crew"}, ""},
 		{"super admin on super admin role", root, []string{RoleSuperAdmin}, "permission_denied"},
 	} {
 		if got := can(c.actor, c.roles...); got != c.want {
