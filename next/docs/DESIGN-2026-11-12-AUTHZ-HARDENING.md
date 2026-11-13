@@ -189,7 +189,7 @@
 - 改动：
   - 决策 1：`authz.CanActOnUsers` 只对本人的登录会话免检“作用于自己”；经访问密钥时（`core.ByAccessKey`）密钥主人和其他目标一样比较（密钥收窄后不是超管，也小于主人的角色）。超管自己带 `user:update` 的访问密钥 `PATCH /users/<超管>` 改显示名、带当前密码 `DELETE /users/<超管>/security` 清两步验证与通行密钥，由 200/204 变为 403 `you cannot modify a superuser`（后者在核对密码之前拒绝；T48 起 `DELETE /users/:id/security` 改用只限登录会话的 `user:password:reset`，访问密钥在权限阶段即 403 `details.permission = user:password:reset`，到不了这一步）；非超管的访问密钥经 `/users/:id` 改自己的资料，密钥权限不覆盖主人角色时同样 403（改自己的资料走 `/me` 或登录会话）。
   - dynweight 原生界面：没有 `group:read` 时不再请求 `GET /groups`（分组名显示 `#id`），没有全量级 `account:read` 时账号列表工具栏的降级标记不再请求 `GET /p/dynweight/degraded`、不显示。own 级用户打开账号页不再出现这两个 403。随 dynweight 重新打包（T84 升版本）生效。
-- 发布前提（T84，按 PLAN 裁决 24 各插件任务都不升版本）：本分支改了这些插件而没有升版本：ccgateway 0.1.132（T26 `upstreamFields`）、codex 0.1.3（T25 路由 `accounts`、T26、T42 代码）、dynweight 0.5.7（T25 路由 `accounts`、原生界面）、volcengine 0.12.6（T25、T26）、payment 0.1.0（T35 代码）、claude-oauth 0.2.2（T26、T42 代码，非内置）。生产库已按这些版本存了旧 manifest，内置安装器遇到同版本不同内容会保留已存的行（`install/builtin.go` 日志 `version already stored with other content, keeping the stored one`），registry 从库里的 manifest 读路由与账号类型，节点也可能继续用旧包，所以不升版本上线时插件路由的账号归属检查、`upstreamFields` 与上述代码修复都不生效（期 2 生产备份验证确认：`builtin-relink.sh` 只改写包摘要，库里仍是生产的 manifest）。任何一期单独上线前都必须先做 T84：升这些插件的 manifest 版本（`deploy/docker/build-go.sh` 从 manifest 读版本，不另维护清单）。
+- 发布前提（T84，按 PLAN 裁决 24 各插件任务都不升版本）：本分支改了这些插件而没有升版本：ccgateway 0.1.132（T26 `upstreamFields`）、codex 0.1.3（T25 路由 `accounts`、T26、T42 代码）、dynweight 0.5.7（T25 路由 `accounts`、原生界面）、volcengine 0.12.6（T25、T26）、payment 0.1.0（T35 代码）、claude-oauth 0.2.2（T26、T42 代码，非内置）。生产库已按这些版本存了旧 manifest，内置安装器遇到同版本不同内容会保留已存的行（`install/builtin.go` 日志 `version already stored with other content, keeping the stored one`），registry 从库里的 manifest 读路由与账号类型，节点也可能继续用旧包，所以不升版本上线时插件路由的账号归属检查、`upstreamFields` 与上述代码修复都不生效（期 2 生产备份验证确认：`builtin-relink.sh` 只改写包摘要，库里仍是生产的 manifest）。任何一期单独上线前都必须先做 T84：升这些插件的 manifest 版本（`deploy/docker/build-go.sh` 从 manifest 读版本，不另维护清单）。T84 已完成，见文末“期 4 T84”。
 - 滚动升级与回滚（无代码改动，按此操作）：
   - 新旧节点混跑时，最后启动的节点决定权限目录：旧节点启动会把 `role:define`、`role:assign` 标为 removed、把 `role:manage` 恢复为 active、把 T10 补标的 8 个 sensitive 改回，新节点上 admin、operator 和自定义角色的持有者因此暂时失去角色管理，直到某个新节点重启。回滚时一次换掉全部节点；回滚后再升级时，保证最后启动的是新节点。超管不受影响；生产 admin、operator 无持有者、无自定义角色，实际影响近于零。
   - 回滚窗口里在旧版本上新建或修改、只勾了 `role:manage` 的角色，再次升级后不会自动得到 `role:define`、`role:assign`（`grantInherited` 只在新 key 首次插入时运行），也没有可分配清单（0097 的存量回填只在迁移时运行一次）。需要超管在角色页重新勾选并设置可分配清单。
@@ -867,3 +867,11 @@
 - 改动：`reject` 记下的每个 (permission, role) 同时清除该插件在这次拒绝之前（按审计先后，不论版本高低：直接 API 只拒后一版本也会清掉前一版本的同一项）所有版本里暂缓的同一授予（`PendingRoleGrants` 的 NOT EXISTS 增加按 `grants` 包含匹配的条件）；版本自身的清单照旧整体清除。之后的升级再次暂缓同一授予时重新列出。confirm 行为不变：只清本版本，其他版本的同一项因角色已持有而不再列出（若之后从角色收回该权限，会在其他版本下重新出现，与修复前相同）。前端不改。
 - 测试：install `TestRejectWithheldGrantAcrossVersions`（两个版本暂缓同一授予只列一次；拒一次后只剩后一版本独有的项；全部拒绝后为空且无写入；之后的升级再暂缓时重新列出）。
 - 回滚：revert 提交即可；无迁移。规则按查询计算，库里已有的 reject 审计上线后同样生效（清除之前跨版本残留的同一授予，即本次要修的情况）；回滚后这些残留重新列出。
+
+## 期 4 T84：本轮改动过的插件统一升版本
+
+- 改动（只改版本、hostCompat 与 claude-oauth 发布者名，不改功能）：ccgateway 0.1.132→0.1.133、claude-oauth 0.2.2→0.2.3、codex 0.1.3→0.1.4、dynweight 0.5.7→0.5.9（develop 已发布 0.5.8，合并后取 0.5.9 以免同版本不同内容）、volcengine 0.12.6→0.12.7、growth 0.1.6→0.2.0、moderation 0.11.2→0.12.0（growth、moderation 权限语义拆分，用 minor）、payment 0.1.0→0.1.1、guard 0.2.8→0.2.9、anthropic 0.3.1→0.3.2。这些就是本分支相对 develop 改了 manifest 的全部插件。
+- hostCompat 下限统一提到 `>=0.1.286 <0.2.0`：十个插件都用了本轮新增的 manifest 字段（`defaultRoles`、`inheritFrom`、路由 `accounts`、`upstreamFields`），旧核心忽略它们（`"defaultRoles": []` 被当作省略 = admin，路由不做账号归属检查）。develop 当前核心已是 0.1.285，不认识这些语义，本分支随之后的核心发布，所以下限取 0.1.286。插件 hostCompat 下限 = 本轮核心发布版本，发布时核对；发布号不同时，把这十个 manifest 与 ccgateway/volcengine/moderation 的 manifest 测试里的 0.1.286 一并改掉（`grep -rn 0.1.286 next/plugins`）。
+- claude-oauth `publisher` 由 `sup2api` 改为 `sub2api`（与其他插件和签名者一致，否则签名包上传 400）。
+- 包内版本：codex `internal/codex/plugin.go` 的 `Version`；guard 测试包 overlay `0.2.9-test`；anthropic 升级测试包 overlay 由 `0.3.2-test` 改为 `0.3.3-test`（须新于发布版 0.3.2，同步 build-demo.sh、tools 测试、deploy/ci/check.sh、e2e AC05）。`deploy/docker/build-go.sh` 从 manifest 读版本，没有单独的内置包清单要改。
+- 回滚：revert 提交即可。已按这些新版本安装到库里的插件回滚核心时需同时回滚插件版本。

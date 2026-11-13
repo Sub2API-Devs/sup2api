@@ -30,7 +30,7 @@ const declaration = `{"preset":"anthropic","filterFields":[]}`
 // anthropic platform, the model catalog and its upgrade fixture.
 func TestManifest(t *testing.T) {
 	m := load(t)
-	if m.Key != "anthropic" || m.Version != "0.3.1" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "anthropic" || m.Version != "0.3.2" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {

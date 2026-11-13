@@ -44,7 +44,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.12.6" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.12.7" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -54,8 +54,9 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("runtime/entry/hostCompat = %s %+v %s", m.Runtime, m.Entry, m.HostCompat)
 	}
 	// 0.1.229 is the first core that renders a table page's "create" link
-	// (the asset forms have no sidebar entry of their own).
-	for version, want := range map[string]bool{"0.1.125": false, "0.1.228": false, "0.1.229": true} {
+	// (the asset forms have no sidebar entry of their own); 0.1.286 the
+	// first that honours defaultRoles, route accounts and upstreamFields.
+	for version, want := range map[string]bool{"0.1.125": false, "0.1.229": false, "0.1.285": false, "0.1.286": true} {
 		if got, err := check.HostCompatible(m.HostCompat, version); err != nil || got != want {
 			t.Fatalf("host %s compatibility: %v %v", version, got, err)
 		}
@@ -614,7 +615,7 @@ func TestValidate(t *testing.T) {
 	for _, icon := range []string{"assets/volcengine-color.svg", "assets/doubao-color.svg"} {
 		files[icon] = mustFile(t, icon)
 	}
-	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.229"}); err != nil {
+	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.286"}); err != nil {
 		t.Fatalf("core manifest validation: %v", err)
 	}
 }

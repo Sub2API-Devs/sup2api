@@ -419,7 +419,7 @@ func startDB(t *testing.T) (*Plugin, *pluginsdktest.FakeHost) {
 		Grants: []*pluginv1.Grant{
 			{Permission: "ledger.credit", ScopeJson: `{"maxPerTx":"100000","maxPerDay":"1000000"}`},
 		},
-		SDK: []pluginsdk.Option{pluginsdk.WithInfo("payment", "0.1.0")},
+		SDK: []pluginsdk.Option{pluginsdk.WithInfo("payment", "0.1.1")},
 	})
 	return p, fh
 }
