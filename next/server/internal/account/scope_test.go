@@ -67,6 +67,12 @@ func TestGroupScopedAccounts(t *testing.T) {
 	require.Equal(t, 200, code, out)
 	code, out = e.doAs(mgr, "PATCH", path(inG), map[string]any{"group_ids": []int64{g, h}})
 	require.Equal(t, 403, code, out)
+	// Holding account:group:bind does not let it drop its last own group.
+	az.keys[mgr] = append(mgrKeys, "account:group:bind")
+	code, out = e.doAs(mgr, "PATCH", path(inGH), map[string]any{"group_ids": []int64{h}})
+	require.Equal(t, 403, code, out)
+	require.Equal(t, "would_leave_scope", out["error"].(map[string]any)["code"])
+	az.keys[mgr] = mgrKeys
 	// Unbinding its last group of an account leaves its range.
 	code, out = e.doAs(mgr, "PATCH", path(inGH), map[string]any{"group_ids": []int64{h}})
 	require.Equal(t, 403, code, out)
@@ -80,6 +86,15 @@ func TestGroupScopedAccounts(t *testing.T) {
 		"credentials": map[string]any{"api_key": "sk-good-key-123"}})
 	require.Equal(t, 400, code, out)
 	require.Equal(t, "[group_ids:not_in_scope]", fmt.Sprint(fieldsOf(out)))
+	// group/* needs some group; own needs none.
+	star := e.addUser("star@x.com")
+	az.keys[star] = []string{"account:create:group/*"}
+	code, out = e.doAs(star, "POST", "/accounts", map[string]any{"name": "star", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}})
+	require.Equal(t, 400, code, out)
+	e.createAs(star, "star", map[string]any{"group_ids": []int64{h}})
+	az.keys[star] = []string{"account:create:group/*", "account:create:own"}
+	e.createAs(star, "own-mix", nil)
 	made := e.createAs(mgr, "mine", map[string]any{"group_ids": []int64{k}})
 	require.EqualValues(t, ownDefaultConcurrency, made["max_concurrency"])
 	require.EqualValues(t, mgr, made["created_by"])
@@ -142,4 +157,9 @@ func TestDeleteClearsScopedGrants(t *testing.T) {
 
 	require.NoError(t, e.db.Tx(ctx, func(tx pgx.Tx) error { return core.ClearScopeGrants(ctx, tx, 0, core.ScopeRefGroup, []int64{g}) }))
 	require.True(t, slices.Equal([]string{keep, "own"}, scopes()))
+	// Nothing to clear: nothing written.
+	v = version()
+	require.NoError(t, e.db.Tx(ctx, func(tx pgx.Tx) error { return core.ClearScopeGrants(ctx, tx, 0, core.ScopeRefGroup, []int64{g}) }))
+	require.Equal(t, v, version())
 }
+

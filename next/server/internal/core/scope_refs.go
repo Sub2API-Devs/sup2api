@@ -43,6 +43,16 @@ func ClearScopeGrants(ctx context.Context, tx pgx.Tx, actorID int64, kind string
 	if actorID > 0 {
 		actor = &actorID
 	}
+	// The authz lock first, as every authz write takes it (a role save in
+	// flight would otherwise deadlock with this delete), and only when
+	// there is something to clear, so that deletes do not queue behind it.
+	var found bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM role_permission_scopes WHERE scope ~ ANY($1))`, patterns).Scan(&found); err != nil || !found {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM authz_meta WHERE id = 1 FOR UPDATE`); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, `WITH cleared AS (
     DELETE FROM role_permission_scopes rs USING permissions p
     WHERE p.id = rs.permission_id AND rs.scope ~ ANY($1)
