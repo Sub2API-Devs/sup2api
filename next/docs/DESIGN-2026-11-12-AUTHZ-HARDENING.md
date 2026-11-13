@@ -125,7 +125,7 @@
 - 改动：`authz.editableRole`（同一事务、`Bump` 之后锁住角色行）成为改名称描述、改权限、重置、删除角色的唯一入口：超级管理员角色一律 409；其余角色（内置与自定义同口径）当前授予的权限必须在操作者的授予范围内（`covers`），否则 403。`UpdateRole`、`DeleteRole` 增加 `actorID`。`SetRolePermissions` 只检查新增的权限；已移除（`status=removed`）的 key 忽略、授权行保留，完全不存在的 key 仍报 unknown。`CreateRole`、`ResetRole` 的授予检查挪进事务改用 `covers`。五个写操作各写一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.reset`）。CONTRACTS §4、§15.7、§43.6 同步。
 - 影响对象：
   - 超级管理员角色不能再改名称、描述，也不能重置（原先可以；超管本人和系统也不行），返回 409。前端本来就把超管角色设为只读。
-  - 持 `role:define` 的操作者不能再改、删、重置权限比自己大的角色（包括带有自己没有的插件权限的内置角色），返回 403。原先只检查授出的权限，可以先削弱上级角色再对其持有者改密码或禁用。
+  - 持 `role:define` 的操作者不能再改、删、重置权限比自己大的角色（包括带有自己没有的插件权限的内置角色），返回 403（T51 起非超管改内置角色一律 403）。原先只检查授出的权限，可以先削弱上级角色再对其持有者改密码或禁用。
   - 原样保存带已移除权限的角色不再报 unknown；保存时操作者已不需要持有角色上原有的权限（原有部分已由入口检查保证在操作者之内）。POST `/roles` 带已移除的权限 key 时忽略而不再报错。
   - 审计日志多出角色写入的记录。
 - 回滚：revert 这个提交即可，无迁移、无数据变化（已写入的 `role.*` 审计行可保留）。
@@ -155,7 +155,7 @@
 ## T15 设计 3.4 后端、C-T1：可分配清单接口
 
 - 改动：角色对象增加 `assignable_role_keys`（显式清单）与 `assign_custom`；新增 `PUT /roles/:id/assignable {role_keys, assign_custom}`（`role:define`，经 `editableRole`：超管角色 409；未知角色或含 `super_admin` 400；新增部分须在操作者可分配范围内，否则 403 `details.missing_assignable` / `missing_assign_custom`；整体替换；审计 `role.assignable`）；`POST /roles` 可带 `assignable_role_keys`、`assign_custom`，同样校验；`POST /roles/:id/reset` 同时恢复默认可分配清单（admin = operator、user + 全部自定义角色；operator = user；user 清空），操作者须能分配默认清单；新增 `GET /me/assignable-roles`（`AuthedRead`）列出调用者可分配的角色及能否授出（访问密钥下为 `[]`）。CONTRACTS §80 写明 AuthedRead 自身只读接口按访问密钥收窄计算（C-T1，仅文档）。无迁移。
-- 影响对象：重置内置角色会丢掉手工加到其可分配清单上的角色（含 `assign_custom` 变化），重置者若不能分配默认清单（如非超管重置 admin 而自己没有 `assign_custom`）改为 403；角色对象多两个字段，旧前端忽略即可。
+- 影响对象：重置内置角色会丢掉手工加到其可分配清单上的角色（含 `assign_custom` 变化），重置者若不能分配默认清单（如非超管重置 admin 而自己没有 `assign_custom`）改为 403（T51 起非超管重置内置角色一律 403）；角色对象多两个字段，旧前端忽略即可。
 - 回滚：revert 这个提交即可，无迁移；经新接口写入的可分配清单保留在 `role_assignable_roles` / `roles.assign_custom` 中，回滚后仍按 T13 的规则生效。
 
 ## T16 设计 3.1.2、决策 1：超管移交

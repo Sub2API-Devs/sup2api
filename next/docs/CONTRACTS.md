@@ -691,12 +691,12 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/roles/:id` | `role:read` | | 不存在 404 |
 | POST `/roles` | `role:define` | `{key, name, description?, permission_keys?, assignable_role_keys?, assign_custom?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`，且不能是内置角色保留的 key（`super_admin`、`admin`、`operator`、`user`、`supplier`；400 `details.fields[{field:"key", code:"reserved"}]`）；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；已移除的权限忽略；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`）；可分配清单同 PUT `/roles/:id/assignable` 校验（字段错误记在 `role_keys` 下） |
 | PATCH `/roles/:id` | `role:define` | `{name?, description?}` | 内置角色也可改名称和描述（只有超级管理员，否则 403，§43.6）；给了 `name` 时 `name.en` 不能为空 |
-| DELETE `/roles/:id` | `role:define` | | 内置角色 409；用户的该角色随之删除，所以角色仍有持有者时它须在操作者的可分配清单内（否则 403 `details.role`） |
+| DELETE `/roles/:id` | `role:define` | | 内置角色：非超管 403，超管 409；用户的该角色随之删除，所以角色仍有持有者时它须在操作者的可分配清单内（否则 403 `details.role`） |
 | PUT `/roles/:id/permissions` | `role:define` | `{permission_keys}` | 整体替换；操作者须持有**新增**的权限（否则 403 `details.missing`）；已移除（`status=removed`）的权限忽略，角色上已有的授权行保留（原样保存不报错）；完全不存在的 key 仍按未知报错 |
 | PUT `/roles/:id/assignable` | `role:define` | `{role_keys, assign_custom}` | 整体替换可分配清单；未知角色 400 `details.fields[{field:"role_keys", code:"unknown"}]`，含 `super_admin` 400（`code:"superuser"`）；操作者须能分配**新增**的角色，新开 `assign_custom` 时自己也须有它（否则 403 `details.missing_assignable` / `missing_assign_custom`） |
 | POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述、核心权限（§4）和默认可分配清单（admin = operator、user 与全部自定义角色；operator = user；尚未建出的内置角色跳过）；角色上的插件权限不动；自定义角色 409；操作者须持有全部默认权限并能分配默认清单（同上，否则 403） |
 
-以上 PATCH、DELETE、PUT permissions、PUT assignable、reset 共用一个入口（§43.6 角色写入口）：超级管理员角色一律 409；角色当前授予的权限或可分配角色超出操作者时 403。每次写入记一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.assignable`、`role.reset`，目标为该角色）。
+以上 PATCH、DELETE、PUT permissions、PUT assignable、reset 共用一个入口（§43.6 角色写入口）：超级管理员角色一律 409；其余内置角色只有超级管理员能做，否则 403 `details.superuser = true`（决策 6，表中“操作者须持有……”对内置角色因此恒成立）；角色当前授予的权限或可分配角色超出操作者时 403。每次写入记一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.assignable`、`role.reset`，目标为该角色）。
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 

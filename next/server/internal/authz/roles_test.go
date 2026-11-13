@@ -100,13 +100,26 @@ func TestBuiltinRolesSuperAdminOnly(t *testing.T) {
 		}
 	}
 
-	// The super admin changes and resets them; deleting stays refused for
-	// everyone (built-in).
+	// Neither does the super admin's access key, which is no superuser.
 	opID := roleID(t, s, RoleOperator)
-	for op, err := range writes(root, opID) {
-		if err != nil {
-			t.Errorf("super admin %s operator: %v", op, err)
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"role:define", "user:read"}})
+	if _, err := s.SetRolePermissions(keyed, root, opID, []string{"user:read"}); !isCode(err, "permission_denied") || detail(err, "superuser") != true {
+		t.Fatalf("super admin's access key changes operator: %v", err)
+	}
+
+	// The super admin and the system change and reset them; deleting stays
+	// refused for everyone (built-in).
+	for _, actor := range []int64{root, 0} {
+		for _, key := range []string{RoleAdmin, RoleOperator, RoleUser} {
+			for op, err := range writes(actor, roleID(t, s, key)) {
+				if err != nil {
+					t.Errorf("actor %d %s %s: %v", actor, op, key, err)
+				}
+			}
 		}
+	}
+	if got := rolePermissionKeys(t, s, opID); !slices.Equal(got, []string{"user:read"}) {
+		t.Fatalf("operator after the super admin's write: %v", got)
 	}
 	if _, err := s.ResetRole(ctx, root, opID); err != nil {
 		t.Fatalf("super admin resets operator: %v", err)
