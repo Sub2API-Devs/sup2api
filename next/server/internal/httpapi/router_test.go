@@ -39,84 +39,40 @@ func (a fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.PermissionS
 
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 
-type scopeView struct {
-	Granted []string `json:"granted"`
-	Scope   *int64   `json:"scope"`
-}
-
+// PermAny opens a route to any of its keys and records each one held.
 func TestPermAny(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	r := NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
-		1: {"proxy:read", "proxy:own:read"}, // all + own
-		2: {"proxy:own:read", "proxy:own:manage"},
-		3: {"proxy:manage"},
+		1: {"settings:read", "group:read"},
+		2: {"group:read"},
 		4: {"apikey:self:manage"},
 	}})
-	echo := func(c *gin.Context) {
-		OK(c, scopeView{Granted: Granted(c), Scope: core.OwnerScope(c.Request.Context(), "proxy:read")})
-	}
-	r.PermAny("GET", "/proxies", echo, "proxy:read", "proxy:own:read")
-	r.PermAny("POST", "/proxies", echo, "proxy:manage", "proxy:own:manage")
-	r.Perm("GET", "/single", "proxy:read", echo)
-
-	call := func(method, path string, uid int64) (int, scopeView, map[string]any) {
-		req := httptest.NewRequest(method, "/api/v1"+path, nil)
+	r.PermAny("GET", "/x", func(c *gin.Context) { OK(c, Granted(c)) }, "settings:read", "group:read")
+	r.Perm("GET", "/single", "group:read", func(c *gin.Context) { OK(c, Granted(c)) })
+	call := func(path string, uid int64) (int, []string, map[string]any) {
+		req := httptest.NewRequest("GET", "/api/v1"+path, nil)
 		req.Header.Set("Authorization", "Bearer u"+strconv.FormatInt(uid, 10))
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 		var out struct {
-			Data  scopeView      `json:"data"`
+			Data  []string       `json:"data"`
 			Error map[string]any `json:"error"`
 		}
 		_ = json.Unmarshal(w.Body.Bytes(), &out)
 		return w.Code, out.Data, out.Error
 	}
-
-	// Both keys held: all-level scope, both recorded.
-	code, v, _ := call("GET", "/proxies", 1)
-	if code != 200 || v.Scope != nil || strings.Join(v.Granted, ",") != "proxy:read,proxy:own:read" {
-		t.Fatalf("all: %d %+v", code, v)
+	if code, g, _ := call("/x", 1); code != 200 || strings.Join(g, ",") != "settings:read,group:read" {
+		t.Fatalf("both: %d %v", code, g)
 	}
-	// Only the own key: scope is the caller id.
-	code, v, _ = call("GET", "/proxies", 2)
-	if code != 200 || v.Scope == nil || *v.Scope != 2 || strings.Join(v.Granted, ",") != "proxy:own:read" {
-		t.Fatalf("own: %d %+v", code, v)
+	if code, g, _ := call("/x", 2); code != 200 || strings.Join(g, ",") != "group:read" {
+		t.Fatalf("one: %d %v", code, g)
 	}
-	// Neither key: permission_denied naming the first key.
-	code, _, e := call("GET", "/proxies", 4)
-	if code != http.StatusForbidden || e["code"] != "permission_denied" ||
-		e["details"].(map[string]any)["permission"] != "proxy:read" {
+	if code, _, e := call("/x", 4); code != http.StatusForbidden || e["details"].(map[string]any)["permission"] != "settings:read" {
 		t.Fatalf("denied: %d %v", code, e)
 	}
-	// The permission alone is enough; there is no password confirmation.
-	if code, _, e = call("POST", "/proxies", 3); code != 200 {
-		t.Fatalf("manage: %d %v", code, e)
-	}
-	if code, _, _ = call("POST", "/proxies", 2); code != 200 {
-		t.Fatalf("own manage: %d", code)
-	}
-	// Perm records its key too, so OwnerScope works on single-key routes.
-	code, v, _ = call("GET", "/single", 1)
-	if code != 200 || v.Scope != nil || strings.Join(v.Granted, ",") != "proxy:read" {
-		t.Fatalf("perm: %d %+v", code, v)
-	}
-	if code, _, _ = call("GET", "/single", 2); code != http.StatusForbidden {
-		t.Fatalf("perm denied: %d", code)
-	}
-}
-
-func TestOwnerScopeWithoutGrant(t *testing.T) {
-	ctx := core.WithUserID(context.Background(), 7)
-	if s := core.OwnerScope(ctx, "x:read"); s == nil || *s != 7 {
-		t.Fatalf("scope without grants = %v", s)
-	}
-	ctx = core.WithGranted(ctx, []string{"x:own:read"})
-	if s := core.OwnerScope(ctx, "x:read"); s == nil || *s != 7 {
-		t.Fatalf("own scope = %v", s)
-	}
-	if s := core.OwnerScope(core.WithGranted(ctx, []string{"x:own:read", "x:read"}), "x:read"); s != nil {
-		t.Fatalf("all scope = %v", *s)
+	if code, g, _ := call("/single", 2); code != 200 || strings.Join(g, ",") != "group:read" {
+		t.Fatalf("perm: %d %v", code, g)
 	}
 }
 
@@ -385,7 +341,7 @@ func TestPermScoped(t *testing.T) {
 		ctx := c.Request.Context()
 		read, _ := core.Scope(ctx, nil, perm.AccountRead)
 		update, _ := core.Scope(ctx, nil, perm.AccountUpdate)
-		OK(c, view{Granted: Granted(c), Read: read, Update: update, Owner: core.OwnerScope(ctx, "account:read")})
+		OK(c, view{Granted: Granted(c), Read: read, Update: update})
 	}, perm.AccountRead, perm.AccountUpdate)
 	call := func(uid int64) (int, view, map[string]any) {
 		req := httptest.NewRequest("GET", "/api/v1/accounts", nil)
@@ -399,14 +355,14 @@ func TestPermScoped(t *testing.T) {
 		_ = json.Unmarshal(w.Body.Bytes(), &out)
 		return w.Code, out.Data, out.Error
 	}
-	if code, v, _ := call(1); code != 200 || !v.Read.All || v.Owner != nil || strings.Join(v.Granted, ",") != "account:read" || !v.Update.Empty() {
+	if code, v, _ := call(1); code != 200 || !v.Read.All || strings.Join(v.Granted, ",") != "account:read" || !v.Update.Empty() {
 		t.Fatalf("all: %d %+v", code, v)
 	}
-	if code, v, _ := call(2); code != 200 || v.Read.Owner != 2 || v.Read.All || len(v.Granted) != 0 || v.Owner == nil || *v.Owner != 2 || v.Update.Groups[0] != 12 {
+	if code, v, _ := call(2); code != 200 || v.Read.Owner != 2 || v.Read.All || len(v.Granted) != 0 || v.Update.Groups[0] != 12 {
 		t.Fatalf("own: %d %+v", code, v)
 	}
-	// A group scope only: the transitional OwnerScope fails closed (id 0).
-	if code, v, _ := call(3); code != 200 || !v.Read.Empty() || v.Owner == nil || *v.Owner != 0 {
+	// A group scope only: an empty scope for the action not held.
+	if code, v, _ := call(3); code != 200 || !v.Read.Empty() {
 		t.Fatalf("group: %d %+v", code, v)
 	}
 	if code, _, e := call(4); code != http.StatusForbidden || e["details"].(map[string]any)["permission"] != "account:read" {

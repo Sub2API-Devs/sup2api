@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"regexp"
 	"time"
-
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 type ctxKey int
@@ -72,7 +70,9 @@ func UserID(ctx context.Context) (int64, bool) {
 
 // WithGranted records the permission keys the route middleware matched for
 // the caller (CONTRACTS §21.1). Router.Perm stores its single key,
-// Router.PermAny every key the caller holds among the accepted ones.
+// Router.PermAny every key the caller holds among the accepted ones,
+// Router.PermScoped each action held for every row (core.Scope has the
+// rest).
 func WithGranted(ctx context.Context, keys []string) context.Context {
 	return context.WithValue(ctx, ctxGranted, keys)
 }
@@ -82,36 +82,6 @@ func WithGranted(ctx context.Context, keys []string) context.Context {
 func Granted(ctx context.Context) []string {
 	keys, _ := ctx.Value(ctxGranted).([]string)
 	return keys
-}
-
-// OwnerScope tells a handler which rows the caller may reach on a route
-// registered with Router.PermScoped(action) or Router.PermAny(allKey,
-// ownKey): nil for every row, otherwise a pointer to the caller id (rows
-// whose created_by equals it). The value is meant to go straight into SQL,
-// e.g. `WHERE ($2::bigint IS NULL OR created_by = $2)`; rows with created_by
-// NULL are then only reachable with every row (CONTRACTS §21.1).
-//
-// Transitional (R2): a scope the route computed (WithScope) is read
-// first; a scope with group or id parts is not expressible here and is cut
-// to its own part, a caller id of 0 when it has none (no row), so it fails
-// closed until its users read DataScope (R3, R4).
-func OwnerScope(ctx context.Context, allKey string) *int64 {
-	uid, _ := UserID(ctx)
-	if s, ok := routeScopes(ctx)[perm.Key(allKey)]; ok {
-		switch {
-		case s.All:
-			return nil
-		case s.Owner == 0:
-			uid = 0
-		}
-		return &uid
-	}
-	for _, k := range Granted(ctx) {
-		if k == allKey {
-			return nil
-		}
-	}
-	return &uid
 }
 
 func WithRequestID(ctx context.Context, id string) context.Context {

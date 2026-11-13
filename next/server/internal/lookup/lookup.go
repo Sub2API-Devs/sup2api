@@ -203,7 +203,7 @@ func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (own, ok bool) {
 		if !httpapi.CanAny(c, s.authz, e.Read, e.OwnRead) {
 			return false, false
 		}
-		return core.OwnerScope(c.Request.Context(), e.Read) != nil, true
+		return !core.HasGranted(c.Request.Context(), perm.Key(e.Read)), true
 	}
 	return true, len(e.Mine.Perms) == 0 || httpapi.CanAny(c, s.authz, e.Mine.Perms...)
 }

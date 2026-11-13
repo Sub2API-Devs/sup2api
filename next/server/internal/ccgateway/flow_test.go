@@ -21,6 +21,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -70,14 +71,17 @@ type fixtureAccess struct {
 }
 
 func (a fixtureAccess) AccountsInScope(ctx context.Context, uid int64, action string, ids []int64) (bool, []int64, error) {
-	scope, ok := core.ScopeOf(core.WithUserID(ctx, uid), a.az, core.AccountScope(action))
-	if !ok {
+	scope, err := core.Scope(core.WithUserID(ctx, uid), a.az, perm.AccountAction(action))
+	switch {
+	case err != nil:
+		return false, nil, err
+	case scope.Empty():
 		return false, nil, core.AccountsDenied(action)
-	}
-	if scope == nil {
+	case scope.All:
 		return true, nil, nil
 	}
-	rows, err := a.db.Pool.Query(ctx, `SELECT id FROM accounts WHERE id = ANY($1) AND deleted_at IS NULL AND created_by = $2`, ids, *scope)
+	rows, err := a.db.Pool.Query(ctx, `SELECT a.id FROM accounts a WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+core.AccountRows.SQL(2),
+		append([]any{ids}, core.AccountRows.Args(scope)...)...)
 	if err != nil {
 		return false, nil, err
 	}

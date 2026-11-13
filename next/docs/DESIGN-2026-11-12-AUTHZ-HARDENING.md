@@ -951,3 +951,39 @@
     - 存量全量 key 收窄为用户的 own。
   - 不可比组合被丢弃，已由 core `TestRestrictScoped` 覆盖。
 - 影响对象：无新增行为。回滚：revert。
+
+## 期 4 R7：清理旧范围原语，CONTRACTS §21 改写
+
+- 删除：
+  - `core.OwnerScope`、`OwnerScopeOf`、`ScopeOf`、`Allows`、`AccountScope`。
+  - `perm.Scoped`、`Pair`、`OrAll`、`Keys`（`perm/scoped.go` 已删除，`Key` 与 `Strings` 移到 `perm/key.go`）。
+  - R2a 的过渡适配。
+  - ccgateway 测试替身与 lookup 的最后两处调用改用 `core.Scope` 与 `HasGranted`。
+- 保留：`Router.PermAny`（多个无范围 key 的路由，例如请求日志查看）、`core.Granted` / `HasGranted`。
+- 守护测试：perm `TestNoLegacyOwnLiterals`。生产 Go 代码里，除别名表 `perm/pattern.go` 外，不得出现含 `:own:` 的字符串字面量。
+- CONTRACTS：
+  - §21.0 汇总资源范围的口径。
+  - §21.1 的 key 表与路由绑定段落改写为范围写法。
+  - §4 的权限表、operator 与 supplier 默认、代理与账号的路由表改为范围写法。
+  - §21 开头注明：全文其他位置的 `account:own:<x>` 读作 `account:<x>:own`，“自己级”读作“受限范围”。
+- 测试：httpapi `TestPermAny` 改为无范围 key；全量 server 测试见期 4 R 组汇总。
+- 回滚：revert（纯代码）。
+
+## 期 4 资源范围（R0–R7）发布说明
+
+- 两步走，滚动发布：
+  - **本版本（R2a）**：迁移 0103 只做新增；8 个旧 own key 保持 active，作为别名使用。
+    - 新节点写入时同时写新表与旧行；旧 own key 仍为 active 时，以旧行为准。
+    - 访问密钥两种写法都保存。
+    - 新旧节点混跑时 supplier 不中断；分组或 id 范围在旧节点上不生效（fail-closed）。
+    - 升级期间不要修改角色权限，全部节点升级后再改。
+  - **下一版本（R2b，确认全部节点已升级后）**：
+    1. 按旧 own 行重新同步新表的 own 行（补齐缺的，删除没有对应旧行的），写审计。
+    2. 目录把 8 个旧 key 标 removed（`ownShadowed` 随即不再遮蔽，新表成为唯一记录）。
+    3. 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥里的旧写法与冗余旧行（写审计）。
+    4. `Parse` 的别名表保留，用于读取旧请求。
+- 同版本：R0 的二次验证依赖 S5 前端（StepUpDialog）。
+- 前端（R8）上线前：
+  - 旧控制台的角色页不认识 `…:own` 等规范 key，own 授予可能显示不出来，但后端照常接受新旧两种写法。
+  - 账号页、代理页的“自己的”判断仍按旧别名（`/me` 仍输出旧别名），可以继续工作。
+- 回滚：revert 代码即可（新表、新列旧代码不读；访问密钥中的旧写法仍在）。回滚期间写入的分组或 id 范围授予不生效。

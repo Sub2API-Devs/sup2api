@@ -71,7 +71,7 @@
 - 控制台：`Authorization: Bearer <access_token>`（JWT，HS256，`sub` 为用户 ID，默认 2 小时有效）
 - **已取消二次验证（2026-10-05 用户决定）**：不再有密码确认（step-up）。`POST /auth/step-up`、`X-Step-Up-Token` 请求头、`step_up_required` 错误码、`core.StepUpVerifier`、`Authorizer.IsSensitive`、`Router.PermStepUp` 全部删除；任何操作（调整余额、删除用户/账号、查看凭证、角色授权、插件安装/卸载、系统更新等）只看登录态 + RBAC 权限。旧前端仍发送 `X-Step-Up-Token` 时核心直接忽略。
 - **二次验证重新引入（2026-11-13，权限加固期 4，用户决定照 new-api）**：只用于少数高危操作，按 scope 换短时一次性 proof（`X-Verify-Proof`），会话与访问密钥同一套，见 §80.2。上面这条只说明旧的 step-up 机制已删除。
-- 路由注册：`r.Public` / `r.Authed` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可，§21.1）
+- 路由注册：`r.Public` / `r.Self` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可）/ `r.PermScoped(method, path, handler, actions...)`（任一动作的任意范围，handler 用 `core.Scope` 取范围，§21.0）
 - 网关：由插件声明的端点按 `auth.headers` 读取 API Key；错误格式按端点的 `errorFormat`
 
 ## 4. 权限清单（核心）
@@ -84,8 +84,8 @@
 | role | `role:read` `role:define`🔐 `role:assign`🔐（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
 | group | `group:read` `group:manage`🔐 |
 | segment | `segment:read` `segment:manage`（用户组，§97.7） |
-| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐🔑；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
-| proxy | `proxy:read` `proxy:manage`🔐🔑；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
+| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐🔑，均可带范围（`:own`、`:group/<g>`、`:group/<g>/account/<a>`、`:account/<a>`；create 不接受 id，§21.0；旧 key `account:own:<x>` 为 `account:<x>:own` 的别名，R2a 期间保留）；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
+| proxy | `proxy:read` `proxy:manage`🔐🔑，可带范围 `:own`、`:proxy/<id>`（§21.0；旧 key `proxy:own:<x>` 为别名） |
 | price | `price:read` `price:manage`🔐 |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` |
@@ -98,7 +98,7 @@
 | settings | `settings:read` `settings:manage`🔐 |
 | system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
-内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，核心默认权限只有这些（插件权限按 manifest `defaultRoles` 授予，payment 的 `recharge:use`、growth 的 `growth:use` 列了 supplier），暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。新登记的插件权限授予 manifest `userPermissions[].defaultRoles` 列出的内置角色（`admin`、`operator`、`supplier`、`user`，即 `manifest.BuiltinRoleKeys`；省略或 `null` 时为 `admin`，显式 `[]` 表示不授予任何角色；超管角色本来拥有全部权限，不写入），以及持有本插件 `inheritFrom` 所列旧 key 的角色（改名、拆分不丢授权，先授予再删除不再声明的旧 key）。声明了 `inheritFrom` 且目录里已有其中某个旧 key 时视为改名或拆分，只按继承授予、不叠加 `defaultRoles`；全新安装没有旧 key，才按 `defaultRoles`；每一条都写 `authz.sync.grant` 审计（`detail.via` 为 `default` 或 `inherit`）。同意请求可以显式覆盖：`new_permission_roles: {<本地 key>: [角色 key]}` 优先（空数组表示不授予任何角色，`inheritFrom` 照常生效），其次旧字段 `role_keys_for_new_permissions`（非空时作用于其余全部新权限），都没有时按 manifest 默认；已存在的权限不受影响（2026-11-12 权限加固 T58）。manifest 默认属于系统目录默认，同意时不要求操作者的任何权限（审计操作者为系统）；显式指定的角色要求操作者持有 `role:define`，且每个角色都必须是操作者能修改的角色（与 `PUT /roles/:id/permissions` 的 `editableRole` 同一判断：内置角色只有超管，自定义角色的现有权限须在操作者权限之内），并且必须在操作者的可分配清单内（与 `PUT /users/:id/roles` 的可分配判断相同，访问密钥没有可分配清单；不在清单内 403，`details.role`），非超管也不能指定自己持有的角色（即使清单按名字列出了它，403，`details.role`），超管角色一律 403，未知角色 400（字段为请求里的字段：`new_permission_roles.<本地 key>` 或 `role_keys_for_new_permissions`，`code: unknown`；`new_permission_roles` 为目录已有的权限写的未知角色同样 400，不再静默忽略，期 4 P4F4）；新权限本身不要求操作者持有（这一点与 PUT `/roles/:id/permissions` 不同，那里新增的权限须在操作者之内），但因为不能指定自己持有的角色，操作者无法借此给自己新增权限。只有本次真正新建的权限才检查，升级不新增权限时带了角色也不需要 `role:define`（T59）。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `account:credential:view:own` 与 `user` 角色的默认权限（全量 key 蕴含 own 范围，因此能授出 supplier，期 4 R2a 起不再重复列出 own key）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12；期 4 R2a 起写作 `account:read:own` `account:create:own` `account:update:own` `account:delete:own` `account:test:own` `account:credential:view:own` `proxy:read:own` `proxy:manage:own`，核心默认权限只有这些（插件权限按 manifest `defaultRoles` 授予，payment 的 `recharge:use`、growth 的 `growth:use` 列了 supplier），暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。新登记的插件权限授予 manifest `userPermissions[].defaultRoles` 列出的内置角色（`admin`、`operator`、`supplier`、`user`，即 `manifest.BuiltinRoleKeys`；省略或 `null` 时为 `admin`，显式 `[]` 表示不授予任何角色；超管角色本来拥有全部权限，不写入），以及持有本插件 `inheritFrom` 所列旧 key 的角色（改名、拆分不丢授权，先授予再删除不再声明的旧 key）。声明了 `inheritFrom` 且目录里已有其中某个旧 key 时视为改名或拆分，只按继承授予、不叠加 `defaultRoles`；全新安装没有旧 key，才按 `defaultRoles`；每一条都写 `authz.sync.grant` 审计（`detail.via` 为 `default` 或 `inherit`）。同意请求可以显式覆盖：`new_permission_roles: {<本地 key>: [角色 key]}` 优先（空数组表示不授予任何角色，`inheritFrom` 照常生效），其次旧字段 `role_keys_for_new_permissions`（非空时作用于其余全部新权限），都没有时按 manifest 默认；已存在的权限不受影响（2026-11-12 权限加固 T58）。manifest 默认属于系统目录默认，同意时不要求操作者的任何权限（审计操作者为系统）；显式指定的角色要求操作者持有 `role:define`，且每个角色都必须是操作者能修改的角色（与 `PUT /roles/:id/permissions` 的 `editableRole` 同一判断：内置角色只有超管，自定义角色的现有权限须在操作者权限之内），并且必须在操作者的可分配清单内（与 `PUT /users/:id/roles` 的可分配判断相同，访问密钥没有可分配清单；不在清单内 403，`details.role`），非超管也不能指定自己持有的角色（即使清单按名字列出了它，403，`details.role`），超管角色一律 403，未知角色 400（字段为请求里的字段：`new_permission_roles.<本地 key>` 或 `role_keys_for_new_permissions`，`code: unknown`；`new_permission_roles` 为目录已有的权限写的未知角色同样 400，不再静默忽略，期 4 P4F4）；新权限本身不要求操作者持有（这一点与 PUT `/roles/:id/permissions` 不同，那里新增的权限须在操作者之内），但因为不能指定自己持有的角色，操作者无法借此给自己新增权限。只有本次真正新建的权限才检查，升级不新增权限时带了角色也不需要 `role:define`（T59）。
 
 ## 5. REST API（`/api/v1`）
 
@@ -148,20 +148,20 @@
 | GET `/me/groups` | auth（当前用户可用的分组：公开的，或已授权给调用者所在用户组的私有分组；每行带调用者在该分组的实际倍率，§97.6） |
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage`；DELETE 不再因分组下有 API Key 而拒绝（2026-11-01）：`?move_keys_to=<分组 id>` 把 Key 迁到该分组（须为另一个已存在的分组，否则 400 `details.fields[{field:"move_keys_to"}]`），不带时 Key 保留但解除绑定（`group_id` 置 `null`，§15.1）；分组下的账号只移出分组。插件按 (用户, 分组) 记的资源与历史（`provider_*` 表）不随 Key 迁移，留在原分组 id 下，删除后无法再通过网关读取或删除，目前没有清理任务。GET `/groups` 另有筛选 `?model=`，每行带授权与定价的汇总字段（§97.6）；分组删除时它上面的授权、专属倍率和定价规则一并删除 |
 | GET `/groups/:id/segments`（`?include=`），PUT `/groups/:id/segments` `{items:[{segment_id, granted?, rate_override?}]}` | `group:read` / `group:manage`；各用户组在本分组的授权与专属倍率（§97.6） |
-| GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
-| POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
-| POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage`（返回含明文密码的代理串，写审计） |
+| GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage` 的任意范围（只作用于范围内的代理；新建要求全部或 own，§21.0）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
+| POST `/proxies/:id/test` | `proxy:manage` 的任意范围（会发起外部连接） |
+| POST `/proxies/:id/reveal-url` | `proxy:manage` 的任意范围（返回含明文密码的代理串，写审计） |
 
 ### 5.4 账号（A；类型和表单来自插件注册表）
 
-每条路由也接受对应的 `account:own:*` key，只作用于自己创建的账号（§21）；`POST /accounts`、`PATCH /accounts/:id` 可用 `proxy_url` 代替 `proxy_id`（§21.4）。
+每条路由接受对应动作的任意范围，只作用于范围内的账号（§21.0）；`POST /accounts`、`PATCH /accounts/:id` 可用 `proxy_url` 代替 `proxy_id`（§21.4）。
 
 | 方法 路径 | 权限 | 说明 |
 |---|---|---|
 | GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}], custom_upstream}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`；`custom_upstream` 见 §21.3） |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
 | GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=&created_by=&mine=&orphaned=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18）、`created_by`、`created_by_email`（§21）。**默认不列出孤立账号**（所属插件已禁用/卸载，数据仍在）；`orphaned=true` 只列孤立的，`orphaned=all` 都列；详情 `GET /accounts/:id` 不受影响 |
-| GET `/accounts/summary` | `account:read` 或 `account:own:read` | 调用者范围内（`core.OwnerScope`：有 `account:read` 为全部，否则只计自己创建的）未删除账号的状态计数 `{total, available, auto_disabled, disabled}`，口径同 `GET /usage/overview` 的 `accounts`（`available` = active 且可调度；`auto_disabled` 含旧 `error` 与 active 但不可调度；不区分孤立账号）；供应商仪表盘账号状态卡片（T81，2026-11-13 权限加固期 4 P4F5） |
+| GET `/accounts/summary` | `account:read` 的任意范围 | 调用者 `account:read` 范围内未删除账号的状态计数 `{total, available, auto_disabled, disabled}`，口径同 `GET /usage/overview` 的 `accounts`（`available` = active 且可调度；`auto_disabled` 含旧 `error` 与 active 但不可调度；不区分孤立账号）；供应商仪表盘账号状态卡片（T81，2026-11-13 权限加固期 4 P4F5） |
 | POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, auto_disable, models[], model_mapping{}, rpm_limit, tpm_limit, credentials:{...}}`（§18、§21.4、§42.3）；响应另带 `proxy_created` |
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
@@ -1056,6 +1056,8 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 ## 21. 账号与代理的所有权授权、受限设置（base_url）、保存账号时自动关联代理（2026-09-25，用户要求）
 
+> 期 4 R1–R7 起，所有权改为带范围的权限 key（§21.0）。本节及全文其他位置的 `account:own:<x>`、`proxy:own:<x>` 均读作 `account:<x>:own`、`proxy:<x>:own`（R2a 期间旧写法仍是有效别名），“全部级 / 自己级”读作“全部范围 / 受限范围”，`PermAny(all, own)` 与 `core.OwnerScope` 读作 `PermScoped(动作)` 与 `core.Scope`。
+
 背景：需要"供应商"角色只维护自己创建的账号和代理、不能改 base_url（只能用官方地址）；"只读"角色能看全部账号但不能改、看不到密钥；保存账号时能直接填代理串，后端自动解析并复用已有代理或新建再关联。旧 sub2api 没有所有者模型，本节为新设计。
 
 ### 21.0 带范围的权限 key（期 4 R1–R2a，取代下文的 own/all 成对 key；R7 重写本节）
@@ -1105,18 +1107,18 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 模块 | 新增 key | 说明 |
 |---|---|---|
-| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3）；🔑 见 §80.2 |
+| account | `account:read:own` `account:create:own` `account:update:own` `account:delete:own`🔐 `account:test:own` `account:credential:view:own`🔐🔑（旧写法 `account:own:<x>`） | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3）；🔑 见 §80.2 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
 | account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
-| proxy | `proxy:own:read` `proxy:own:manage` | 只作用于 `created_by` = 调用者的代理 |
+| proxy | `proxy:read:own` `proxy:manage:own`（旧写法 `proxy:own:<x>`） | 只作用于 `created_by` = 调用者的代理 |
 
 - 全部级 key 覆盖自己级 key：同时拥有时按全部处理。
 - `created_by` 为 `NULL` 的历史数据只有全部级 key 能看到/操作。
 - admin 角色按 `SyncCore` 规则自动获得全部新 key（含 `account:settings:custom`）；`user` 角色不变；已有自定义角色需要管理员手工勾选。
-- 典型角色：**供应商** = `account:own:*`（六个）+ `proxy:own:read` + `proxy:own:manage`，没有 `account:settings:custom`（2026-11-12 起即内置角色 `supplier` 的默认权限，§4；没有 `account:relay` 与 `account:group:bind`，所以不能新建可自定义上游的账号、不能绑定分组）；**只读** = `account:read` + `proxy:read`，没有任何 `credential:view`。
+- 典型角色：**供应商** = 六个 `account:<x>:own` + `proxy:read:own` + `proxy:manage:own`，没有 `account:settings:custom`（2026-11-12 起即内置角色 `supplier` 的默认权限，§4；没有 `account:relay` 与 `account:group:bind`，所以不能新建可自定义上游的账号、不能绑定分组）；**只读** = `account:read` + `proxy:read`，没有任何 `credential:view`。
 
-路由绑定改为**同一路由接受全部级或自己级任一 key**（`httpapi.Router.PermAny(method, path string, handler gin.HandlerFunc, keys ...string)`，现有 `Perm` 不变）：中间件对每个 key 调 `Authorizer.Can`，把命中的 key 集合按注册顺序放进 **request ctx**（`core.WithGranted` / `core.Granted(ctx) []string`；`httpapi.Granted(c *gin.Context)` 是取 `c.Request.Context()` 的便捷写法）（原"任一命中的 key 敏感就要求 step-up"已随二次验证删除，§3.3）；都不命中返回 403 `permission_denied`，`details.permission` 为 **第一个** key。`Perm` 也把它的单个 key 写进 `Granted`，所以 `OwnerScope` 在单 key 路由上同样可用。handler 用 `core.OwnerScope(ctx context.Context, allKey string) *int64` 取范围（ctx 为 `c.Request.Context()`，和 `core.UserID` 一致）：命中全部级 key 返回 `nil`，否则返回调用者 id 的指针；范围条件**落在 SQL 里**（列表 `WHERE ($n::bigint IS NULL OR created_by = $n)`，写操作 `UPDATE ... WHERE id=$1 AND ($2::bigint IS NULL OR created_by = $2)`，仿 `apikey.softDelete`），越权访问一律 404（不区分"不存在"和"不是你的"）。
+路由绑定（期 4 R2a 起）：`httpapi.Router.PermScoped(method, path, handler, actions...)` 要求任一动作的任意范围（`PermissionSet.HasAction`），把每个动作的 `core.DataScope`（未持有时为空）放进 request ctx，全部范围的动作也记入 `core.Granted`；都不持有返回 403 `permission_denied`，`details.permission` 为第一个动作。handler 用 `core.Scope(ctx, az, action)` 取范围，条件落在 SQL 里（`core.AccountRows` / `core.ProxyRows` 的 `SQL(n)` / `Cond()` / `Args(scope)`），越权访问一律 404（不区分“不存在”和“不在范围内”）。`Router.PermAny` 保留给多个无范围 key 的路由；`core.OwnerScope`、`OwnerScopeOf`、`ScopeOf`、`Allows`、`AccountScope`、`perm.Scoped/Pair` 已在 R7 删除。
 
 所有权只约束控制台 API；网关调度、`AccountDirectory`、分组的 `account_count`、代理的 `account_count` 仍按全部统计。
 
@@ -1128,7 +1130,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 方法 路径 | 权限（任一） | 变化 |
 |---|---|---|
-| GET `/accounts` | `account:read` / `account:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（只看自己的，两级都可用，`strconv.ParseBool`） |
+| GET `/accounts` | `account:read` 的任意范围 | 只返回范围内的；筛选 `created_by=<id>`（在范围内收窄，期 4 R3 起；此前自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（只看自己的，两级都可用，`strconv.ParseBool`） |
 | GET `/accounts/:id` | `account:read` / `account:own:read` | |
 | POST `/accounts` | `account:create` / `account:own:create` | `created_by` = 调用者；自己级时 `proxy_id` 必须是调用者**可见**的代理（§21.4 的可见范围），否则 `proxy_id/not_found`；新增 `proxy_url`（§21.4） |
 | PATCH `/accounts/:id` | `account:update` / `account:own:update` | 新增 `proxy_url`（§21.4）；自己级改 `proxy_id` 同样只能用可见的代理；受限设置校验（§21.3） |
@@ -1137,11 +1139,11 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | POST `/account-types/:plugin_key/:type/models/fetch` | `account:create` / `account:own:create` | 可带 `proxy_url`：只解析、临时用它发请求，**不查找不创建**代理、不需要代理权限；与 `proxy_id` 同时给出 400 `fields[{proxy_url, conflict}]`；`proxy_id` 的可见性规则同 POST `/accounts` |
 | POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐🔑 / `account:own:credential:view`🔐🔑 | 二次验证 `credential.reveal`（§80.2） |
 | GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
-| GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
+| GET `/proxies`、GET `/proxies/:id` | `proxy:read` 的任意范围 | 只返回范围内的；筛选 `created_by=<id>`（在范围内收窄，期 4 R4 起；此前自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
 | PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数；自己级下 PATCH 改了连接字段（`protocol`、`host`、`port`、`username`、`password` 任一与现值不同，原样带回不算，`host` 只有大小写不同也不算且不写入）而代理正被他人创建的账号（含 `created_by` 为空的）使用时，返回 409 `proxy_in_use`，`details.account_count` 为这些账号的数量（2026-11-12 权限加固 T31）；改名称、状态不受限，`proxy:manage` 不受限 |
 
-菜单（`/me/menus`、前端回退表、路由 meta）：账号/平台菜单 anyOf `account:read account:own:read account:own:create`（§90 第四版起没有平台菜单）；代理菜单 anyOf `proxy:read proxy:own:read proxy:own:manage`。
+菜单（`/me/menus`、前端回退表、路由 meta）：账号菜单 anyOf `account:read`、代理菜单 anyOf `proxy:read`，按“动作的任意范围”判断（`HasAction`，期 4 R2a；§90 第四版起没有平台菜单）。
 
 审计（新公共包 `server/internal/audit`，`plugin/install/audit.go` 的 helper 上提到这里，原调用方改用；API：`audit.Audit(ctx, q store.Querier, actorID int64, action, targetType, targetID string, detail any) error`（actorID 0 = 系统，detail nil 写 `{}`，q 可为 pool 或 tx）、`audit.WithClientIP(ctx, ip)` / `audit.ClientIP(ctx)`、`audit.Context(c *gin.Context) context.Context`（= `WithClientIP(c.Request.Context(), c.ClientIP())`，handler 里用它替代 `c.Request.Context()` 即可）；IP 超过 64 字符截断）：账号 `account.create`（detail `{name, plugin_key, type}`）、`account.update`（`{fields:[...]}`：请求体里出现的字段名，不记值；`credentials` 只记 `credentials` 一个名，`proxy_url` 记 `proxy_url`）、`account.delete`（`{name}`）；原有的 `account.credentials.reveal`（detail `{}`）改用本包写入，因此也带 IP；代理 `proxy.create`（手工创建 detail `{auto:false, name, protocol, host, port}`，自动创建 `{auto:true, account_id}`）、`proxy.update`（`{fields:[...]}`，字段名同请求体，密码只记 `password`）、`proxy.delete`（`{name}`）。`target_type` 为 `account` / `proxy`，`target_id` 为十进制 id 字符串，`user_id` 为操作人，IP 取 `audit.WithClientIP`。账号、代理的写操作与审计行在同一事务。
 

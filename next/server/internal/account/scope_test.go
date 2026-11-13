@@ -167,4 +167,3 @@ func TestDeleteClearsScopedGrants(t *testing.T) {
 	require.NoError(t, e.db.Tx(ctx, func(tx pgx.Tx) error { return core.ClearScopeGrants(ctx, tx, 0, core.ScopeRefGroup, []int64{g}) }))
 	require.Equal(t, v, version())
 }
-
