@@ -900,7 +900,8 @@ func TestOperatorReclaimRoleDefineMigration(t *testing.T) {
 
 // 0098 keeps one super admin (decisions 1 and 2): a soft-deleted holder loses
 // the role, two undeleted holders (whatever their status) stop the
-// migration naming both, and afterwards a second superuser role or holder
+// migration naming both by id (never by email, the error goes to the
+// start-up log), and afterwards a second superuser role or holder
 // fails at commit while a transfer, deleting before it inserts, commits.
 func TestOneSuperAdminMigration(t *testing.T) {
 	db := testutil.DB(t)
@@ -938,8 +939,9 @@ func TestOneSuperAdminMigration(t *testing.T) {
 		` + grant + `'a@su';` + grant + `'disabled@su';` + grant + `'deleted@su'`)
 
 	_, err := migrate()
-	require.ErrorContains(t, err, fmt.Sprintf("several super admins: %d (a@su), %d (disabled@su);", id("a@su"), id("disabled@su")))
+	require.ErrorContains(t, err, fmt.Sprintf("several super admins: user ids %d, %d;", id("a@su"), id("disabled@su")))
 	require.ErrorContains(t, err, "sub2api admin recover-superadmin --email")
+	require.NotContains(t, err.Error(), "@su", "the start-up error names a user's email")
 
 	exec(`DELETE FROM user_roles WHERE user_id = (SELECT id FROM users WHERE email = 'disabled@su')`)
 	done, err := migrate()

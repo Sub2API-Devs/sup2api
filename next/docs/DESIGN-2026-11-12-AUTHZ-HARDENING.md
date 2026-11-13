@@ -177,7 +177,7 @@
 
 ## T18 设计 3.1.1、3.1.3、决策 1、2、W4-A4：超管全局唯一，删除 guardTarget
 
-- 改动：迁移 `0098_one_super_admin.sql`：删除软删除用户的超管行；未删除的超管持有者（不论启用、禁用）多于一个时 `RAISE EXCEPTION`，信息列出 user id 与邮箱和处理命令 `sub2api admin recover-superadmin --email <要保留的人>`；`roles_one_superuser` 部分唯一索引（最多一个超管角色）；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser`（提交时检查最多一个持有者，advisory 锁串行化并发，违反时 23505），移交的先删后插不受影响。不种角色、不依赖运行时 id，CLI 在迁移前后的库上都能用。iam 删除 `guardTarget`、`errProtectedTarget` 与别名 `assertTargetPermissionsWithinActor`：UpdateUser、DeleteUser、ResetSecurity 只经 `CanActOnUser` 判断目标（改他人密码时不再重复检查；改状态时仍在 `Bump` 之后复查一次）。CONTRACTS §43.6 同步。
+- 改动：迁移 `0098_one_super_admin.sql`：删除软删除用户的超管行；未删除的超管持有者（不论启用、禁用）多于一个时 `RAISE EXCEPTION`，信息列出 user id（期 4 P4F2 起不含邮箱）和处理命令 `sub2api admin recover-superadmin --email <要保留的人>`；`roles_one_superuser` 部分唯一索引（最多一个超管角色）；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser`（提交时检查最多一个持有者，advisory 锁串行化并发，违反时 23505），移交的先删后插不受影响。不种角色、不依赖运行时 id，CLI 在迁移前后的库上都能用。iam 删除 `guardTarget`、`errProtectedTarget` 与别名 `assertTargetPermissionsWithinActor`：UpdateUser、DeleteUser、ResetSecurity 只经 `CanActOnUser` 判断目标（改他人密码时不再重复检查；改状态时仍在 `Bump` 之后复查一次）。CONTRACTS §43.6 同步。
 - 影响对象：
   - 存量多个未删除超管的部署升级时迁移失败、服务不启动，须先按 T17 的运维步骤用 CLI 保留一个（生产核查只有 1 个超管，不受影响）。软删除用户残留的超管行被删除。
   - 非超管（含超管的访问密钥）修改、删除超管或重置其安全设置仍是 403，错误文案由 `only a super admin can modify a super admin` 变为 `you cannot modify a superuser`，并带 `details.superuser = true`；依赖旧文案的脚本需调整。
@@ -674,4 +674,11 @@
 - 测试：migrations `TestOperatorReclaimRoleDefineMigration`（新库不写不移版本；存量库收回 operator 的、保留 admin 与自定义角色的、一条审计、版本 +1；再跑无变化；非内置同名角色不动）。
 - 影响对象：存量库中持有内置 operator 角色的用户失去定义角色（新建、改权限、删除角色）的能力（生产 operator 0 人）。发布说明草稿：滚动发布窗口内旧节点不会恢复这条授予，但回滚到旧版本后 admin（0099）与 operator（0102）暂时都不能管理角色，由超管处理。
 - 回滚：迁移不可逆向执行；需要时由超管在角色页给 operator 重新勾选 `role:define`，或按 `authz.reclaim`（`via = migration 0102`）审计手工补回。
+
+## 期 4 P4F2：0098 多超管报错不再含用户邮箱
+
+- 改动：`0098_one_super_admin.sql` 的 `RAISE EXCEPTION` 只列 user id（`several super admins: user ids 3, 7; keep one with "sub2api admin recover-superadmin --email <the email of the one to keep>" …`）。迁移失败的信息原样成为启动失败的错误与日志，是唯一出处（启动代码不另行拼接用户信息）。处理时按 id 查邮箱：`SELECT id, email FROM users WHERE id IN (…)`。
+- 0098 尚未发布（只在 feat/authz-hardening），改文本会改变它的 checksum：已用旧 0098 跑过的测试库需重建；托管核心的迁移前缀校验（`managed_checks`）只在已发布版本之间比较，不受影响。
+- 测试：migrations `TestOneSuperAdminMigration` 断言错误列出两个 id、且不含 `@`。
+- 影响对象：无行为变化，仅错误信息。回滚：revert 这个提交（同样会改回 checksum，适用同一说明）。
 
