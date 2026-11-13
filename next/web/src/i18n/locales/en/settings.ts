@@ -105,7 +105,7 @@ export default {
       queue_fallback_max_waiting: 'Max queued per account when all are full',
       queue_fallback_wait_seconds: 'Longest wait when all accounts are full',
       media_download_max_mb: 'Media download cap',
-      claude_default_max_tokens: 'Claude default max_tokens'
+      claude_max_tokens: 'Claude default max_tokens (built-in parameter override)'
     },
     hints: {
       max_attempts: 'Accounts tried per request, including the first attempt (failover).',
@@ -118,20 +118,22 @@ export default {
       platform_hotpath_timeout_ms:
         'Timeout of the per-request platform calls that are not hooks: resolving the model before scheduling, and reading usage after the response was sent.',
       media_download_max_mb: 'Size cap of one http(s) image or other media file downloaded for a request converted to Gemini (MB).',
-      claude_default_max_tokens: 'max_tokens of a request converted to Anthropic when the client sets no output limit: by exact client model name, else the default row. The default row cannot be removed or renamed; at most 200 rows, values 0–1048576.'
+      claude_max_tokens:
+        'On, a request to an Anthropic account without max_tokens gets it from the table below; one that sets it is left as is. Parameter overrides of the account run after it and may change it. Off, only a request converted to Anthropic gets {fallback}, as the protocol requires.'
     },
     maxTokens: {
+      title: 'max_tokens per model',
+      hint: 'By exact client model name, else the default row; without a default row other models get none (a request converted to Anthropic still gets {fallback}). At most {models} rows, values {min}–{max}.',
       model: 'Model',
       tokens: 'max_tokens',
-      modelPlaceholder: 'Client model name',
+      modelPlaceholder: 'Client model name or default',
       add: 'Add model',
       remove: 'Remove {model}',
-      defaultLocked: 'The default row cannot be removed or renamed',
       errors: {
-        value: 'Every row needs a whole number from 0 to {max}',
-        model: 'Model names must be 1–200 characters',
+        value: 'Every row needs a whole number from {min} to {max}',
+        model: 'Model names must be 1–{nameLength} characters',
         duplicate: 'Duplicate model name',
-        too_many: 'At most {n} rows'
+        too_many: 'At most {models} rows'
       }
     },
     range: 'Range {min}–{max}.',
@@ -164,11 +166,9 @@ export default {
     },
     disconnectHint: {
       precharge: 'Stops the upstream request at once and bills the estimate pre-charged before the request.',
-      continue: 'Sends nothing more to the client but reads the upstream response to its end and bills the usage the upstream reports. The account slot stays in use meanwhile; a read that cannot finish is billed the pre-charge estimate. Default.',
+      continue:
+        'Sends nothing more to the client but reads the upstream response to its end and bills the usage the upstream reports. The account slot stays in use meanwhile, and the read is bounded by the upstream total and stream idle timeouts, as for any request; a read that cannot finish is billed the pre-charge estimate. Default.',
       free: 'Stops the upstream request at once and bills nothing. A client that disconnects after receiving the text pays no output cost, so use this only in internal or trusted environments.'
-    },
-    disconnectWait: 'Keep reading for at most',
-    disconnectWaitHint: 'An upstream response not finished by then is stopped and billed the pre-charge estimate ({min} to {max} seconds, default {default}).',
-    disconnectWaitInvalid: 'Enter an integer between {min} and {max}'
+    }
   }
 }
