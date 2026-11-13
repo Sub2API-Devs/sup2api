@@ -68,6 +68,6 @@ func runRecoverSuperAdmin(args []string) int {
 	if password != "" {
 		fmt.Printf("new password (shown once): %s\n", password)
 	}
-	fmt.Println("Running nodes apply the change within 30 seconds (authz version poll and status cache).")
+	fmt.Println("Signing in again works at once; running nodes end the old sessions and apply the new roles within 30 seconds (status cache and authz version poll).")
 	return 0
 }

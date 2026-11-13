@@ -173,7 +173,7 @@ func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, e
 	if err != nil || uid <= 0 {
 		return 0, core.ErrUnauthenticated.WithMessage("invalid token subject")
 	}
-	active, currentVersion, err := s.isActiveWithVersion(ctx, uid)
+	active, currentVersion, err := s.isActiveWithVersion(ctx, uid, claims.TokenVersion)
 	if err != nil {
 		return 0, err
 	}
@@ -187,12 +187,16 @@ func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, e
 	return uid, nil
 }
 
-func (s *Service) isActiveWithVersion(ctx context.Context, uid int64) (bool, int, error) {
+// isActiveWithVersion reads the user's status through the cache. seen is the
+// token_version a signed token carries: a cached entry older than that missed
+// a change this node was not told about (the server CLI has no bus), so it is
+// read again instead of rejecting the new login for up to statusCacheTTL.
+func (s *Service) isActiveWithVersion(ctx context.Context, uid int64, seen int) (bool, int, error) {
 	s.mu.Lock()
 	e, ok := s.status[uid]
 	epoch := s.statusEpoch
 	s.mu.Unlock()
-	if ok && time.Since(e.at) < statusCacheTTL {
+	if ok && time.Since(e.at) < statusCacheTTL && e.tokenVersion >= seen {
 		return e.active, e.tokenVersion, nil
 	}
 	var active bool

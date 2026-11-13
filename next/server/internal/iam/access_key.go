@@ -302,7 +302,7 @@ func (s *Service) VerifyAccessKey(ctx context.Context, raw, ip string) (core.Acc
 	if expiresAt != nil && !expiresAt.After(time.Now()) {
 		return id, core.ErrUnauthenticated.WithMessage("access key has expired")
 	}
-	active, _, err := s.isActiveWithVersion(ctx, id.UserID)
+	active, _, err := s.isActiveWithVersion(ctx, id.UserID, 0)
 	if err != nil {
 		return id, err
 	}

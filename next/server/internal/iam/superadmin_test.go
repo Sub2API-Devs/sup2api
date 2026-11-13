@@ -132,6 +132,35 @@ func TestRecoverSuperAdmin(t *testing.T) {
 	}
 }
 
+// The server CLI runs in its own process without a bus, so a running node's
+// status cache still holds the old token_version. A token signed after the
+// change carries a newer one: that node reads the status again instead of
+// rejecting the new sign-in until statusCacheTTL.
+func TestRecoverSuperAdminNewSignInWorksOnARunningNode(t *testing.T) {
+	e := setupAdmin(t)
+	s, ctx := e.svc, audit.WithSource(context.Background(), "cli")
+	root := mustLogin(t, s, adminEmail, adminPassword)
+	mustCreateUser(t, s, "target@example.com")
+	for _, p := range []*TokenPair{root, mustLogin(t, s, "target@example.com", adminPassword)} {
+		if _, err := s.VerifyAccessToken(ctx, p.AccessToken); err != nil { // fills the status cache
+			t.Fatal(err)
+		}
+	}
+
+	cli := New(Deps{DB: s.db, Config: e.cfg, Authz: authz.New(authz.Deps{DB: s.db})}) // as cmd/sub2api/admin.go
+	for _, email := range []string{"target@example.com", adminEmail} {
+		if _, err := cli.RecoverSuperAdmin(ctx, email, RecoverOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		for _, who := range []string{"target@example.com", adminEmail} {
+			p := mustLogin(t, s, who, adminPassword)
+			if _, err := s.VerifyAccessToken(ctx, p.AccessToken); err != nil {
+				t.Fatalf("after recovering %s, a new sign-in of %s is rejected: %v", email, who, err)
+			}
+		}
+	}
+}
+
 func TestRecoverSuperAdminUnknownUser(t *testing.T) {
 	s := setupAdmin(t).svc
 	if _, err := s.RecoverSuperAdmin(context.Background(), "nobody@example.com", RecoverOptions{}); !isCode(err, "not_found") {
