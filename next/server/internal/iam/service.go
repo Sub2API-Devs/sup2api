@@ -83,7 +83,9 @@ type statusEntry struct {
 
 var (
 	_ core.TokenVerifier     = (*Service)(nil)
+	_ core.SessionVerifier   = (*Service)(nil)
 	_ core.AccessKeyVerifier = (*Service)(nil)
+	_ core.StepUpVerifier    = (*Service)(nil)
 )
 
 // New creates the service. The authz service must be started before
@@ -164,28 +166,35 @@ func (s *Service) issueAccessToken(userID int64, tokenVersion int, family string
 // VerifyAccessToken implements core.TokenVerifier: checks signature and
 // expiry, then that the user still exists, is active, and token_version matches.
 func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, error) {
+	uid, _, err := s.VerifySession(ctx, token)
+	return uid, err
+}
+
+// VerifySession implements core.SessionVerifier: VerifyAccessToken that also
+// returns the token's login session.
+func (s *Service) VerifySession(ctx context.Context, token string) (int64, string, error) {
 	var claims accessClaims
 	_, err := jwt.ParseWithClaims(token, &claims, func(*jwt.Token) (any, error) { return s.cfg.JWTSecret, nil },
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 	if err != nil {
-		return 0, core.ErrUnauthenticated.WithCause(err)
+		return 0, "", core.ErrUnauthenticated.WithCause(err)
 	}
 	uid, err := strconv.ParseInt(claims.Subject, 10, 64)
 	if err != nil || uid <= 0 {
-		return 0, core.ErrUnauthenticated.WithMessage("invalid token subject")
+		return 0, "", core.ErrUnauthenticated.WithMessage("invalid token subject")
 	}
 	active, currentVersion, err := s.isActiveWithVersion(ctx, uid, claims.TokenVersion)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if !active {
-		return 0, core.ErrUnauthenticated.WithMessage("user is disabled or deleted")
+		return 0, "", core.ErrUnauthenticated.WithMessage("user is disabled or deleted")
 	}
 	// SEC-M1: reject tokens from before password change / logout-all / disable
 	if claims.TokenVersion != currentVersion {
-		return 0, core.ErrUnauthenticated.WithMessage("token has been invalidated")
+		return 0, "", core.ErrUnauthenticated.WithMessage("token has been invalidated")
 	}
-	return uid, nil
+	return uid, claims.Family, nil
 }
 
 // isActiveWithVersion reads the user's status through the cache. seen is the

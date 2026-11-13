@@ -24,13 +24,18 @@ type Router struct {
 	api    *gin.RouterGroup
 	tokens core.TokenVerifier
 	authz  core.Authorizer
+	stepUp core.StepUpVerifier
 	noKeys bool
+	scope  string // step-up scope of the StepUp view
 }
 
 // NewRouter mounts common middleware on engine and returns the /api/v1 router.
+// tokens spends the step-up proofs of StepUp routes when it implements
+// core.StepUpVerifier; otherwise those routes fail closed.
 func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authorizer) *Router {
 	engine.Use(RequestContext(), Recover())
-	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz}
+	stepUp, _ := tokens.(core.StepUpVerifier)
+	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz, stepUp: stepUp}
 }
 
 // Public registers an unauthenticated route.
@@ -38,17 +43,35 @@ func (r *Router) Public(method, path string, h ...gin.HandlerFunc) {
 	r.api.Handle(method, path, h...)
 }
 
+// Handle registers a route for any logged-in user or access key, without a
+// permission: the handler limits what the caller gets by itself. On a
+// SessionOnly view it is a route for login sessions only (CONTRACTS §80:
+// managing access keys and login sessions).
+func (r *Router) Handle(method, path string, h ...gin.HandlerFunc) {
+	r.handle(method, path, nil, h)
+}
+
 // Authed registers a route for any logged-in user, not for an access key: a
 // route without a permission has nothing to limit a key by, and most of them
 // manage how the user signs in (CONTRACTS §80).
 func (r *Router) Authed(method, path string, h ...gin.HandlerFunc) {
-	r.api.Handle(method, path, append(r.SessionOnly().auth(), h...)...)
+	r.SessionOnly().Handle(method, path, h...)
 }
 
 // AuthedRead registers a read-only route for any logged-in user or access key:
 // who the caller is and what they can see, under the key's own limits.
 func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
-	r.api.Handle(http.MethodGet, path, append(r.auth(), h...)...)
+	r.handle(http.MethodGet, path, nil, h)
+}
+
+// Self registers a route of the caller's own account, under one of the self
+// permissions (authz.SelfPermissionKeys) every signed-in user holds: a login
+// session always passes, an access key only when it was given perm.
+func (r *Router) Self(method, path, perm string, h ...gin.HandlerFunc) {
+	if !strings.HasPrefix(perm, "self:") {
+		panic("httpapi: Self with a permission outside the self module: " + perm)
+	}
+	r.Perm(method, path, perm, h...)
 }
 
 // SessionOnly returns a view of r whose routes refuse access keys; r itself
@@ -59,10 +82,23 @@ func (r *Router) SessionOnly() *Router {
 	return &v
 }
 
+// StepUp returns a view of r whose routes need, after their permission, a
+// step-up proof for scope bound to the request's operation (header
+// X-Verify-Proof, CONTRACTS §80.2): one the caller got from POST /me/verify
+// with the same session or access key. Without one they answer 403
+// verification_required. r itself is unchanged.
+func (r *Router) StepUp(scope string) *Router {
+	if scope == "" {
+		panic("httpapi: StepUp without a scope")
+	}
+	v := *r
+	v.scope = scope
+	return &v
+}
+
 // Perm registers a route requiring permission.
 func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
-	chain := append(r.auth(), r.require(permission))
-	r.api.Handle(method, path, append(chain, h...)...)
+	r.handle(method, path, r.require(permission), h)
 }
 
 // PermAny registers a route the caller may use with any one of keys, e.g.
@@ -74,7 +110,35 @@ func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...s
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")
 	}
-	r.api.Handle(method, path, append(r.auth(), r.requireAny(keys), handler)...)
+	r.handle(method, path, r.requireAny(keys), []gin.HandlerFunc{handler})
+}
+
+// handle registers a route: authentication, then check (the permission,
+// when there is one), then the step-up proof on a StepUp view, then h.
+func (r *Router) handle(method, path string, check gin.HandlerFunc, h []gin.HandlerFunc) {
+	chain := r.auth()
+	if check != nil {
+		chain = append(chain, check)
+	}
+	if r.scope != "" {
+		chain = append(chain, r.requireStepUp(r.scope))
+	}
+	r.api.Handle(method, path, append(chain, h...)...)
+}
+
+// requireStepUp spends the request's step-up proof on scope.
+func (r *Router) requireStepUp(scope string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if r.stepUp == nil {
+			Fail(c, core.ErrInternal.WithMessage("step-up verification is not available"))
+			return
+		}
+		if err := r.stepUp.ConsumeStepUp(c.Request.Context(), scope); err != nil {
+			Fail(c, err)
+			return
+		}
+		c.Next()
+	}
 }
 
 // Granted returns the permission keys the route middleware matched for the
@@ -119,8 +183,9 @@ func StampAuthzVersion(c *gin.Context, authz core.Authorizer) {
 }
 
 // Authenticate resolves the request's bearer token (a JWT or an access key)
-// and stores the caller in the request context. On failure it renders
-// unauthenticated and returns false.
+// and stores the caller in the request context, with the step-up proof the
+// request carries (core.WithStepUp). On failure it renders unauthenticated
+// and returns false.
 func Authenticate(c *gin.Context, tokens core.TokenVerifier) bool {
 	token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
 	if !ok || token == "" {
@@ -132,6 +197,7 @@ func Authenticate(c *gin.Context, tokens core.TokenVerifier) bool {
 		Fail(c, core.ErrUnauthenticated.WithCause(err))
 		return false
 	}
+	ctx = core.WithStepUp(ctx, c.GetHeader(core.HeaderVerifyProof), c.Request.Method+" "+c.Request.URL.Path)
 	c.Request = c.Request.WithContext(ctx)
 	return true
 }

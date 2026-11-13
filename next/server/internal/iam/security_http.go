@@ -22,13 +22,20 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Authed(http.MethodGet, "/me/two-factor", s.handleTwoFactor)
 	r.Authed(http.MethodPost, "/me/two-factor/setup", s.handleTwoFactorSetup)
 	r.Authed(http.MethodPost, "/me/two-factor/enable", s.handleTwoFactorEnable)
-	r.Authed(http.MethodPost, "/me/two-factor/disable", s.handleTwoFactorDisable)
-	r.Authed(http.MethodPost, "/me/two-factor/backup-codes", s.handleBackupCodes)
+	session := r.SessionOnly()
+	session.StepUp(core.StepUpSelf2FADisable).Handle(http.MethodPost, "/me/two-factor/disable", s.handleTwoFactorDisable)
+	session.StepUp(core.StepUpSelfBackupCodes).Handle(http.MethodPost, "/me/two-factor/backup-codes", s.handleBackupCodes)
 
 	r.Authed(http.MethodGet, "/me/passkeys", s.handlePasskeys)
-	r.Authed(http.MethodPost, "/me/passkeys/begin", s.handlePasskeyAddBegin)
+	session.StepUp(core.StepUpSelfPasskeyAdd).Handle(http.MethodPost, "/me/passkeys/begin", s.handlePasskeyAddBegin)
 	r.Authed(http.MethodPost, "/me/passkeys/finish", s.handlePasskeyAddFinish)
-	r.Authed(http.MethodDelete, "/me/passkeys/:id", s.handlePasskeyDelete)
+	r.Authed(http.MethodPatch, "/me/passkeys/:id", s.handlePasskeyRename)
+	session.StepUp(core.StepUpSelfPasskeyDelete).Handle(http.MethodDelete, "/me/passkeys/:id", s.handlePasskeyDelete)
+
+	// Step-up verification (§80.2): any caller, a session or an access key.
+	r.AuthedRead("/me/verify/methods", s.handleVerifyMethods)
+	r.Handle(http.MethodPost, "/me/verify/begin", s.handleVerifyBegin)
+	r.Handle(http.MethodPost, "/me/verify", s.handleVerify)
 
 	r.Authed(http.MethodGet, "/me/sessions", s.handleSessions)
 	r.Authed(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
@@ -41,8 +48,8 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Authed(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
 
 	// Removing someone's second factor leaves the account one password away,
-	// like resetting the password: the same permission, session only (D16).
-	r.Perm(http.MethodDelete, "/users/:id/security", "user:password:reset", s.handleResetSecurity)
+	// like resetting the password: the same permission and a step-up (D16).
+	r.StepUp(core.StepUpUserSecurityReset).Perm(http.MethodDelete, "/users/:id/security", "user:password:reset", s.handleResetSecurity)
 }
 
 func (s *Service) handleAccessKeys(c *gin.Context) {
@@ -197,31 +204,17 @@ func (s *Service) handleTwoFactorEnable(c *gin.Context) {
 }
 
 func (s *Service) handleTwoFactorDisable(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-		Code     string `json:"code"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	if err := s.DisableTwoFactor(audit.Context(c), actor(c), in.Password, in.Code, c.ClientIP()); err != nil {
-		failLogin(c, err)
+	if err := s.DisableTwoFactor(audit.Context(c), actor(c)); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.NoContent(c)
 }
 
 func (s *Service) handleBackupCodes(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-		Code     string `json:"code"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	codes, err := s.RegenerateBackupCodes(audit.Context(c), actor(c), in.Password, in.Code, c.ClientIP())
+	codes, err := s.RegenerateBackupCodes(audit.Context(c), actor(c))
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, gin.H{"backup_codes": codes})
@@ -237,15 +230,9 @@ func (s *Service) handlePasskeys(c *gin.Context) {
 }
 
 func (s *Service) handlePasskeyAddBegin(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	out, err := s.BeginPasskeyRegistration(c.Request.Context(), c.Request, actor(c), in.Password, c.ClientIP())
+	out, err := s.BeginPasskeyRegistration(c.Request.Context(), c.Request, actor(c))
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
@@ -316,15 +303,65 @@ func (s *Service) handleResetSecurity(c *gin.Context) {
 	if !ok {
 		return
 	}
-	// The body is optional: an operator resetting someone else sends none; a
-	// user resetting their own factors sends their confirmation.
-	var confirm SelfConfirmation
-	if c.Request.Body != nil && c.Request.ContentLength != 0 && !httpapi.BindJSON(c, &confirm) {
-		return
-	}
-	if err := s.ResetSecurity(audit.Context(c), actor(c), id, confirm, c.ClientIP()); err != nil {
-		failLogin(c, err)
+	if err := s.ResetSecurity(audit.Context(c), actor(c), id); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.NoContent(c)
+}
+
+func (s *Service) handlePasskeyRename(c *gin.Context) {
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.RenamePasskey(audit.Context(c), actor(c), id, in.Name)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleVerifyMethods(c *gin.Context) {
+	out, err := s.StepUpMethods(c.Request.Context(), actor(c), c.Query("scope"))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleVerifyBegin(c *gin.Context) {
+	var in struct {
+		Scope string `json:"scope"`
+	}
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.BeginStepUpPasskey(c.Request.Context(), c.Request, actor(c), in.Scope, c.ClientIP())
+	if err != nil {
+		failLogin(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleVerify(c *gin.Context) {
+	var in VerifyInput
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.VerifyStepUp(audit.Context(c), c.Request, actor(c), in, c.ClientIP())
+	if err != nil {
+		failLogin(c, err)
+		return
+	}
+	httpapi.OK(c, out)
 }

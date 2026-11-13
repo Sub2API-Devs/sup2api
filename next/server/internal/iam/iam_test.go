@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -196,15 +197,12 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 		t.Fatalf("refresh after logout: %v", err)
 	}
 
-	// Password change revokes refresh tokens and requires the old password.
+	// Password change revokes refresh tokens (the route verifies the caller).
 	p3 := mustLogin(t, s, adminEmail, adminPassword)
-	if err := s.ChangePassword(ctx, uid, "", "wrong", "new-password-1"); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong old password: %v", err)
-	}
-	if err := s.ChangePassword(ctx, uid, "", adminPassword, "short"); !isCode(err, "invalid_argument") {
+	if err := s.ChangePassword(ctx, uid, "", "short"); !isCode(err, "invalid_argument") {
 		t.Fatalf("short password: %v", err)
 	}
-	if err := s.ChangePassword(ctx, uid, "", adminPassword, "new-password-1"); err != nil {
+	if err := s.ChangePassword(ctx, uid, "", "new-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Refresh(ctx, p3.RefreshToken); err == nil {
@@ -257,7 +255,7 @@ func TestUserLifecycle(t *testing.T) {
 	// Disable: login and access tokens stop working.
 	pair := mustLogin(t, s, "alice@example.com", "password-1")
 	disabled := StatusDisabled
-	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}, testIP); err != nil || u.Status != StatusDisabled {
+	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}); err != nil || u.Status != StatusDisabled {
 		t.Fatalf("disable: %+v %v", u, err)
 	}
 	if _, err := s.Login(ctx, "alice@example.com", "password-1", testIP); !isCode(err, "permission_denied") {
@@ -274,13 +272,13 @@ func TestUserLifecycle(t *testing.T) {
 	}
 	active := StatusActive
 	name := "Alice B"
-	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &active, DisplayName: &name}, testIP); err != nil || u.DisplayName != "Alice B" {
+	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &active, DisplayName: &name}); err != nil || u.DisplayName != "Alice B" {
 		t.Fatalf("enable: %+v %v", u, err)
 	}
 	mustLogin(t, s, "alice@example.com", "password-1")
 
 	// Super admin protections.
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}, testIP); !isCode(err, "conflict") {
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}); !isCode(err, "conflict") {
 		t.Fatalf("self disable: %v", err)
 	}
 	if err := s.DeleteUser(ctx, root, root); !isCode(err, "conflict") {
@@ -290,7 +288,7 @@ func TestUserLifecycle(t *testing.T) {
 		t.Fatalf("admin deletes root: %v", err)
 	}
 	pw := "hijacked-password"
-	if _, err := s.UpdateUser(ctx, admin.ID, root, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
+	if _, err := s.UpdateUser(ctx, admin.ID, root, UpdateUserInput{Password: &pw}); !isCode(err, "permission_denied") {
 		t.Fatalf("admin resets root password: %v", err)
 	}
 	if _, err := s.SetUserRoles(ctx, admin.ID, admin.ID, []string{authz.RoleSuperAdmin}); !isCode(err, "permission_denied") {
@@ -345,6 +343,25 @@ type client struct {
 
 func (c client) do(method, path, token string, body any) (int, map[string]any) {
 	c.t.Helper()
+	return c.doProof(method, path, token, "", body)
+}
+
+// proof verifies for scope and operation with the fields of how (method,
+// password, code...) and returns the proof.
+func (c client) proof(token, scope, operation string, how map[string]any) string {
+	c.t.Helper()
+	body := map[string]any{"scope": scope, "context": operation}
+	maps.Copy(body, how)
+	code, out := c.do("POST", "/me/verify", token, body)
+	if code != 200 {
+		c.t.Fatalf("verify %s: %d %v", scope, code, out)
+	}
+	return out["data"].(map[string]any)["proof"].(string)
+}
+
+// doProof is do with a step-up proof (none when empty).
+func (c client) doProof(method, path, token, proof string, body any) (int, map[string]any) {
+	c.t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
 		_ = json.NewEncoder(&buf).Encode(body)
@@ -354,6 +371,9 @@ func (c client) do(method, path, token string, body any) (int, map[string]any) {
 	req.Header.Set("Accept-Language", "zh-CN")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if proof != "" {
+		req.Header.Set(core.HeaderVerifyProof, proof)
 	}
 	w := httptest.NewRecorder()
 	c.engine.ServeHTTP(w, req)
@@ -441,7 +461,12 @@ func TestHTTP(t *testing.T) {
 		t.Fatalf("ops lists users: %d %v", code, out)
 	}
 	// Delete needs only user:delete.
-	if code, out = c.do("DELETE", "/users/"+strconv.FormatInt(joeID, 10), ops, nil); code != 204 {
+	joePath := "/users/" + strconv.FormatInt(joeID, 10)
+	if code, out = c.do("DELETE", joePath, ops, nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("delete without a proof: %d %v", code, out)
+	}
+	proof := c.proof(ops, core.StepUpUserDelete, "DELETE /api/v1"+joePath, map[string]any{"method": "password", "password": "password-1"})
+	if code, out = c.doProof("DELETE", joePath, ops, proof, nil); code != 204 {
 		t.Fatalf("delete: %d %v", code, out)
 	}
 	if code, _ = c.do("GET", "/me", joe, nil); code != 401 {
@@ -484,7 +509,11 @@ func TestHTTP(t *testing.T) {
 	}
 	tok, rt = renew(data["refresh_token"].(string))
 	// Changing the password keeps the caller's own session.
-	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"old_password": adminPassword, "new_password": "another-pass-1"}); code != 204 {
+	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"new_password": "another-pass-1"}); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("change password without a proof: %d %v", code, out)
+	}
+	proof = c.proof(tok, core.StepUpSelfPassword, "PUT /api/v1/me/password", map[string]any{"method": "password", "password": adminPassword})
+	if code, out = c.doProof("PUT", "/me/password", tok, proof, map[string]any{"new_password": "another-pass-1"}); code != 204 {
 		t.Fatalf("change password: %d %v", code, out)
 	}
 	renew(rt)

@@ -1,0 +1,256 @@
+package iam
+
+import (
+	"context"
+	"fmt"
+	"maps"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+)
+
+// testOperation is the operation the service-level tests bind proofs to.
+const testOperation = "TEST /op"
+
+// withProof returns ctx acting as userID through a login session and
+// carrying a proof of scope for testOperation, as POST /me/verify issues one.
+func withProof(t *testing.T, s *Service, ctx context.Context, userID int64, scope string) context.Context {
+	t.Helper()
+	ctx = core.WithUserID(ctx, userID)
+	token, err := s.createFlow(ctx, flowStepUpProof, userID, proofPayload{Scope: scope, Operation: testOperation, Subject: stepUpSubject(ctx), Method: methodPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return core.WithStepUp(ctx, token, testOperation)
+}
+
+// noProof returns ctx acting as userID in a request without a proof.
+func noProof(ctx context.Context, userID int64) context.Context {
+	return core.WithStepUp(core.WithUserID(ctx, userID), "", testOperation)
+}
+
+func isVerificationRequired(err error) bool {
+	return core.AsError(err).Code == core.ErrVerificationRequired.Code
+}
+
+func methodsOf(t *testing.T, m *VerifyMethods) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, v := range m.Methods {
+		if v.Available {
+			out[v.Method] = "ok"
+		} else {
+			out[v.Method] = v.Reason
+		}
+	}
+	return out
+}
+
+// §8.1: a passkey or two-factor shuts the password out; the password-too
+// scopes ask for it besides; an access key cannot use a passkey.
+func TestStepUpMethodsPolicy(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	check := func(ctx context.Context, scope string, wantPassword bool, want map[string]string) {
+		t.Helper()
+		m, err := s.StepUpMethods(ctx, id, scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := methodsOf(t, m); m.PasswordRequired != wantPassword || !maps.Equal(got, want) {
+			t.Fatalf("%s: password_required=%v %v, want %v %v", scope, m.PasswordRequired, got, wantPassword, want)
+		}
+	}
+	if _, err := s.StepUpMethods(ctx, id, "no.such.scope"); !isCode(err, "invalid_argument") {
+		t.Fatalf("unknown scope: %v", err)
+	}
+	check(ctx, core.StepUpUserDelete, false, map[string]string{"passkey": "not_enrolled", "totp": "not_enrolled", "password": "ok"})
+	check(ctx, core.StepUpSuperAdminTransfer, true, map[string]string{"passkey": "not_enrolled", "totp": "not_enrolled", "password": "ok"})
+	enableTwoFactor(t, s, id)
+	check(ctx, core.StepUpUserDelete, false, map[string]string{"passkey": "not_enrolled", "totp": "ok", "password": "strong_method"})
+	check(ctx, core.StepUpSelfPassword, true, map[string]string{"passkey": "not_enrolled", "totp": "ok", "password": "strong_method"})
+	addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), id)
+	check(ctx, core.StepUpUserDelete, false, map[string]string{"passkey": "ok", "totp": "ok", "password": "strong_method"})
+	byKey := core.WithAccessKey(core.WithUserID(ctx, id), core.AccessKeyIdentity{UserID: id, KeyID: 1})
+	check(byKey, core.StepUpUserDelete, false, map[string]string{"passkey": "access_key", "totp": "ok", "password": "strong_method"})
+}
+
+func TestVerifyStepUpRefusesThePasswordWithTwoFactor(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s := e.svc
+	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	ctx := core.WithUserID(context.Background(), id)
+	in := VerifyInput{Scope: core.StepUpUserDelete, Context: testOperation, Method: methodPassword, Password: adminPassword}
+	if _, err := s.VerifyStepUp(ctx, nil, id, in, testIP); err != nil {
+		t.Fatalf("password without a second factor: %v", err)
+	}
+	if _, err := s.VerifyStepUp(ctx, nil, id, VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodPassword, Password: "wrong-password"}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("wrong password: %v", err)
+	}
+	secret, _ := enableTwoFactor(t, s, id)
+	clearLastStep(t, s, id)
+	if _, err := s.VerifyStepUp(ctx, nil, id, in, testIP); !isCode(err, "invalid_argument") || !strings.Contains(fmt.Sprint(core.AsError(err).Details), "unavailable") {
+		t.Fatalf("password with two-factor on: %v", err)
+	}
+	if _, err := s.VerifyStepUp(ctx, nil, id, VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodTOTP, Code: "000000"}, testIP); !isBadSecondFactor(err) {
+		t.Fatalf("wrong code: %v", err)
+	}
+	p, err := s.VerifyStepUp(ctx, nil, id, VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodTOTP, Code: codeAt(t, secret, time.Now())}, testIP)
+	if err != nil || p.Proof == "" || p.Scope != in.Scope || p.Context != in.Context || p.Method != methodTOTP || time.Until(p.ExpiresAt) > flowTTL {
+		t.Fatalf("code: %+v %v", p, err)
+	}
+	var failed int
+	if err := s.db.Pool.QueryRow(ctx, `SELECT failed_attempts FROM user_totp WHERE user_id = $1`, id).Scan(&failed); err != nil || failed != 0 {
+		t.Fatalf("failed attempts after a good code: %d %v", failed, err)
+	}
+	var n int
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'user.security_verify' AND user_id = $1 AND detail->>'scope' = $2`, id, in.Scope).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("audit rows: %d %v", n, err)
+	}
+}
+
+// A proof works once, for its scope, operation, user and session or key,
+// and for five minutes.
+func TestConsumeStepUpBindings(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s, base := e.svc, context.Background()
+	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	other := mustCreateUser(t, s, "other@example.com")
+	issue := func(ctx context.Context, userID int64, scope string) string {
+		t.Helper()
+		p, err := s.VerifyStepUp(core.WithUserID(ctx, userID), nil, userID, VerifyInput{Scope: scope, Context: testOperation, Method: methodPassword, Password: adminPassword}, testIP)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Proof
+	}
+	consume := func(ctx context.Context, userID int64, proof, operation, scope string) error {
+		return s.ConsumeStepUp(core.WithStepUp(core.WithUserID(ctx, userID), proof, operation), scope)
+	}
+	session := core.WithSession(base, "family-1")
+
+	proof := issue(session, id, core.StepUpUserDelete)
+	if err := consume(session, id, proof, testOperation, core.StepUpUserDelete); err != nil {
+		t.Fatalf("first use: %v", err)
+	}
+	if err := consume(session, id, proof, testOperation, core.StepUpUserDelete); !isVerificationRequired(err) {
+		t.Fatalf("replay: %v", err)
+	}
+	// Bound to the scope, the operation, the session and the user; a proof
+	// spent on the wrong one is gone (it was presented for something else).
+	for name, try := range map[string]func(string) error{
+		"another scope":     func(p string) error { return consume(session, id, p, testOperation, core.StepUpCredentialReveal) },
+		"another operation": func(p string) error { return consume(session, id, p, "DELETE /api/v1/users/9", core.StepUpUserDelete) },
+		"another session": func(p string) error {
+			return consume(core.WithSession(base, "family-2"), id, p, testOperation, core.StepUpUserDelete)
+		},
+		"an access key": func(p string) error {
+			byKey := core.WithAccessKey(base, core.AccessKeyIdentity{UserID: id, KeyID: 7})
+			return consume(byKey, id, p, testOperation, core.StepUpUserDelete)
+		},
+		"another user": func(p string) error { return consume(session, other, p, testOperation, core.StepUpUserDelete) },
+	} {
+		p := issue(session, id, core.StepUpUserDelete)
+		err := try(p)
+		if !isVerificationRequired(err) {
+			t.Fatalf("%s: %v", name, err)
+		}
+		details := core.AsError(err).Details
+		if details["scope"] == nil || details["context"] == nil || details["methods"] == nil {
+			t.Fatalf("%s: details %v", name, details)
+		}
+	}
+	// A proof of the access key works only through that key.
+	byKey := core.WithAccessKey(base, core.AccessKeyIdentity{UserID: id, KeyID: 7})
+	if err := consume(byKey, id, issue(byKey, id, core.StepUpUserDelete), testOperation, core.StepUpUserDelete); err != nil {
+		t.Fatalf("key's own proof: %v", err)
+	}
+	// Expired.
+	proof = issue(session, id, core.StepUpUserDelete)
+	if _, err := s.db.Pool.Exec(base, `UPDATE auth_flows SET expires_at = now() - interval '1 second' WHERE purpose = $1`, flowStepUpProof); err != nil {
+		t.Fatal(err)
+	}
+	if err := consume(session, id, proof, testOperation, core.StepUpUserDelete); !isVerificationRequired(err) {
+		t.Fatalf("expired: %v", err)
+	}
+	// No proof, and outside a console request.
+	if err := consume(session, id, "", testOperation, core.StepUpUserDelete); !isVerificationRequired(err) {
+		t.Fatalf("no proof: %v", err)
+	}
+	if err := s.ConsumeStepUp(core.WithUserID(base, id), core.StepUpUserDelete); !isVerificationRequired(err) {
+		t.Fatalf("no request: %v", err)
+	}
+	// One request spends one proof; later checks of the same scope pass.
+	ctx := core.WithStepUp(core.WithUserID(session, id), issue(session, id, core.StepUpUserDelete), testOperation)
+	for range 2 {
+		if err := s.ConsumeStepUp(ctx, core.StepUpUserDelete); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.ConsumeStepUp(ctx, core.StepUpCredentialReveal); !isVerificationRequired(err) {
+		t.Fatalf("another scope in the same request: %v", err)
+	}
+}
+
+func TestStepUpWithPasskey(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s := e.svc
+	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	ctx := core.WithSession(core.WithUserID(context.Background(), id), "family-1")
+	r := consoleRequest(consoleOrigin, consoleHost)
+	a := newAuthenticator(t, consoleOrigin, consoleHost)
+	if _, err := s.BeginStepUpPasskey(ctx, r, id, core.StepUpUserDelete, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("begin without a passkey: %v", err)
+	}
+	addPasskey(t, s, a, id)
+	byKey := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: id, KeyID: 3})
+	if _, err := s.BeginStepUpPasskey(byKey, r, id, core.StepUpUserDelete, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("begin through an access key: %v", err)
+	}
+	begin, err := s.BeginStepUpPasskey(ctx, r, id, core.StepUpUserDelete, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := VerifyInput{Scope: core.StepUpUserDelete, Context: testOperation, Method: methodPasskey, FlowToken: begin.FlowToken, Credential: a.get(t, begin)}
+	p, err := s.VerifyStepUp(ctx, r, id, in, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ConsumeStepUp(core.WithStepUp(ctx, p.Proof, testOperation), core.StepUpUserDelete); err != nil {
+		t.Fatal(err)
+	}
+	// The ceremony is used up.
+	in.Credential = a.get(t, begin)
+	if _, err := s.VerifyStepUp(ctx, r, id, in, testIP); err == nil {
+		t.Fatal("a ceremony verified twice")
+	}
+	// A passkey shuts the password out.
+	if _, err := s.VerifyStepUp(ctx, r, id, VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodPassword, Password: adminPassword}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("password with a passkey: %v", err)
+	}
+}
+
+func TestRenamePasskey(t *testing.T) {
+	t.Parallel()
+	k := newKeyEnv(t)
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	p := addPasskey(t, k.s, newAuthenticator(t, consoleOrigin, consoleHost), login.User.ID)
+	path := "/me/passkeys/" + strconv.FormatInt(p.ID, 10)
+	if code, out := k.call(login.AccessToken, "PATCH", path, map[string]any{"name": " Phone "}); code != 200 || out["data"].(map[string]any)["name"] != "Phone" {
+		t.Fatalf("rename: %d %v", code, out)
+	}
+	if code, out := k.call(mustLogin(t, k.s, "key-user@example.com", adminPassword).AccessToken, "PATCH", path, map[string]any{"name": "x"}); code != 404 {
+		t.Fatalf("someone else's: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "PATCH", path, map[string]any{"name": strings.Repeat("x", 101)}); code != 400 {
+		t.Fatalf("too long: %d %v", code, out)
+	}
+}

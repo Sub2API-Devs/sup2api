@@ -13,6 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 // familyOf reads the login session id out of an access token.
@@ -99,7 +100,7 @@ func TestChangePasswordEndsOtherSessionsKeepsCurrent(t *testing.T) {
 	s, ctx := e.svc, context.Background()
 	current := mustLogin(t, s, adminEmail, adminPassword)
 	other := mustLogin(t, s, adminEmail, adminPassword)
-	if err := s.ChangePassword(ctx, current.User.ID, familyOf(t, s, current.AccessToken), adminPassword, "another-password-1"); err != nil {
+	if err := s.ChangePassword(ctx, current.User.ID, familyOf(t, s, current.AccessToken), "another-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	renews(t, s, other, false)
@@ -127,7 +128,7 @@ func TestAdminPasswordResetBroadcasts(t *testing.T) {
 	if _, err := node2.VerifyAccessToken(ctx, p.AccessToken); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Password: &reset}, testIP); err != nil {
+	if _, err := s.UpdateUser(withProof(t, s, ctx, root, core.StepUpUserPasswordReset), root, u.ID, UpdateUserInput{Password: &reset}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := node2.VerifyAccessToken(ctx, p.AccessToken); !isCode(err, "unauthenticated") {
@@ -155,14 +156,14 @@ func TestChangePasswordAndStatusUpdateDoNotDeadlock(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range rounds {
-			errs <- s.ChangePassword(ctx, u.ID, "", pws[i%2], pws[(i+1)%2])
+			errs <- s.ChangePassword(ctx, u.ID, "", pws[(i+1)%2])
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		statuses := [2]string{StatusDisabled, StatusActive}
 		for i := range rounds {
-			_, err := s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &statuses[i%2]}, testIP)
+			_, err := s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &statuses[i%2]})
 			errs <- err
 		}
 	}()

@@ -4,6 +4,8 @@ import (
 	"context"
 	"strconv"
 	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 // Clearing someone's two-factor and passkeys takes user:password:reset, not
@@ -65,7 +67,11 @@ func TestResetSecurityNeedsPasswordReset(t *testing.T) {
 		denied(who, key.Key, "user:password:reset")
 	}
 
-	if code, out := k.call(resetter, "DELETE", target, nil); code != 204 {
+	if code, out := k.call(resetter, "DELETE", target, nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("holder without a proof: %d %v", code, out)
+	}
+	proof := k.proof(t, resetter, core.StepUpUserSecurityReset, "DELETE", target, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(resetter, proof, "DELETE", target, nil); code != 204 {
 		t.Fatalf("holder: %d %v", code, out)
 	}
 	if enrolled() {

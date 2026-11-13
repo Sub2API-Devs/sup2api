@@ -74,6 +74,13 @@ type AccessKeyVerifier interface {
 // access key, whose limits then travel in the returned context.
 func AuthenticateBearer(ctx context.Context, tokens TokenVerifier, token, ip string) (context.Context, int64, error) {
 	if !strings.HasPrefix(token, AccessKeyPrefix) {
+		if sv, ok := tokens.(SessionVerifier); ok {
+			uid, session, err := sv.VerifySession(ctx, token)
+			if err != nil {
+				return ctx, 0, err
+			}
+			return WithSession(WithUserID(ctx, uid), session), uid, nil
+		}
 		uid, err := tokens.VerifyAccessToken(ctx, token)
 		if err != nil {
 			return ctx, 0, err
