@@ -39,6 +39,9 @@ const (
 	StepUpPluginGrant        = "plugin.grant"
 	StepUpPublisherManage    = "publisher.manage"
 	StepUpSystemUpdate       = "system.update"
+	// StepUpHostInstall: installing or reaching code that runs on a host the
+	// core controls (the ccgateway controller and runtimes, SSH targets).
+	StepUpHostInstall = "host.install"
 	// StepUpSuperAdminIdentity is the super admin changing its own account
 	// through an access key (UserGuard, ActOnIdentity): any proof the request
 	// already spent covers it.

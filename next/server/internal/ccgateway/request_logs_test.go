@@ -275,7 +275,7 @@ func TestRequestLogsManagementRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, method := range []string{"GET", "PUT"} {
 		engine := gin.New()
-		auth := ccgRouteAuth{false}
+		auth := ccgRouteAuth{allowed: false}
 		(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 		req := httptest.NewRequest(method, "/api/v1/system/ccgateway/accounts/25/request-logs", strings.NewReader(`{"level":"summary"}`))
 		req.Header.Set("Authorization", "Bearer test")

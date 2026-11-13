@@ -66,7 +66,7 @@ type refusedRouteAuth struct {
 }
 
 // Running other code on the nodes takes a step-up proof (CONTRACTS §80.2);
-// reading and the update source do not.
+// so does changing the update source; reading does not.
 func TestCoreUpdateRoutesStepUp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -82,7 +82,7 @@ func TestCoreUpdateRoutesStepUp(t *testing.T) {
 		{"POST", "/system/nodes/1/disable", true},
 		{"POST", "/system/releases/import", true},
 		{"POST", "/system/upgrades/preflight", false},
-		{"PUT", "/system/update-source", false},
+		{"PUT", "/system/update-source", true},
 		{"GET", "/system/upgrades", false},
 	} {
 		req := httptest.NewRequest(tc.method, "/api/v1"+tc.path, nil)

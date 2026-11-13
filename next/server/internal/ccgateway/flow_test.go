@@ -38,7 +38,10 @@ type runtimeFixture struct {
 
 // keyAuth authenticates "Bearer u<id>" (plain "test" is user 1) and grants
 // each user the listed keys; users without an entry hold every key.
-type keyAuth struct{ keys map[int64][]string }
+type keyAuth struct {
+	testutil.StepUpPassed
+	keys map[int64][]string
+}
 
 func (a *keyAuth) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	if tok == "test" {

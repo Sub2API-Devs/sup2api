@@ -154,7 +154,7 @@ var coreModules = []coreModule{
 	}},
 	{"settings", lt("Settings", "设置"), []corePerm{
 		{key: "settings:read", en: "View settings", zh: "查看设置"},
-		{key: "settings:manage", en: "Manage settings", zh: "管理设置", sensitive: true},
+		{key: "settings:manage", en: "Manage settings", zh: "管理设置", sensitive: true, stepUp: true},
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
 		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},

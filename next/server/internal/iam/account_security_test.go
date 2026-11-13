@@ -1367,8 +1367,13 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list[0].Lost) != 0 {
 		t.Fatalf("lost = %+v, %v", list, err)
 	}
-	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
-		t.Fatalf("key with settings:manage: %d %v", code, out)
+	// Pointing the ccgateway at a host takes a host.install proof (R0).
+	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("key with settings:manage, no proof: %d %v", code, out)
+	}
+	hostProof := k.proof(t, key.Key, core.StepUpHostInstall, "PUT", "/system/ccgateway/remote-config", map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(key.Key, hostProof, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
+		t.Fatalf("key with settings:manage and a proof: %d %v", code, out)
 	}
 	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "verification_required" {
 		t.Fatalf("key with plugin:install, no proof: %d %v", code, out)

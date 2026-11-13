@@ -764,3 +764,13 @@
 - 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
 - 影响对象：新增只读接口；回滚：revert 这个提交。
 
+
+## 期 4 R0：settings:manage 守护的装码与拨号接口挂二次验证（决策“插件升级授权”p4s 交回后补充）
+
+- 改动：泄露的会话或带 `settings:manage` 的访问密钥原本可以把核心指向另一台主机、装另一份运行时或换更新源。新增 scope `host.install`（`core.StepUpHostInstall`，iam `stepUpScopes` 登记，不要求密码）。挂 `Router.StepUp`：
+  - ccgateway（`host.install`）：PUT `remote-config`（SSH 目标与凭据）、POST `remote-fingerprint`、`remote-test`（拨号）、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（装载或运行代码）。上传会话的创建与分片 PUT 不挂（只传字节、分片很多，装载那一步才要 proof），读取、`cleanup`、`purge`、`cli` 不挂。
+  - PUT `/system/update-source`：复用 `system.update`（与执行升级同一类：决定下一次升级运行的代码）。
+  - 目录 `settings:manage` 加 `stepUp` 展示标记（访问密钥选择器提示“使用时需二次验证”）。
+- 测试：ccgateway `TestHostInstallRoutesStepUp`（`testutil.StepUpRefused`，逐条断言哪些要、哪些不要）；updater `TestCoreUpdateRoutesStepUp` 增加 update-source；iam `TestFormerSessionOnlyPermissionsInAccessKeys`（带 `settings:manage` 的密钥改 remote-config：无 proof 403，带 `host.install` proof 200）；authz `TestCatalogFlaggedSets`。
+- 影响对象：控制台在 ccgateway 设置页、运行时安装与更新源设置时会弹出二次验证（S5 的 StepUpDialog 按 403 `verification_required` 自动处理）；脚本化调用需先 `POST /me/verify` 取 `host.install`/`system.update` proof。须与 S5 同版本发布。
+- 回滚：revert 这个提交。

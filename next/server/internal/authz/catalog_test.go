@@ -124,7 +124,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 	wantStepUp := []string{
 		"account:credential:view", "account:own:credential:view",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
-		"plugin:install", "proxy:manage", "publisher:manage",
+		"plugin:install", "proxy:manage", "publisher:manage", "settings:manage",
 		"system:update:execute", "system:update:recover", "user:delete", "user:password:reset",
 	}
 	// Decision D2: what only the super admin holds by default.

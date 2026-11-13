@@ -53,33 +53,40 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 		}
 		httpapi.OK(c, v.Public())
 	})
-	r.Perm("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
+	// Installing or reaching code on a host (the SSH target, the controller,
+	// the runtimes and their workers) takes a step-up proof each time
+	// (CONTRACTS §80.2): a leaked key must not point the core at another host
+	// or load another runtime.
+	host := r.StepUp(core.StepUpHostInstall)
+	host.Perm("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
 	// Host key probe for the SSH install method (§53.9).
-	r.Perm("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
+	host.Perm("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
 	// Controller installation over SSH or on this machine, then the
 	// connection to it (CONTRACTS §53.3 / §53.9).
-	r.Perm("POST", "/system/ccgateway/controller/install", "settings:manage", s.controllerInstall)
+	host.Perm("POST", "/system/ccgateway/controller/install", "settings:manage", s.controllerInstall)
 	// Runtime installation / upgrade over SSH (CONTRACTS §49.16) or through
 	// the control panel (§53.6).
 	r.Perm("GET", "/system/ccgateway/runtime", "settings:read", s.runtimeGet)
-	r.Perm("POST", "/system/ccgateway/runtime/install", "settings:manage", s.runtimeInstall)
+	host.Perm("POST", "/system/ccgateway/runtime/install", "settings:manage", s.runtimeInstall)
+	// Sending image bytes runs nothing (and goes in many chunks); loading
+	// the image is what takes the proof.
 	r.Perm("POST", "/system/ccgateway/runtime/uploads", "settings:manage", s.uploadCreate)
 	r.Perm("PUT", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadPut)
 	r.Perm("GET", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
 	r.Perm("DELETE", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
-	r.Perm("POST", "/system/ccgateway/runtime/uploads/:id/load", "settings:manage", s.uploadLoad)
+	host.Perm("POST", "/system/ccgateway/runtime/uploads/:id/load", "settings:manage", s.uploadLoad)
 	// The runtime images bundled in the plugin package (§53.10).
-	r.Perm("POST", "/system/ccgateway/runtime/bundled", "settings:manage", s.runtimeBundled)
+	host.Perm("POST", "/system/ccgateway/runtime/bundled", "settings:manage", s.runtimeBundled)
 	// Worker update in place, never recreating account containers (§53.7).
-	r.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
-	r.Perm("POST", "/system/ccgateway/runtimes/:key/worker", "settings:manage", s.runtimeWorker)
+	host.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
+	host.Perm("POST", "/system/ccgateway/runtimes/:key/worker", "settings:manage", s.runtimeWorker)
 	r.Perm("POST", "/system/ccgateway/runtime/cleanup", "settings:manage", s.runtimeCleanup)
 	// Runtimes of deleted accounts kept for their retention period.
 	r.Perm("GET", "/system/ccgateway/runtimes/retained", "settings:read", s.retainedRuntimes)
 	r.Perm("POST", "/system/ccgateway/runtimes/:key/purge", "settings:manage", s.runtimePurge)
 	// The shared-container endpoints (status, proxy, auth/*, remote-action)
 	// are gone: per-account runtimes are the only mode (§53.9).
-	r.Perm("POST", "/system/ccgateway/remote-test", "settings:manage", s.remoteTest)
+	host.Perm("POST", "/system/ccgateway/remote-test", "settings:manage", s.remoteTest)
 }
 func (s *Service) record(c *gin.Context, action string) { s.recordDetail(c, action, nil) }
 
