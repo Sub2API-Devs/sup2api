@@ -276,13 +276,10 @@ export const settingValue = (s: PluginSettings | null | undefined, key: string):
 
 /**
  * May read accounts of the console at any scope (all, own, groups, ids): a
- * caller who may not is not sent for a 403. A console before resource scopes
- * has no hasAction; there the own-level key still answers.
+ * caller who may not is not sent for a 403. Every console this plugin runs
+ * on (UI 3.15) has hasAction.
  */
-const canReadAccounts = () => {
-  const p = useModHost().permissions
-  return p.hasAction?.('account:read') ?? ['account:read', 'account:own:read'].some((k) => p.has(k))
-}
+const canReadAccounts = () => useModHost().permissions.hasAction?.('account:read') === true
 
 /** Ids one lookup request takes (the core's cap, CONTRACTS §96.1). */
 const LOOKUP_IDS = 100

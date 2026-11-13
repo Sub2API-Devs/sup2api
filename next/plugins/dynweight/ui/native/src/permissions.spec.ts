@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import type { PluginHost } from '@sub2api/host'
 
-// An own-level viewer (account:own:read with dynweight:read, no group:read
+// An own-level viewer (account:read:own with dynweight:read, no group:read
 // or account:read) opens the account list: the plugin asks nothing the core
 // refuses (no console 403s); a full-level viewer gets the names and the chip.
 const list = vi.fn(async () => ({ items: [{ id: 2, name: 'g' }], total: 1 }))
@@ -56,7 +56,7 @@ describe('DegradedBadge', () => {
   const props = { ids: null, setIds: () => {} }
 
   it('asks nothing and stays hidden without account:read', async () => {
-    held = ['account:own:read']
+    held = ['account:read:own']
     await fresh()
     const { default: DegradedBadge } = await import('./DegradedBadge.vue')
     const w = mount(DegradedBadge, { props })
