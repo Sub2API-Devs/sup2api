@@ -77,6 +77,18 @@ export interface Role {
   member_count?: number // deprecated alias
 }
 
+/** One role of GET /me/assignable-roles: on the caller's managed list (CONTRACTS §43.6). */
+export interface AssignableRole {
+  key: string
+  name: LText
+  builtin: boolean
+  /** What the role carries is within the caller: assigning it passes. */
+  grantable: boolean
+  missing?: string[]
+  missing_assignable?: string[]
+  missing_assign_custom?: boolean
+}
+
 export interface PermissionItem {
   key: string
   label: LText
