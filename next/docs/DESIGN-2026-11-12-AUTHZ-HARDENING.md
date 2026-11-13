@@ -19,7 +19,7 @@
 5. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
 6. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。2026-11-14 已按用户授权只读核查生产：生产从未安装 claude-oauth（plugins、plugin_versions 均无记录），publishers 仅 id 1 `sub2api`，现有 10 个插件都归它，首次安装 0.2.3 直接归 `sub2api`，**不需要处理**（其他部署仍按运维清单第 8 条核对）。
 7. **mailer 升到 0.1.2**：本分支改了 next/sdk（host.proto 等），mailer 0.1.1 重新打包内容会与生产已存的 0.1.1 不同，EnsureBuiltin 会保留旧包、拿不到新 SDK；因此 mailer 升一个 patch 版本（功能不变）。
-8. **跨域部署**：服务端需 `Access-Control-Expose-Headers: X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）。
+8. **跨域部署**：核心自己不发 CORS 头，由前置代理配置：`Access-Control-Expose-Headers` 要含 `X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）；`Access-Control-Allow-Headers` 要含 `X-Verify-Proof`，否则控制台带 proof 的重放过不了预检，所有要二次验证的操作（改密码、插件同意、镜像上传等，CONTRACTS §80.2）都会以网络错误失败。
 9. **旧写法不再接受**：8 个旧 own key（`account:own:<x>`、`proxy:own:<x>`）与 `role:manage` 由迁移改写后删除，服务端与控制台都只认规范写法（`account:read:own` 等、`role:define` + `role:assign`）。仍用旧写法调用 `PUT /roles/:id/permissions` 或新建访问密钥的脚本会得到 400 `unknown` 或 403 `missing`，要改成规范写法；`/me` 不再输出旧别名。
 10. **gateway 外壳不再有 tokenless 管理开关**：所有核心（含线上 0.1.284）都带管理令牌，本版本不换网关；以后换网关时旧配置里的 `allow_tokenless_management` / `SUB2API_ALLOW_TOKENLESS_MANAGEMENT` 被忽略，不影响启动。
 
