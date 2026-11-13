@@ -1,12 +1,15 @@
 import type { Directive, DirectiveBinding } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import type { PermRef } from '@/generated/permissions'
+
+type Value = PermRef | readonly PermRef[] | undefined
 
 /**
  * v-permission="'account:create'"            hide unless the user has it
  * v-permission="['a:read', 'b:read']"        hide unless the user has any
  * v-permission:disable="'account:delete'"    disable instead of hiding
  */
-function apply(el: HTMLElement, binding: DirectiveBinding<string | string[] | undefined>) {
+function apply(el: HTMLElement, binding: DirectiveBinding<Value>) {
   const ok = useAuthStore().has(binding.value)
   if (binding.arg === 'disable') {
     ;(el as HTMLButtonElement).disabled = !ok
@@ -23,7 +26,7 @@ function apply(el: HTMLElement, binding: DirectiveBinding<string | string[] | un
   }
 }
 
-export const vPermission: Directive<HTMLElement, string | string[] | undefined> = {
+export const vPermission: Directive<HTMLElement, Value> = {
   mounted: apply,
   updated: apply
 }

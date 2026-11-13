@@ -71,7 +71,7 @@ const rows = computed<HPRow[]>(() => {
     .map((hp) => {
       const risk = riskOf(hp.id, hp.risk)
       const required = requiredPermsOf(hp, risk)
-      const lacking = required.find((p) => !auth.has(p))
+      const lacking = required.find((p) => !auth.hasDynamic(p))
       return {
         ...hp,
         risk,

@@ -8,11 +8,12 @@ import { CCGATEWAY_PAGE, isPluginKey, pluginSettingsPath } from '@/views/plugins
 import { settingsLanding } from '@/views/settings/settingsNav'
 import { closeLayersOnBack } from './layerBack'
 import { deniedRoute } from './guard'
+import type { PermRef } from '@/generated/permissions'
 
 declare module 'vue-router' {
   interface RouteMeta {
     /** Required permission(s): any of them grants access. */
-    perm?: string | string[]
+    perm?: PermRef | PermRef[]
     /** i18n key of the page title. */
     title?: string
     /**

@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth'
+import { LEGACY_OWN, P, type PermRef, type ScopableKey } from '@/generated/permissions'
 
 // Ownership of accounts and proxies (CONTRACTS §21.1): an "all" key
 // (account:read, proxy:manage, ...) acts on every row, the matching "own" key
@@ -14,46 +15,49 @@ export interface Owned {
   created_by?: number | null
 }
 
+/** An action's (all-level, own-level) key pair; the own-level key is the alias /me still lists. */
+const pair = <K extends ScopableKey>(action: K) => [action, LEGACY_OWN[action]] as const
+
 /** Permission key pairs (all-level, own-level) of the owned resources. */
 export const ACCOUNT_KEYS = {
-  read: ['account:read', 'account:own:read'],
-  create: ['account:create', 'account:own:create'],
-  update: ['account:update', 'account:own:update'],
-  delete: ['account:delete', 'account:own:delete'],
-  test: ['account:test', 'account:own:test'],
-  reveal: ['account:credential:view', 'account:own:credential:view']
-} as const satisfies Record<string, readonly [string, string]>
+  read: pair(P.AccountRead),
+  create: pair(P.AccountCreate),
+  update: pair(P.AccountUpdate),
+  delete: pair(P.AccountDelete),
+  test: pair(P.AccountTest),
+  reveal: pair(P.AccountCredentialView)
+} as const
 
 /** Single keys that widen what an own-level caller may set on an account (CONTRACTS §21). */
 export const ACCOUNT_FIELD_KEYS = {
-  relay: 'account:relay',
-  groupBind: 'account:group:bind',
-  groupManage: 'group:manage',
-  settingsCustom: 'account:settings:custom'
+  relay: P.AccountRelay,
+  groupBind: P.AccountGroupBind,
+  groupManage: P.GroupManage,
+  settingsCustom: P.AccountSettingsCustom
 } as const
 
 export const PROXY_KEYS = {
-  read: ['proxy:read', 'proxy:own:read'],
-  manage: ['proxy:manage', 'proxy:own:manage']
-} as const satisfies Record<string, readonly [string, string]>
+  read: pair(P.ProxyRead),
+  manage: pair(P.ProxyManage)
+} as const
 
 /** Any of these opens the accounts page (menus, routes): the keys of its list, GET /accounts. */
-export const ACCOUNT_PAGE_PERMS: string[] = [...ACCOUNT_KEYS.read]
+export const ACCOUNT_PAGE_PERMS: PermRef[] = [...ACCOUNT_KEYS.read]
 /** Any of these opens the proxies page: the keys of GET /proxies. */
-export const PROXY_PAGE_PERMS: string[] = [...PROXY_KEYS.read]
+export const PROXY_PAGE_PERMS: PermRef[] = [...PROXY_KEYS.read]
 
 export function useOwnership() {
   const auth = useAuthStore()
 
   /** 'all' with the all-level key (or superuser), 'own' with only the own-level key, null with neither. */
-  function scope(allKey: string, ownKey: string): OwnerScope {
+  function scope(allKey: PermRef, ownKey: PermRef): OwnerScope {
     if (auth.has(allKey)) return 'all'
     if (auth.has(ownKey)) return 'own'
     return null
   }
 
   /** Whether the caller may act on `row` with either key. */
-  function canOn(row: Owned | null | undefined, allKey: string, ownKey: string): boolean {
+  function canOn(row: Owned | null | undefined, allKey: PermRef, ownKey: PermRef): boolean {
     const s = scope(allKey, ownKey)
     if (s === 'all') return true
     if (s === 'own') return isMine(row)
@@ -67,12 +71,12 @@ export function useOwnership() {
   }
 
   /** Same as canOn for a [allKey, ownKey] pair. */
-  function can(row: Owned | null | undefined, pair: readonly [string, string]): boolean {
+  function can(row: Owned | null | undefined, pair: readonly [PermRef, PermRef]): boolean {
     return canOn(row, pair[0], pair[1])
   }
 
   /** Same as scope for a [allKey, ownKey] pair. */
-  function scopeOf(pair: readonly [string, string]): OwnerScope {
+  function scopeOf(pair: readonly [PermRef, PermRef]): OwnerScope {
     return scope(pair[0], pair[1])
   }
 

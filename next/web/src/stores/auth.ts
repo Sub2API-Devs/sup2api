@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api, session } from '@sub2api/host'
 import type { Me, TokenResponse } from '@/api/types'
 import { getPasskey } from '@/utils/webauthn'
+import type { PermRef } from '@/generated/permissions'
 import { refreshShell } from './app'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -28,10 +29,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   })
 
-  function has(perm: string | string[] | undefined | null): boolean {
+  /** Whether the caller holds `perm`, or any of a list (an empty one passes); keys the code names. */
+  function has(perm: PermRef | readonly PermRef[] | undefined | null): boolean {
+    return hasDynamic(perm)
+  }
+
+  /** `has` for keys that come from data (route meta, plugin manifests, server responses). */
+  function hasDynamic(perm: string | readonly string[] | undefined | null): boolean {
     if (!perm || (Array.isArray(perm) && perm.length === 0)) return true
     if (me.value?.superuser) return true
-    const list = Array.isArray(perm) ? perm : [perm]
+    const list: readonly string[] = Array.isArray(perm) ? perm : [perm]
     return list.some((p) => permSet.value.has(p))
   }
 
@@ -127,6 +134,7 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired,
     permissionsEpoch,
     has,
+    hasDynamic,
     holds,
     login,
     loginSecondFactor,

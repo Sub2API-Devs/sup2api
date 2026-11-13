@@ -1125,6 +1125,28 @@
   - app：`TestManagedRuntime*` 走真实 `app.Run`，真实路由表自检通过。故意往白名单加一条不存在的路由，核心以 `route check: …` 失败。
 - 回滚：revert（纯代码）。
 
+## 期 4 T69：生成前端权限目录 permissions.ts 与 auth.has 类型化
+
+- 改动：
+  - `authz/tsgen.go` 的 `PermissionsTS()` 生成 `next/web/src/generated/permissions.ts`，内容见 CONTRACTS §3。生成物已是控制台的 prettier 风格。
+  - `cmd/sub2api` 新增子命令 `permissions-ts`，与 `schema-contract` 同一模式。
+  - golden 测试 `TestGeneratedPermissionsTS` 要求生成物与目录一致；`UPDATE_GOLDEN=1` 时重写文件。
+  - 前端：
+    - `auth.has(perm: PermRef | readonly PermRef[])` 与 `v-permission` 改为类型化，实现不变。
+    - 新增 `auth.hasDynamic(string | readonly string[])`，给服务端或插件提供的 key 用：插件桥 `permissions.has/any`、同意页的必需权限、插件设置权限、插件设置入口。
+    - 路由 meta `perm`、设置页 `Page.perm`、实体查找的 `permissions` 改为 `PermRef`。
+    - `useOwnership` 的 `ACCOUNT_KEYS`、`PROXY_KEYS`、`ACCOUNT_FIELD_KEYS` 与 `entities.ts` 的 `OWN_OR_ALL` 改为引用生成常量（`P` 与 `LEGACY_OWN`），导出名与取值不变。
+    - `quoteSubjects` 改用 `P`；`RolesView` 的角色 key 正则改用 `ROLE_KEY_PATTERN`。
+  - 类型化后 vue-tsc 没有报出拼写错误。
+- 与 plan.json 原 spec 的出入：
+  - 没有生成 `PAIRS`：own/all 已由范围取代，改为 `SCOPE_TYPE` + `LEGACY_OWN`。
+  - 没有生成 `PAGE_PERMS`：菜单可见性现在在启动时从路由表绑定（T68），生成器拿不到路由表，前端菜单本来就来自 `/me/menus`。
+  - 没有生成 TS 版 Implies：`auth.has` 的实现归 R8。
+  - 旧 own 别名保留为 `LEGACY_OWN` 与 `LegacyOwnKey`：`/me` 在 R2b 之前仍输出这些别名，现有前端靠它们判断“自己的”。R8 的 useScope 会改用规范 key。
+- 影响对象：无运行时行为变化；前端写错权限 key 会在类型检查阶段失败；核心目录变化后必须重新生成前端文件，否则 Go 测试失败。
+- 测试：authz `TestGeneratedPermissionsTS`、`TestPermissionsTSNames`；web `src/generated/permissions.spec.ts`；ConsentView spec 的 auth mock 补了 `hasDynamic`。
+- 回滚：revert（纯代码）。
+
 ## 期 4 资源范围（R0–R7）发布说明
 
 - 两步走，滚动发布：

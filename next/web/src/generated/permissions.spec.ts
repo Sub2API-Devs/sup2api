@@ -1,0 +1,28 @@
+import { describe, expect, it } from 'vitest'
+import { LEGACY_OWN, P, PERMISSIONS, ROLE_KEY_PATTERN, SCOPE_TYPE } from './permissions'
+
+// The generated catalog is consistent with itself (the Go golden test keeps it
+// in step with the core).
+describe('generated permissions', () => {
+  it('lists every key once, with metadata', () => {
+    const keys = Object.values(P)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(Object.keys(PERMISSIONS).sort()).toEqual([...keys].sort())
+    for (const meta of Object.values(PERMISSIONS)) {
+      for (const r of meta.requires) expect(keys).toContain(r)
+      expect(meta.description.en).not.toBe('')
+    }
+  })
+
+  it('pairs every scopable action with its former own-level alias', () => {
+    expect(Object.keys(LEGACY_OWN)).toEqual(Object.keys(SCOPE_TYPE))
+    expect(LEGACY_OWN[P.AccountRead]).toBe('account:own:read')
+    expect(PERMISSIONS[P.AccountUpdate].requires).toEqual([P.AccountRead])
+  })
+
+  it('matches role keys like the core', () => {
+    expect(ROLE_KEY_PATTERN.test('vip_ops')).toBe(true)
+    expect(ROLE_KEY_PATTERN.test('Ops')).toBe(false)
+    expect(ROLE_KEY_PATTERN.test('a')).toBe(false)
+  })
+})

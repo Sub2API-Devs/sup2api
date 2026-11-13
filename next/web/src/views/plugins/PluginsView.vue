@@ -76,7 +76,7 @@ function open(p: PluginSummary) {
 }
 
 function settingsPath(p: PluginSummary): string | undefined {
-  return p.status === 'awaiting_consent' ? undefined : consoleSettingsPath(p, perm => auth.has(perm))
+  return p.status === 'awaiting_consent' ? undefined : consoleSettingsPath(p, perm => auth.hasDynamic(perm))
 }
 
 function review(p: PluginSummary) {

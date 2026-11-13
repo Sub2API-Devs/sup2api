@@ -22,7 +22,7 @@ const emit = defineEmits<{ (e: 'saved'): void }>()
 const SETTINGS_ERROR_CODES = { reenter: 'plugins.settings.reenter' }
 const { t } = useI18n()
 const auth = useAuthStore()
-const canManage = computed(() => auth.has(['plugin:manage', ...(props.settings.permission ? [props.settings.permission] : [])]))
+const canManage = computed(() => auth.hasDynamic(['plugin:manage', ...(props.settings.permission ? [props.settings.permission] : [])]))
 
 const values = ref<Record<string, any>>({})
 const loaded = ref('')

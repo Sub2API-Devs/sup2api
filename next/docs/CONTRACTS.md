@@ -73,6 +73,17 @@
 - **二次验证重新引入（2026-11-13，权限加固期 4，用户决定照 new-api）**：只用于少数高危操作，按 scope 换短时一次性 proof（`X-Verify-Proof`），会话与访问密钥同一套，见 §80.2。上面这条只说明旧的 step-up 机制已删除。
 - 路由注册：`r.Public` / `r.Self` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可）/ `r.PermScoped(method, path, handler, actions...)`（任一动作的任意范围，handler 用 `core.Scope` 取范围，§21.0）
 - 路由表与启动自检（期 4 T68）：上面每个注册方法（含 `Handle`/`AuthedRead` 与 `SessionOnly`、`StepUp` 视图）都返回并记录一条 `httpapi.RouteSpec{Method, Path, Mode, Keys, Extra, PluginKeys, StepUp, NoAccessKey}`，`Router.Routes()` 列出全部。handler 自己额外做的放行检查（例如字段级的 `account:group:bind`）用 `.Uses(keys...)` 登记到 `Extra`，只为脱敏或补充展示做的检查不登记；检查插件声明的动态 key 的用 `.UsesPluginKeys()`。两者都只是登记，不改变授权。启动时 `httpapi.CheckRoutes` 检查三件事，任何一项失败核心拒绝启动：所有 `Keys`、`Extra` 都是核心目录（含 `self`）里的 key；`StepUp` scope 都是已知的二次验证 scope；不需要权限的路由（`Public`、`Handle`、`AuthedRead`）与 `app/routecheck.go` 的白名单完全一致：多了或少了都报错，访问方式（公开、任意登录者或访问密钥、只允许登录会话）不一致也报错。`Public` 不能在 `SessionOnly`、`StepUp` 视图上注册（panic）。插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不在路由表里。
+- 前端权限目录（期 4 T69）：`web/src/generated/permissions.ts` 由核心目录生成，内容包括：
+  - `P`：每个核心与 `self` 权限一个常量，名字由 key 转成驼峰。
+  - `SCOPE_TYPE`：可带范围的动作及其资源。
+  - `LEGACY_OWN`：可带范围动作的旧 own 别名，R2b 删除别名时随之删除。
+  - `PERMISSIONS`：每个 key 的 module、sensitive、stepUp、requires 和中英 description。
+  - `ROLE_KEY_PATTERN`。
+  - 类型 `PermKey`、`ScopedPermKey`、`LegacyOwnKey`、`PluginPermKey`、`PermRef`。
+
+  生成方式：`sub2api permissions-ts` 输出到 stdout，或 `UPDATE_GOLDEN=1 go test ./internal/authz -run TestGeneratedPermissionsTS` 直接写文件。golden 测试 `TestGeneratedPermissionsTS` 在文件过期时失败，所以 CI 能拦住。
+
+  前端用法：`auth.has` 与 `v-permission` 的参数类型是 `PermRef`，代码里写错 key 会类型检查失败；来自数据的 key（路由以外的插件 manifest、服务端响应、插件桥）用 `auth.hasDynamic(string)`，实现与 `has` 相同。路由 meta 的 `perm` 也是 `PermRef`。
 - 网关：由插件声明的端点按 `auth.headers` 读取 API Key；错误格式按端点的 `errorFormat`
 
 ## 4. 权限清单（核心）
