@@ -296,8 +296,8 @@ func TestRequestLogsPermissions(t *testing.T) {
 	outsider := f.user("outsider@test")
 	reader := f.user("reader@test")
 	updater := f.user("updater@test")
-	f.auth.keys[owner] = []string{"account:own:read", "account:own:update"}
-	f.auth.keys[outsider] = []string{"account:own:read", "account:own:update"}
+	f.auth.keys[owner] = []string{"account:read:own", "account:update:own"}
+	f.auth.keys[outsider] = []string{"account:read:own", "account:update:own"}
 	f.auth.keys[reader] = []string{"account:read"}
 	f.auth.keys[updater] = []string{"account:update"}
 	settings := f.user("settings@test")

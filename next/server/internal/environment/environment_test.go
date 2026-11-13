@@ -66,7 +66,7 @@ type env struct {
 	h     http.Handler
 	admin int64
 	user  int64
-	// ownRead holds account:own:read, ownCreate account:own:create only.
+	// ownRead holds account:read:own, ownCreate account:create:own only.
 	ownRead, ownCreate int64
 }
 
@@ -81,8 +81,8 @@ func setup(t *testing.T) *env {
 	engine := gin.New()
 	e.svc = New(db, e.bus, core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 900, core.EnvVarStreamingIdleTimeoutSeconds: 45})
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin, perms: map[int64][]string{
-		e.ownRead:   {"account:own:read", "account:own:update"},
-		e.ownCreate: {"account:own:create"},
+		e.ownRead:   {"account:read:own", "account:update:own"},
+		e.ownCreate: {"account:create:own"},
 	}}))
 	e.h = engine
 	return e

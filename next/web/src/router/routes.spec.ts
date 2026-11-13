@@ -129,7 +129,7 @@ describe('the CCGateway page', () => {
   })
 
   it('is not for a caller with neither', async () => {
-    auth.denied = ['settings:read', 'account:read', 'account:own:read']
+    auth.denied = ['settings:read', 'account:read', 'account:read:own']
     // From another page: a link to the open page is no navigation.
     await follow('/forbidden')
     expect(await follow(CCGATEWAY_PAGE)).toMatch(/^\/forbidden\?perm=settings:read/)
@@ -182,8 +182,8 @@ describe('the accounts and proxies pages', () => {
     auth.denied = ['account:read', 'proxy:read']
     expect(await follow('/accounts')).toBe('/accounts')
     expect(await follow('/proxies')).toBe('/proxies')
-    // account:own:create and proxy:own:manage are still held.
-    auth.denied.push('account:own:read', 'proxy:own:read')
+    // account:create:own and proxy:manage:own are still held.
+    auth.denied.push('account:read:own', 'proxy:read:own')
     expect(await follow('/accounts')).toMatch(/^\/forbidden\?perm=/)
     expect(await follow('/proxies')).toMatch(/^\/forbidden\?perm=/)
   })

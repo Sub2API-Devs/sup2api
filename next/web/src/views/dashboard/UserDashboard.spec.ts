@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn(async () => ({ items
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get: mocks.get, list: mocks.list } }))
 vi.mock('vue-router', () => ({ RouterLink: { props: ['to'], template: '<a><slot /></a>' } }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some((k) => mocks.perms.has(k)), hasAction: (a: string) => [a, a.replace(':', ':own:')].some((k) => mocks.perms.has(k)), balance: null, refreshBalance: vi.fn() })
+  useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some((k) => mocks.perms.has(k)), hasAction: (a: string) => [a, `${a}:own`].some((k) => mocks.perms.has(k)), balance: null, refreshBalance: vi.fn() })
 }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ theme: 'light', menus: [] }) }))
 vi.mock('@/components/stats/UsageCharts.vue', () => ({ default: { template: '<div />' } }))
@@ -22,7 +22,7 @@ describe('user dashboard accounts card (T81)', () => {
   })
 
   it('shows a supplier the accounts in its scope by status, without usage permissions', async () => {
-    mocks.perms = new Set(['account:own:read'])
+    mocks.perms = new Set(['account:read:own'])
     const w = mount(UserDashboard, { global: { plugins: [i18n] } })
     await flushPromises()
     expect(mocks.get).toHaveBeenCalledWith('/accounts/summary')

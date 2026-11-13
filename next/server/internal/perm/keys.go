@@ -1,8 +1,7 @@
 package perm
 
 // The core permission keys (authz catalog and the self module); one
-// constant per key, named after it (TestKeyConstantsMatchCatalog). The
-// former own-level keys are aliases, spelled only in legacyOwn.
+// constant per key, named after it (TestKeyConstantsMatchCatalog).
 const (
 	UserRead                      Key = "user:read"
 	UserCreate                    Key = "user:create"

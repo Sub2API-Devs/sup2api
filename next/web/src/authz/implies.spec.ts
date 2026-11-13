@@ -26,7 +26,7 @@ describe('shared permission vectors', () => {
 })
 
 describe('permissionIndex', () => {
-  const idx = permissionIndex(['account:read:own', 'account:update:group/12', 'account:update:group/12/account/5', 'proxy:own:manage', 'user:read', 'account:read:bad/1'])
+  const idx = permissionIndex(['account:read:own', 'account:update:group/12', 'account:update:group/12/account/5', 'proxy:manage:own', 'user:read', 'account:read:bad/1'])
 
   it('answers an action at any scope, and nothing for one not held', () => {
     expect(idx.hasAction('account:read')).toBe(true)
@@ -36,7 +36,8 @@ describe('permissionIndex', () => {
 
   it('keeps "every row" checks at every row', () => {
     expect(idx.has('account:read')).toBe(false)
-    expect(idx.has('account:own:read')).toBe(true)
+    expect(idx.has('account:read:own')).toBe(true)
+    expect(idx.has('account:own:read')).toBe(false)
     expect(idx.has('proxy:manage:own')).toBe(true)
     expect(idx.has('user:read')).toBe(true)
     expect(idx.has('nonsense:x:group/1')).toBe(false)

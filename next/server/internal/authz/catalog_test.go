@@ -74,8 +74,7 @@ func TestBuiltinWhitelistsAreCatalogKeys(t *testing.T) {
 }
 
 // Catalog invariants: a step-up permission is one worth flagging, and a
-// super-only one reaches no built-in role by default nor by inheriting from
-// a permission that is not super-only itself.
+// super-only one reaches no built-in role by default.
 func TestCatalogFlagInvariants(t *testing.T) {
 	t.Parallel()
 	for _, m := range slices.Concat(coreModules, []coreModule{selfModule}) {
@@ -89,11 +88,6 @@ func TestCatalogFlagInvariants(t *testing.T) {
 			for _, r := range builtinRoles {
 				if slices.Contains(r.defaultPermissions(), string(p.key)) {
 					t.Errorf("%s is superOnly but in the defaults of %s", p.key, r.key)
-				}
-			}
-			for _, from := range p.inherits {
-				if !slices.Contains(superOnlyKeys(), from) {
-					t.Errorf("%s is superOnly but inherits from %s, which is not", p.key, from)
 				}
 			}
 		}
@@ -118,7 +112,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		}
 	}
 	wantSensitive := []string{
-		"account:credential:view", "account:delete", "account:own:credential:view", "account:own:delete", "account:relay",
+		"account:credential:view", "account:delete", "account:relay",
 		"apikey:self:manage", "balance:adjust", "group:manage",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
 		"plugin:install", "plugin:manage", "plugin:uninstall",
@@ -128,7 +122,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
 	}
 	wantStepUp := []string{
-		"account:credential:view", "account:own:credential:view", "apikey:self:manage",
+		"account:credential:view", "apikey:self:manage",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
 		"plugin:install", "proxy:manage", "publisher:manage", "settings:manage",
 		"system:update:execute", "system:update:recover", "user:delete", "user:password:reset",
@@ -149,10 +143,9 @@ func TestCatalogFlaggedSets(t *testing.T) {
 }
 
 // Not parallel: it extends the package catalog while it runs. A new core
-// permission inheriting a split one reaches that one's holders once, the
-// built-in roles accepting it get it by default, and every such grant to an
-// existing role is audited.
-func TestSyncCoreInheritsAndAuditsGrants(t *testing.T) {
+// permission reaches the built-in roles accepting it by default, once, and
+// every such grant to an existing role is audited; other roles do not get it.
+func TestSyncCoreAuditsGrants(t *testing.T) {
 	db := testutil.DB(t)
 	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
@@ -162,16 +155,14 @@ func TestSyncCoreInheritsAndAuditsGrants(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec(`INSERT INTO permissions (key, module, label, source) VALUES ('legacy:split', 'legacy', '{"en":"x"}', 'core')`)
-	exec(`INSERT INTO roles (key, name) VALUES ('splitter', '{"en":"x"}')`)
-	custom := roleID(t, s, "splitter")
-	exec(`INSERT INTO role_permissions (role_id, permission_id) SELECT $1, id FROM permissions WHERE key = 'legacy:split'`, custom)
+	exec(`INSERT INTO roles (key, name) VALUES ('custom', '{"en":"x"}')`)
+	custom := roleID(t, s, "custom")
 
 	saved := coreModules
 	defer func() { coreModules = saved }()
 	coreModules = slices.Clone(coreModules)
 	i := coreModuleOrder["role"]
-	probe := corePerm{key: "role:probe", en: "Probe", zh: "探针", sensitive: true, stepUp: true, inherits: []string{"legacy:split"}}
+	probe := corePerm{key: "role:probe", en: "Probe", zh: "探针", sensitive: true, stepUp: true}
 	coreModules[i].perms = append(slices.Clone(coreModules[i].perms), probe)
 
 	type grant struct {
@@ -180,7 +171,7 @@ func TestSyncCoreInheritsAndAuditsGrants(t *testing.T) {
 	}
 	audited := func() map[grant]int {
 		t.Helper()
-		rows, err := db.Pool.Query(ctx, `SELECT target_id::bigint, detail->>'via', detail->'from' FROM audit_logs
+		rows, err := db.Pool.Query(ctx, `SELECT target_id::bigint, detail->>'via' FROM audit_logs
 WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL AND detail->>'key' = 'role:probe'`)
 		if err != nil {
 			t.Fatal(err)
@@ -189,25 +180,21 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 		out := map[grant]int{}
 		for rows.Next() {
 			var g grant
-			var from json.RawMessage
-			if err := rows.Scan(&g.role, &g.via, &from); err != nil {
+			if err := rows.Scan(&g.role, &g.via); err != nil {
 				t.Fatal(err)
-			}
-			if g.via == "inherit" && string(from) != `["legacy:split"]` {
-				t.Fatalf("inherit from = %s", from)
 			}
 			out[g]++
 		}
 		return out
 	}
 
-	want := map[grant]int{{custom, "inherit"}: 1}
+	want := map[grant]int{}
 	for _, r := range builtinRoles {
 		if r.accepts(probe) {
 			want[grant{roleID(t, s, r.key), "default"}] = 1
 		}
 	}
-	if len(want) < 2 {
+	if len(want) == 0 {
 		t.Fatal("no built-in role accepts role:probe by default")
 	}
 	for range 2 {
@@ -225,8 +212,8 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 		}
 	}
 	var held bool
-	if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = $1 AND p.key = 'role:probe')`, custom).Scan(&held); err != nil || !held {
-		t.Fatalf("inherited grant: %v, %v", held, err)
+	if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = $1 AND p.key = 'role:probe')`, custom).Scan(&held); err != nil || held {
+		t.Fatalf("a custom role got a new core permission: %v, %v", held, err)
 	}
 
 	mods, err := s.ListPermissions(ctx)
@@ -241,65 +228,6 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 	}
 	if !only["role:probe"] || only["role:read"] {
 		t.Fatalf("step_up: probe %v, role:read %v", only["role:probe"], only["role:read"])
-	}
-}
-
-// role:manage was split into role:define and role:assign (decision 3): the
-// first sync after the split gives a role holding role:manage both halves,
-// once, and keeps role:manage as a removed permission that grants nothing.
-// A built-in role gets only the halves its defaults have: the operator
-// role:assign, never role:define (decision D3), the admin both.
-func TestSyncCoreSplitsRoleManage(t *testing.T) {
-	t.Parallel()
-	db := testutil.DB(t)
-	ctx := context.Background()
-	exec := func(sql string) {
-		t.Helper()
-		if _, err := db.Pool.Exec(ctx, sql); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// The catalog before the split, with a custom role holding role:manage.
-	exec(`INSERT INTO permissions (key, module, label, source) VALUES ('role:manage', 'role', '{"en":"x"}', 'core')`)
-	exec(`INSERT INTO roles (key, name) VALUES ('delegator', '{"en":"x"}')`)
-	exec(`INSERT INTO roles (key, name, builtin) VALUES ('admin', '{"en":"x"}', true), ('operator', '{"en":"x"}', true)`)
-	exec(`INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key IN ('delegator', 'admin', 'operator') AND p.key = 'role:manage'`)
-
-	s := newService(t, db, newMemBus(), nil) // Start runs the first sync.
-	if err := s.SyncCore(ctx); err != nil {
-		t.Fatal(err)
-	}
-	role := roleID(t, s, "delegator")
-	var status string
-	var held, audited int
-	err := db.Pool.QueryRow(ctx, `SELECT
-    (SELECT status FROM permissions WHERE key = 'role:manage'),
-    (SELECT count(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
-        WHERE rp.role_id = $1 AND p.key IN ('role:define', 'role:assign')),
-    (SELECT count(*) FROM audit_logs WHERE action = 'authz.sync.grant' AND target_type = 'role'
-        AND target_id = $1::text AND detail->>'via' = 'inherit')`, role).Scan(&status, &held, &audited)
-	if err != nil || status != "removed" || held != 2 || audited != 2 {
-		t.Fatalf("status %q, held %d, audited %d: %v", status, held, audited, err)
-	}
-	uid := addUser(t, s, "delegator@x.com", "delegator")
-	mustCan(t, s, uid, "role:define", true)
-	mustCan(t, s, uid, "role:assign", true)
-	mustCan(t, s, uid, "role:manage", false)
-
-	halves := func(role string) (v string) {
-		t.Helper()
-		if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(string_agg(p.key, ',' ORDER BY p.key), '') FROM role_permissions rp
-    JOIN permissions p ON p.id = rp.permission_id JOIN roles r ON r.id = rp.role_id
-    WHERE r.key = $1 AND p.key IN ('role:define', 'role:assign')`, role).Scan(&v); err != nil {
-			t.Fatal(err)
-		}
-		return v
-	}
-	if got := halves(RoleOperator); got != "role:assign" {
-		t.Fatalf("operator holds %q", got)
-	}
-	if got := halves(RoleAdmin); got != "role:assign,role:define" {
-		t.Fatalf("admin holds %q", got)
 	}
 }
 
@@ -352,8 +280,7 @@ func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
 }
 
 // Every catalog key (core and self modules) has its perm constant and every
-// constant names a catalog key, once each (T66); the former own-level keys
-// are perm aliases, not constants.
+// constant names a catalog key, once each (T66).
 func TestKeyConstantsMatchCatalog(t *testing.T) {
 	t.Parallel()
 	file, err := parser.ParseFile(token.NewFileSet(), "../perm/keys.go", nil, 0)
@@ -381,9 +308,6 @@ func TestKeyConstantsMatchCatalog(t *testing.T) {
 	catalog := map[string]bool{}
 	for _, m := range append(slices.Clone(coreModules), selfModule) {
 		for _, p := range m.perms {
-			if _, legacy := perm.LegacyOwnKeys()[string(p.key)]; legacy {
-				continue
-			}
 			catalog[string(p.key)] = true
 			if constants[string(p.key)] == "" {
 				t.Errorf("%s has no perm constant", p.key)
@@ -398,27 +322,20 @@ func TestKeyConstantsMatchCatalog(t *testing.T) {
 }
 
 // Every listed permission explains itself in both languages, and its soft
-// dependencies are listed catalog keys: never itself, a deprecated or self
-// key, and of the same resource when both take a scope (the editor
+// dependencies are listed catalog keys: never itself or a self key, and of the same resource when both take a scope (the editor
 // suggests the same scope).
 func TestCatalogDescriptionsAndRequires(t *testing.T) {
 	t.Parallel()
 	for _, m := range slices.Concat(coreModules, []coreModule{selfModule}) {
 		for _, p := range m.perms {
-			if p.deprecated {
-				if p.desc != nil || p.requires != nil {
-					t.Errorf("deprecated %s has a description or requires", p.key)
-				}
-				continue
-			}
 			if en, zh := p.desc.Get("en"), p.desc.Get("zh"); en == "" || zh == "" || en == zh {
 				t.Errorf("%s description = %v", p.key, p.desc)
 			}
 			for _, k := range p.requires {
-				r, ok := corePermByKey(string(k))
+				_, ok := corePermByKey(string(k))
 				_, self := selfKeys[string(k)]
 				switch {
-				case !ok || r.deprecated || self || k == p.key:
+				case !ok || self || k == p.key:
 					t.Errorf("%s requires %s, not a listed catalog key", p.key, k)
 				case perm.ScopeType(p.key) != "" && perm.ScopeType(k) != "" && perm.ScopeType(p.key) != perm.ScopeType(k):
 					t.Errorf("%s requires %s of another resource", p.key, k)

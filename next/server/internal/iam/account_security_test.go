@@ -925,7 +925,17 @@ func (k *keyEnv) grantRole(t *testing.T, userID int64, key string, perms ...stri
 		t.Fatal(err)
 	}
 	for _, p := range perms {
-		if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id) SELECT $1, id FROM permissions WHERE key = $2`, id, p); err != nil {
+		pat, err := perm.Parse(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sql := `INSERT INTO role_permissions (role_id, permission_id) SELECT $1, id FROM permissions WHERE key = $2`
+		args := []any{id, string(pat.Action)}
+		if scope := pat.Suffix(); scope != "" {
+			sql = `INSERT INTO role_permission_scopes (role_id, permission_id, scope) SELECT $1, id, $3 FROM permissions WHERE key = $2`
+			args = append(args, scope)
+		}
+		if _, err := k.s.db.Pool.Exec(ctx, sql, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1338,7 +1348,7 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	former := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
 		"plugin:install", "plugin:uninstall", "plugin:grant:high", "plugin:grant:critical", "plugin:grant:db_schema_unconfined",
 		"publisher:manage", "system:update:execute", "system:update:recover",
-		"account:credential:view", "account:own:credential:view"}
+		"account:credential:view", "account:credential:view:own"}
 	// A stand-in for the plugin upload route, guarded the same way.
 	k.r.StepUp(core.StepUpPluginInstall).Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
@@ -1353,7 +1363,7 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 		}
 	}
 	for _, p := range former {
-		// The former own-level key is offered as its action (with a scope).
+		// A scoped key is offered as its action.
 		if c, _ := perm.Parse(p); !offered[string(c.Action)] {
 			t.Fatalf("%s is not offered to access keys", p)
 		}
@@ -1387,14 +1397,14 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 }
 
 // An access key's scopes are within its user's (CONTRACTS §21.0, R6): a key
-// wider than the user is refused at creation, its keys are stored canonical
-// (with the former own-level spelling for older cores) and listed
-// canonical, and a key stored before scopes existed narrows at use to the
-// user's scope of each action.
+// wider than the user is refused at creation (the former own-level spelling
+// names no permission), its keys are stored and listed canonical, and a key
+// stored before scopes existed narrows at use to the user's scope of each
+// action.
 func TestAccessKeyScopes(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
-	k.grantRole(t, k.userID, "seller", "account:own:read", "account:own:update", "proxy:own:manage")
+	k.grantRole(t, k.userID, "seller", "account:read:own", "account:update:own", "proxy:manage:own")
 	for _, wide := range []string{"account:read", "account:update:group/3", "proxy:manage:proxy/1"} {
 		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "w", Permissions: []string{wide}})
 		var ce *core.Error
@@ -1405,7 +1415,10 @@ func TestAccessKeyScopes(t *testing.T) {
 	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "bad", Permissions: []string{"user:read:own"}}); errCodeOf(err) != "invalid_argument" {
 		t.Fatalf("invalid key: %v", err)
 	}
-	key := k.createKey(t, k.userID, "account:own:read", "proxy:manage:own")
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "old", Permissions: []string{"account:own:read"}}); errCodeOf(err) != "permission_denied" {
+		t.Fatalf("former own-level key: %v", err)
+	}
+	key := k.createKey(t, k.userID, "account:read:own", "proxy:manage:own", "account:read:own")
 	if fmt.Sprint(key.Permissions) != "[account:read:own proxy:manage:own]" {
 		t.Fatalf("listed = %v", key.Permissions)
 	}
@@ -1413,7 +1426,7 @@ func TestAccessKeyScopes(t *testing.T) {
 	if err := k.s.db.Pool.QueryRow(ctx, `SELECT permissions FROM user_access_keys WHERE id = $1`, key.ID).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(stored) != "[account:own:read account:read:own proxy:manage:own proxy:own:manage]" {
+	if fmt.Sprint(stored) != "[account:read:own proxy:manage:own]" {
 		t.Fatalf("stored = %v", stored)
 	}
 	// A group-range user's key takes a subset of its groups.

@@ -15,7 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -426,10 +425,8 @@ func (s *Service) GetMe(ctx context.Context, userID int64) (*Me, error) {
 			return nil, err
 		}
 	} else {
-		// Canonical keys (account:read:own, account:update:group/12…), and
-		// for one minor version the former own-level spelling of own scopes
-		// for plugin pages that check it (R2a).
-		me.Permissions = perm.WithLegacyOwn(set.KeyList())
+		// Canonical keys (account:read:own, account:update:group/12…).
+		me.Permissions = set.KeyList()
 	}
 	sort.Strings(me.Permissions)
 	return me, nil

@@ -57,7 +57,7 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 		return 1, nil
 	case "nobody":
 		return 2, nil
-	case "owner": // account:own:* (see accounts)
+	case "owner": // account:*:own (see accounts)
 		return 3, nil
 	case "plain": // no account key
 		return 4, nil

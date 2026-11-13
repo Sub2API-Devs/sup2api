@@ -63,9 +63,8 @@ func normalizeAccessKeyName(name string) (string, error) {
 
 // grantablePermissions checks a key's permissions against what the user holds
 // right now, the rule of §80: a key is a subset of its user, scope by scope.
-// It returns them canonical, sorted, without duplicates, and with the former
-// own-level spelling of own scopes for cores of the previous version
-// (perm.WithLegacyOwn, R2a). A superuser may choose any active permission.
+// It returns them canonical, sorted, without duplicates. A superuser may
+// choose any active permission.
 func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted []string) ([]string, error) {
 	if len(wanted) == 0 {
 		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "required", Message: "choose at least one permission"})
@@ -101,7 +100,7 @@ func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted
 			"an access key can only have permissions you hold",
 			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": missing})
 	}
-	return perm.WithLegacyOwn(out), nil
+	return out, nil
 }
 
 func (s *Service) lostPermissions(ctx context.Context, userID int64, keys []*AccessKey) error {
@@ -124,11 +123,7 @@ const accessKeyColumns = `id, name, token_hint, permissions, expires_at, last_us
 
 func scanAccessKey(row pgx.Row) (*AccessKey, error) {
 	k := &AccessKey{}
-	err := row.Scan(&k.ID, &k.Name, &k.Hint, &k.Permissions, &k.ExpiresAt, &k.LastUsedAt, &k.LastUsedIP, &k.CreatedAt)
-	// Shown canonical: the former own-level spelling kept for older cores
-	// (perm.WithLegacyOwn) is the same grant.
-	k.Permissions = perm.CanonicalSet(k.Permissions)
-	return k, err
+	return k, row.Scan(&k.ID, &k.Name, &k.Hint, &k.Permissions, &k.ExpiresAt, &k.LastUsedAt, &k.LastUsedIP, &k.CreatedAt)
 }
 
 // AccessKeys lists the user's keys.

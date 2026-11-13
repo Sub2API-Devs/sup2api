@@ -124,8 +124,8 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	ctx := context.Background()
 	authz.keys[e.uid] = []string{"account:create", "account:update", "account:read"}
 	owner, stranger, reader := e.addUser("owner@x"), e.addUser("stranger@x"), e.addUser("reader@x")
-	authz.keys[owner] = []string{"account:own:update", "account:own:read", "account:own:delete"}
-	authz.keys[stranger] = []string{"account:own:update"}
+	authz.keys[owner] = []string{"account:update:own", "account:read:own", "account:delete:own"}
+	authz.keys[stranger] = []string{"account:update:own"}
 	authz.keys[reader] = []string{"account:read"}
 	settings := e.addUser("settings@x")
 	authz.keys[settings] = []string{"settings:read", "settings:manage"}

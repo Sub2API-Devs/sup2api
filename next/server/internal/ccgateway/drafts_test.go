@@ -83,7 +83,7 @@ func TestDraftLifecycle(t *testing.T) {
 	// Drafts belong to creating accounts: the update keys open none of the
 	// draft routes (re-authorization runs on the account's own runtime).
 	updater := f.user("updater@x")
-	f.auth.keys[updater] = []string{"account:update", "account:own:update"}
+	f.auth.keys[updater] = []string{"account:update", "account:update:own"}
 	for _, r := range [][2]string{{"POST", "/system/ccgateway/drafts"}, {"PUT", base}, {"DELETE", base}, {"GET", base + "/status"}, {"POST", base + "/sync"}} {
 		if code, out = f.request(updater, r[0], r[1], `{}`); code != 403 {
 			t.Fatalf("updater %s %s: %d %v", r[0], r[1], code, out)
@@ -156,8 +156,8 @@ func TestDraftCreateValidatesTheProxy(t *testing.T) {
 	ctl := newFakeController(t)
 	f := newRuntimeFixture(t, ctl.ServeHTTP)
 	own, ownNoProxy, all := f.user("own@x"), f.user("own2@x"), f.user("all@x")
-	f.auth.keys[own] = []string{"account:own:create", "proxy:own:read"}
-	f.auth.keys[ownNoProxy] = []string{"account:own:create"}
+	f.auth.keys[own] = []string{"account:create:own", "proxy:read:own"}
+	f.auth.keys[ownNoProxy] = []string{"account:create:own"}
 	f.auth.keys[all] = []string{"account:create"}
 	mineProxy, otherProxy := f.proxy(&own), f.proxy(nil)
 	disabled := f.proxy(nil)
@@ -380,7 +380,7 @@ func TestDraftCreateLimit(t *testing.T) {
 	ctl := newFakeController(t)
 	f := newRuntimeFixture(t, ctl.ServeHTTP)
 	owner, other, admin := f.user("owner@x"), f.user("other@x"), f.user("admin@x")
-	f.auth.keys[owner] = []string{"account:own:create"}
+	f.auth.keys[owner] = []string{"account:create:own"}
 	f.auth.keys[other] = []string{"account:create"}
 	f.auth.keys[admin] = []string{"settings:manage"}
 	create := func(uid int64) (int, map[string]any) {
@@ -428,7 +428,7 @@ func TestDraftCreateLimitConcurrent(t *testing.T) {
 	ctl := newFakeController(t)
 	f := newRuntimeFixture(t, ctl.ServeHTTP)
 	owner := f.user("owner@x")
-	f.auth.keys[owner] = []string{"account:own:create"}
+	f.auth.keys[owner] = []string{"account:create:own"}
 	const n = 12
 	codes := make(chan int, n)
 	var wg sync.WaitGroup

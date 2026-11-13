@@ -56,7 +56,6 @@ func TestScopedGrantsAndManagement(t *testing.T) {
 		{a, []string{"account:delete:group/12"}, []string{"account:delete:group/12"}},
 		{star, []string{"account:update:group/12", "account:update:group/*/account/5"}, nil},
 		{star, []string{"account:update:account/5"}, []string{"account:update:account/5"}},
-		{own, []string{"account:own:update"}, nil},
 		{own, []string{"account:update:own"}, nil},
 		{own, []string{"account:update:group/1"}, []string{"account:update:group/1"}},
 	} {
@@ -71,7 +70,7 @@ func TestScopedGrantsAndManagement(t *testing.T) {
 	}
 
 	// Audits name the canonical keys, whatever spelling was sent.
-	spelled, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "spelled", Name: lt("s", "s"), PermissionKeys: []string{"account:own:read", "account:update:group/12/account/*"}})
+	spelled, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "spelled", Name: lt("s", "s"), PermissionKeys: []string{"account:read:own", "account:update:group/12/account/*"}})
 	require.NoError(t, err)
 	var detail string
 	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT detail->>'permission_keys' FROM audit_logs WHERE action = 'role.create' AND target_id = $1`, fmt.Sprint(spelled.ID)).Scan(&detail))

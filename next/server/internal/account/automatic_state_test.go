@@ -128,7 +128,7 @@ func TestAccountAutoDisablePolicy(t *testing.T) {
 	path := "/accounts/auto-disable"
 	status, _ := e.do("GET", path, nil)
 	require.Equal(t, 403, status)
-	for _, permission := range []string{"account:create", "account:own:create", "account:update", "account:own:update"} {
+	for _, permission := range []string{"account:create", "account:create:own", "account:update", "account:update:own"} {
 		authz.keys[e.uid] = []string{permission}
 		status, result := e.do("GET", path, nil)
 		require.Equal(t, 200, status, permission)

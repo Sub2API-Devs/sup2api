@@ -85,19 +85,3 @@ func TestImpliesPreorder(t *testing.T) {
 		}
 	}
 }
-
-func TestLegacyOwnKeys(t *testing.T) {
-	t.Parallel()
-	if len(LegacyOwnKeys()) != 8 {
-		t.Fatalf("legacy keys = %v", LegacyOwnKeys())
-	}
-	for old, k := range LegacyOwnKeys() {
-		p, err := Parse(string(k))
-		if err != nil || !p.Scope.Own || LegacyOwnKey(p.Action) != old || ScopeType(p.Action) == "" {
-			t.Errorf("%s → %s: %+v %v", old, k, p, err)
-		}
-	}
-	if LegacyOwnKey(UserRead) != "" {
-		t.Error("user:read has a legacy own key")
-	}
-}

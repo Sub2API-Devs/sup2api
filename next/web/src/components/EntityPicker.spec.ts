@@ -11,7 +11,7 @@ import { resetEntityLookups, type EntityItem } from './entity/lookup'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), denied: [] as string[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: mocks.get } }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ has: (perm: string[]) => !perm.length || perm.some((p) => !mocks.denied.includes(p)), hasAction: (a: string) => [a, a.replace(':', ':own:')].some((p) => !mocks.denied.includes(p)) })
+  useAuthStore: () => ({ has: (perm: string[]) => !perm.length || perm.some((p) => !mocks.denied.includes(p)), hasAction: (a: string) => [a, `${a}:own`].some((p) => !mocks.denied.includes(p)) })
 }))
 
 enableAutoUnmount(afterEach)
@@ -301,7 +301,7 @@ describe('EntityPicker value', () => {
     // A form item without a label names nothing.
     expect(field({}).get('input').attributes('aria-label')).toBe('No proxy')
     // The text box of a caller without the lookup likewise.
-    mocks.denied = ['proxy:read', 'proxy:own:read']
+    mocks.denied = ['proxy:read', 'proxy:read:own']
     const box = field({}, 'Probe proxy')
     await flushPromises()
     expect(box.get('input').attributes()).toMatchObject({ id: box.get('label').attributes('for'), placeholder: 'No proxy (Proxy ID)' })

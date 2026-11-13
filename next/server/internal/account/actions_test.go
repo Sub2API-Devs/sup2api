@@ -17,7 +17,7 @@ func TestAccountActionsFollowRowOwnership(t *testing.T) {
 	admin := e.uid
 	mixed, reader := e.addUser("mixed@x.com"), e.addUser("reader@x.com")
 	authz.keys[admin] = adminKeys
-	authz.keys[mixed] = []string{"account:read", "account:own:update"}
+	authz.keys[mixed] = []string{"account:read", "account:update:own"}
 	authz.keys[reader] = []string{"account:read"}
 
 	create := func(name string, owner int64) int64 {

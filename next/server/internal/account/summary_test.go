@@ -6,7 +6,7 @@ import (
 )
 
 // GET /accounts/summary counts live accounts by status over the caller's
-// range: every account with account:read, its own with account:own:read
+// range: every account with account:read, its own with account:read:own
 // only; without either it is 403.
 func TestAccountSummaryFollowsOwnerScope(t *testing.T) {
 	authz := fakeAuthz{keys: map[int64][]string{}}

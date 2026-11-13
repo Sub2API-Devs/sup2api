@@ -20,7 +20,7 @@
 // not take it while the user is busy elsewhere. Every state and error is a
 // code (status / details.reason) translated via ccgateway.status.* and
 // ccgateway.reason.*; an unknown reason shows the API's English message.
-// `canEdit`: the caller may edit this account (account:update / own:update).
+// `canEdit`: the caller may edit this account (account:update at any scope).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'

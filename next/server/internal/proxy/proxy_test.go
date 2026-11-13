@@ -401,8 +401,8 @@ func TestOwnership(t *testing.T) {
 	engine := gin.New()
 	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
 		admin:  {"proxy:read", "proxy:manage"},
-		alice:  {"proxy:own:read", "proxy:own:manage"},
-		bob:    {"proxy:own:read", "proxy:own:manage"},
+		alice:  {"proxy:read:own", "proxy:manage:own"},
+		bob:    {"proxy:read:own", "proxy:manage:own"},
 		reader: {"proxy:read"},
 	}}))
 

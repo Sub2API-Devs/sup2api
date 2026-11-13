@@ -42,7 +42,7 @@ type PermissionSet struct {
 	Version      int64
 }
 
-// Add grants k (any spelling: aliases, trailing wildcards). A key that does
+// Add grants k (any spelling: trailing wildcards included). A key that does
 // not parse grants nothing.
 func (s *PermissionSet) Add(k string) {
 	p, err := perm.Parse(k)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LEGACY_OWN, P, PERMISSIONS, ROLE_KEY_PATTERN, SCOPE_TYPE } from './permissions'
+import { P, PERMISSIONS, ROLE_KEY_PATTERN, SCOPE_TYPE } from './permissions'
 
 // The generated catalog is consistent with itself (the Go golden test keeps it
 // in step with the core).
@@ -14,9 +14,9 @@ describe('generated permissions', () => {
     }
   })
 
-  it('pairs every scopable action with its former own-level alias', () => {
-    expect(Object.keys(LEGACY_OWN)).toEqual(Object.keys(SCOPE_TYPE))
-    expect(LEGACY_OWN[P.AccountRead]).toBe('account:own:read')
+  it('lists the scopable actions with their resource', () => {
+    expect(SCOPE_TYPE[P.AccountRead]).toBe('account')
+    expect(SCOPE_TYPE[P.ProxyManage]).toBe('proxy')
     expect(PERMISSIONS[P.AccountUpdate].requires).toEqual([P.AccountRead])
   })
 

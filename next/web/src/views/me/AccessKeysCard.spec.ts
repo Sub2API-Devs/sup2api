@@ -138,7 +138,7 @@ describe('access keys card', () => {
   })
 
   it('offers the scopes of a scoped permission within the user\'s own, and sends canonical keys', async () => {
-    useAuthStore().me = { id: 3, email: 'a@x', display_name: 'a', roles: [], permissions: ['account:read:own', 'account:own:read'], superuser: false } as Me
+    useAuthStore().me = { id: 3, email: 'a@x', display_name: 'a', roles: [], permissions: ['account:read:own'], superuser: false } as Me
     const scoped = [{ module: 'account', label: 'Accounts', source: 'core', status: 'active', permissions: [{ key: 'account:read', label: 'View', sensitive: false, scope_type: 'account', status: 'active' }] }]
     api.get.mockImplementation(async (path: string) => (path.endsWith('/permissions') ? scoped : []))
     const w = render()

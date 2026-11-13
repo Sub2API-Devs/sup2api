@@ -12,7 +12,7 @@ describe('mayOpen', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('opens a page of a scoped action at any scope, a group or an id included', () => {
-    for (const key of ['account:read', 'account:read:own', 'account:read:group/12', 'account:read:account/5', 'account:own:read']) {
+    for (const key of ['account:read', 'account:read:own', 'account:read:group/12', 'account:read:account/5']) {
       signIn(key)
       expect(mayOpen({ action: 'account:read' })).toBe(true)
     }

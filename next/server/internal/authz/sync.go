@@ -105,8 +105,8 @@ RETURNING key, (xmax = 0)`, keys, modules, labels, descs, sensitive, sorts, scop
 		// (grantDefaults).
 		for _, r := range builtinRoles {
 			// Scoped defaults are granted to a role created now only: the
-			// actions exist already, so none is new (0103 converted the
-			// existing roles' former own-level grants).
+			// actions exist already, so none is new (migration 0097
+			// converted the existing roles' former own-level grants).
 			if newRoles[r.key] && len(r.scoped) > 0 {
 				if err := s.grantScopedDefaults(ctx, tx, r.key, r.scoped); err != nil {
 					return err
@@ -129,16 +129,6 @@ WITH ins AS (
     ON CONFLICT DO NOTHING RETURNING role_id, assignable_role_id)
 SELECT ins.role_id, a.key FROM ins JOIN roles a ON a.id = ins.assignable_role_id`); err != nil {
 				return err
-			}
-		}
-		for _, m := range coreModules {
-			for _, p := range m.perms {
-				if len(p.inherits) == 0 || !slices.Contains(inserted, string(p.key)) {
-					continue
-				}
-				if err := s.grantInherited(ctx, tx, string(p.key), p.inherits, builtinsWithout(string(p.key))); err != nil {
-					return err
-				}
 			}
 		}
 
@@ -200,9 +190,9 @@ func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, 
 
 // grantScopedDefaults grants the built-in role roleKey its scoped defaults
 // (canonical keys), each audited as authz.sync.grant (via default,
-// role_created), with the former own-level alias rows (mirrorLegacyOwn).
+// role_created).
 func (s *Service) grantScopedDefaults(ctx context.Context, tx pgx.Tx, roleKey string, keys []string) error {
-	err := s.syncGrant(ctx, tx, map[string]any{"via": "default", "role_created": true}, `
+	return s.syncGrant(ctx, tx, map[string]any{"via": "default", "role_created": true}, `
 WITH ins AS (
     INSERT INTO role_permission_scopes (role_id, permission_id, scope)
     SELECT r.id, p.id, d.scope FROM roles r,
@@ -211,47 +201,21 @@ WITH ins AS (
     WHERE r.key = $1
     ON CONFLICT DO NOTHING RETURNING role_id, permission_id, scope)
 SELECT ins.role_id, p.key || ':' || ins.scope FROM ins JOIN permissions p ON p.id = ins.permission_id`, roleKey, keys)
-	if err != nil {
-		return err
-	}
-	var id int64
-	if err := tx.QueryRow(ctx, `SELECT id FROM roles WHERE key = $1`, roleKey).Scan(&id); err != nil {
-		return err
-	}
-	return mirrorLegacyOwn(ctx, tx, id)
 }
 
 // grantInherited grants newKey to every role holding a key of from: a
-// permission split from others keeps their holders' rights. The built-in
-// roles of skip are left out (builtinsWithout). Run only when newKey is
-// first created, it is idempotent; each grant is audited.
-func (s *Service) grantInherited(ctx context.Context, tx pgx.Tx, newKey string, from, skip []string) error {
+// permission split from others (a plugin manifest's inheritFrom) keeps
+// their holders' rights. Run only when newKey is first created, it is
+// idempotent; each grant is audited.
+func (s *Service) grantInherited(ctx context.Context, tx pgx.Tx, newKey string, from []string) error {
 	return s.syncGrant(ctx, tx, map[string]any{"via": "inherit", "from": from}, `
 WITH ins AS (
     INSERT INTO role_permissions (role_id, permission_id)
     SELECT DISTINCT rp.role_id, np.id FROM role_permissions rp
     JOIN permissions op ON op.id = rp.permission_id AND op.key = ANY($1)
     JOIN permissions np ON np.key = $2
-    JOIN roles r ON r.id = rp.role_id
-    WHERE NOT (r.builtin AND COALESCE(r.key = ANY($3), false))
     ON CONFLICT DO NOTHING RETURNING role_id, permission_id)
-SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, from, newKey, skip)
-}
-
-// builtinsWithout lists the built-in roles whose defaults leave the core
-// permission key out. A built-in role's core permissions are its defaults:
-// what it held under an old key came from the old defaults, not from an
-// administrator, so a split does not carry it over (role:define stays off
-// the built-in operator, decision D3; 0102 takes back what an earlier sync
-// of this version gave).
-func builtinsWithout(key string) []string {
-	var out []string
-	for _, r := range builtinRoles {
-		if !r.superuser && !slices.Contains(r.defaultPermissions(), key) {
-			out = append(out, r.key)
-		}
-	}
-	return out
+SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, from, newKey)
 }
 
 // syncGrant runs sql, an automatic grant returning the role id and the

@@ -628,9 +628,9 @@ func TestAccountRuntimeOwnership(t *testing.T) {
 	ctx := context.Background()
 	vendor, reader, nobody := f.user("vendor@x"), f.user("reader@x"), f.user("nobody@x")
 	admin := f.user("admin@x") // no entry in keys: holds every key
-	f.auth.keys[vendor] = []string{"account:own:read", "account:own:update"}
+	f.auth.keys[vendor] = []string{"account:read:own", "account:update:own"}
 	f.auth.keys[reader] = []string{"account:read"}
-	f.auth.keys[nobody] = []string{"account:own:create"}
+	f.auth.keys[nobody] = []string{"account:create:own"}
 	settings := f.user("settings@x")
 	f.auth.keys[settings] = []string{"settings:read", "settings:manage"}
 	mine, other := f.account(true), f.account(true)

@@ -58,7 +58,7 @@ const plainUser: Identity = {
 /**
  * Sign in as vendor@example.com (password admin): the "vendor" role of
  * CONTRACTS §21 (the own scope of the account and proxy actions, no
- * settings:custom; /me adds the former own-level keys for one version). Sees
+ * settings:custom). Sees
  * and edits only the accounts / proxies it created.
  */
 export const vendorUser: Identity = {
@@ -69,8 +69,6 @@ export const vendorUser: Identity = {
   permissions: [
     'account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own',
     'proxy:read:own', 'proxy:manage:own',
-    'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
-    'proxy:own:read', 'proxy:own:manage',
     'group:read', 'gateway:use'
   ],
   superuser: false

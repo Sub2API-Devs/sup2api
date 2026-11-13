@@ -40,8 +40,7 @@ type corePerm struct {
 	// bearing on access keys.
 	sensitive bool
 	// superOnly: the permission is in no built-in role's defaults, whatever
-	// the role's grants say (builtinRole.accepts), and it inherits only from
-	// superOnly ones (TestCatalogFlagInvariants), so no role gets it
+	// the role's grants say (builtinRole.accepts), so no role gets it
 	// automatically. By default only the super admin holds it; a grant needs
 	// a holder, so delegating it starts with the super admin (decision D2).
 	superOnly bool
@@ -49,39 +48,6 @@ type corePerm struct {
 	// (httpapi.Router.StepUp, where the rule is); display only, for the
 	// access key selector. Always sensitive (TestCatalogFlagInvariants).
 	stepUp bool
-	// deprecated marks a former own-level key (legacyOwnPerms): still in the
-	// catalog and honoured as an alias, never a default, not listed for the
-	// role editor.
-	deprecated bool
-	// inherits: when the permission is first created, every role holding
-	// one of these keys gets it too (splitting a permission keeps its
-	// holders' rights; grantInherited).
-	inherits []string
-}
-
-// legacyOwnLabels are the former own-level keys' catalog rows as they were,
-// so that cores of either version write the same row during a rolling
-// upgrade.
-var legacyOwnLabels = map[perm.Key]corePerm{
-	perm.AccountRead:           {en: "Read own accounts", zh: "查看自己创建的账号"},
-	perm.AccountCreate:         {en: "Create own accounts", zh: "新建账号（归自己所有）"},
-	perm.AccountUpdate:         {en: "Edit own accounts", zh: "编辑自己创建的账号"},
-	perm.AccountDelete:         {en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
-	perm.AccountTest:           {en: "Test own accounts", zh: "测试自己创建的账号"},
-	perm.AccountCredentialView: {en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, stepUp: true},
-	perm.ProxyRead:             {en: "View own proxies", zh: "查看自己创建的代理"},
-	perm.ProxyManage:           {en: "Manage own proxies", zh: "管理自己创建的代理"},
-}
-
-// legacyOwnPerms are the deprecated catalog rows of the former own-level
-// keys of actions (R2a; the next version marks them removed).
-func legacyOwnPerms(actions ...perm.Key) []corePerm {
-	out := make([]corePerm, len(actions))
-	for i, a := range actions {
-		out[i] = legacyOwnLabels[a]
-		out[i].key, out[i].deprecated = perm.Key(perm.LegacyOwnKey(a)), true
-	}
-	return out
 }
 
 func lt(en, zh string) core.LocalizedText { return core.LocalizedText{"en": en, "zh": zh} }
@@ -106,10 +72,9 @@ var coreModules = []coreModule{
 	{"role", lt("Roles", "角色"), []corePerm{
 		{key: perm.RoleRead, en: "View roles and permissions", zh: "查看角色与权限",
 			desc: lt("View roles, their permissions and the permission catalog.", "查看角色、角色权限与权限目录。")},
-		// role:manage was split in two; its holders keep both halves.
-		{key: perm.RoleDefine, en: "Define roles", zh: "定义角色", sensitive: true, inherits: []string{"role:manage"},
+		{key: perm.RoleDefine, en: "Define roles", zh: "定义角色", sensitive: true,
 			desc: lt("Create, edit and delete custom roles, never beyond your own permissions.", "新建、修改、删除自定义角色，授出的权限不能超过自己。"), requires: req(perm.RoleRead)},
-		{key: perm.RoleAssign, en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, inherits: []string{"role:manage"},
+		{key: perm.RoleAssign, en: "Assign roles to users", zh: "给用户分配角色", sensitive: true,
 			desc: lt("Give or take roles from users, only roles on your assignable list.", "给用户分配或撤销角色，只限自己可分配清单内的角色。"), requires: req(perm.RoleRead, perm.UserRead)},
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
@@ -130,7 +95,7 @@ var coreModules = []coreModule{
 		{key: perm.SegmentManage, en: "Manage user groups", zh: "管理用户组",
 			desc: lt("Create, edit and delete user groups: members, private groups and prices.", "新建、修改、删除用户组：成员、专属分组与价格。"), requires: req(perm.SegmentRead)},
 	}},
-	{"account", lt("Accounts", "账号"), slices.Concat([]corePerm{
+	{"account", lt("Accounts", "账号"), []corePerm{
 		// Scopable (perm.ScopeType): account:read reaches every account,
 		// account:read:own, :group/12, :account/125 … some (CONTRACTS §21).
 		{key: perm.AccountRead, en: "View accounts", zh: "查看账号",
@@ -145,21 +110,19 @@ var coreModules = []coreModule{
 			desc: lt("Send test requests through accounts within the scope granted.", "对授权范围内的账号发起测试请求。"), requires: req(perm.AccountRead)},
 		{key: perm.AccountCredentialView, en: "View account credentials", zh: "查看账号凭证", sensitive: true, stepUp: true,
 			desc: lt("Reveal the plain credentials of accounts within the scope granted; asks for verification each time.", "明文查看授权范围内账号的凭证；每次需要二次验证。"), requires: req(perm.AccountRead)},
-		// The former own-level keys, aliases of <action>:own (CONTRACTS §21).
-	}, legacyOwnPerms(perm.AccountRead, perm.AccountCreate, perm.AccountUpdate, perm.AccountDelete, perm.AccountTest, perm.AccountCredentialView), []corePerm{
 		{key: perm.AccountSettingsCustom, en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）",
 			desc: lt("Set guarded account settings (e.g. base URL) to values other than the official ones.", "把受限的账号设置（如 Base URL）改成非官方值。"), requires: req(perm.AccountUpdate)},
 		{key: perm.AccountGroupBind, en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）",
 			desc: lt("Bind accounts to groups you can use; only matters to callers with a restricted account scope (own, a group or one account) and without group:manage.", "把账号绑定到自己可用的分组；只对账号范围受限（仅自己、某分组或单个账号）且没有 group:manage 的人生效。"), requires: req(perm.AccountUpdate)},
 		{key: perm.AccountRelay, en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true,
 			desc: lt("Create accounts whose upstream address is free (relay) or re-point it; only matters to callers with a restricted account scope (own, group or account).", "创建或改动可自定义上游地址的账号（relay）；只对账号范围受限（仅自己、某分组或单个账号）的人生效。"), requires: req(perm.AccountCreate)},
-	})},
-	{"proxy", lt("Proxies", "代理"), slices.Concat([]corePerm{
+	}},
+	{"proxy", lt("Proxies", "代理"), []corePerm{
 		{key: perm.ProxyRead, en: "View proxies", zh: "查看代理",
 			desc: lt("View proxies within the scope granted.", "查看授权范围内的代理。")},
 		{key: perm.ProxyManage, en: "Manage proxies", zh: "管理代理", sensitive: true, stepUp: true,
 			desc: lt("Create, edit, delete and reveal proxies within the scope granted; revealing asks for verification.", "在授权范围内新建、修改、删除代理与查看代理地址；查看地址需要二次验证。"), requires: req(perm.ProxyRead)},
-	}, legacyOwnPerms(perm.ProxyRead, perm.ProxyManage))},
+	}},
 	{"price", lt("Model prices", "模型价格"), []corePerm{
 		{key: perm.PriceRead, en: "View model prices", zh: "查看模型价格",
 			desc: lt("View model prices and price rules.", "查看模型价格与价格规则。")},
@@ -300,9 +263,9 @@ type builtinRole struct {
 	description core.LocalizedText
 	superuser   bool
 	// grants reports whether a core permission is in the role's defaults,
-	// superOnly and deprecated ones aside (accepts); nil means none. New
-	// core permissions are granted to the role when it accepts them, and a
-	// reset restores exactly this set.
+	// superOnly ones aside (accepts); nil means none. New core permissions
+	// are granted to the role when it accepts them, and a reset restores
+	// exactly this set.
 	grants func(p corePerm) bool
 	// scoped are the role's scoped defaults (canonical keys, e.g.
 	// account:read:own), granted when the role is created and on a reset.
@@ -358,10 +321,9 @@ func builtinRoleByKey(key string) (builtinRole, bool) {
 	return builtinRole{}, false
 }
 
-// accepts reports whether p is in r's defaults: never a superOnly or
-// deprecated one.
+// accepts reports whether p is in r's defaults: never a superOnly one.
 func (r builtinRole) accepts(p corePerm) bool {
-	return r.grants != nil && !p.superOnly && !p.deprecated && r.grants(p)
+	return r.grants != nil && !p.superOnly && r.grants(p)
 }
 
 // defaultPermissions returns the core permissions r has by default, the
@@ -424,10 +386,10 @@ func StepUpKey(key string) bool {
 }
 
 // KnownKey reports whether key is a listed core permission (catalog or self
-// module, the former own-level aliases aside), for the start-up route check.
+// module), for the start-up route check.
 func KnownKey(key string) bool {
-	p, ok := corePermByKey(key)
-	return ok && !p.deprecated
+	_, ok := corePermByKey(key)
+	return ok
 }
 
 // corePermByKey finds a permission of the core catalog or the self module.

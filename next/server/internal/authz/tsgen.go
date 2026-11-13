@@ -11,8 +11,7 @@ import (
 // PermissionsTS renders the core permission catalog as the console's
 // next/web/src/generated/permissions.ts (`sub2api permissions-ts`;
 // TestGeneratedPermissionsTS keeps the checked-in file in step): a constant
-// per key, the scopable actions and their former own-level aliases, each
-// key's flags, soft dependencies and description, the key types and the
+// per key, the scopable actions, each key's flags, soft dependencies and description, the key types and the
 // role key pattern. The output is already in the console's prettier style.
 func PermissionsTS() string {
 	var b strings.Builder
@@ -47,22 +46,12 @@ func PermissionsTS() string {
 	w("")
 	w("export type ScopableKey = keyof typeof SCOPE_TYPE")
 	w("")
-	w("/** The former own-level key of each scopable action: a deprecated alias of <action>:own, still in /me (CONTRACTS §21). */")
-	w("export const LEGACY_OWN = {")
-	// Every scopable action has an alias (TestPermissionsTSNames): an empty
-	// one would read as no permission at all, which auth.has grants.
-	for i, p := range scopable {
-		w("  %s: %s%s", tsString(string(p.key)), tsString(perm.LegacyOwnKey(p.key)), comma(i, len(scopable)))
-	}
-	w("} as const")
-	w("")
-	w("export type LegacyOwnKey = (typeof LEGACY_OWN)[ScopableKey]")
 	w("/** A scopable action with a scope: account:read:own, account:update:group/12, … */")
 	w("export type ScopedPermKey = `${ScopableKey}:${string}`")
 	w("/** A plugin permission: plugin.<plugin key>:<local key>. */")
 	w("export type PluginPermKey = `plugin.${string}:${string}`")
 	w("/** Any permission key the console names in code. */")
-	w("export type PermRef = PermKey | ScopedPermKey | LegacyOwnKey | PluginPermKey")
+	w("export type PermRef = PermKey | ScopedPermKey | PluginPermKey")
 	w("")
 	w("export interface PermMeta {")
 	w("  module: string")
@@ -105,15 +94,12 @@ type listedPerm struct {
 	module string
 }
 
-// listedPerms are the core and self permissions in catalog order, the
-// former own-level aliases left out.
+// listedPerms are the core and self permissions in catalog order.
 func listedPerms() []listedPerm {
 	var out []listedPerm
 	for _, m := range append(coreModules[:len(coreModules):len(coreModules)], selfModule) {
 		for _, p := range m.perms {
-			if !p.deprecated {
-				out = append(out, listedPerm{p, m.key})
-			}
+			out = append(out, listedPerm{p, m.key})
 		}
 	}
 	return out

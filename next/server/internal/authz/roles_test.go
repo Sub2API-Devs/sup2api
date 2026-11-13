@@ -250,7 +250,7 @@ func TestOperatorWhitelist(t *testing.T) {
 	// What the role is for, and what it is kept from.
 	operator := addUser(t, s, "op@x.com", RoleOperator)
 	for key, want := range map[string]bool{
-		"account:update": true, "role:assign": true, "audit:read": true, "task:run": true, "account:own:credential:view": true,
+		"account:update": true, "role:assign": true, "audit:read": true, "task:run": true, "account:credential:view:own": true,
 		"role:define": false, "balance:adjust": false, "usage:settle": false, "user:delete": false, "user:password:reset": false,
 		"account:credential:view": false, "account:relay": false, "system:update:execute": false, "settings:read": false, "plugin:read": false,
 	} {

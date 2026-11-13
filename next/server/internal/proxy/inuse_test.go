@@ -22,8 +22,8 @@ func TestUpdateInUseByOthers(t *testing.T) {
 	engine := gin.New()
 	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
 		admin: {"proxy:read", "proxy:manage"},
-		alice: {"proxy:own:read", "proxy:own:manage"},
-		bob:   {"proxy:own:read", "proxy:own:manage"},
+		alice: {"proxy:read:own", "proxy:manage:own"},
+		bob:   {"proxy:read:own", "proxy:manage:own"},
 	}}))
 	stored := map[string]any{"name": "p", "protocol": "http", "host": "h.example", "port": 8080, "username": "u", "password": "pw"}
 	code, out := do(t, engine, alice, "POST", "/proxies", stored)

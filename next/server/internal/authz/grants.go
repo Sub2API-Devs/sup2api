@@ -2,7 +2,6 @@ package authz
 
 import (
 	"context"
-	"maps"
 	"slices"
 	"strings"
 
@@ -14,11 +13,7 @@ import (
 
 // Grants of a role (CONTRACTS §21): an unscoped key is a role_permissions
 // row; a scoped one (account:read:group/12) a role_permission_scopes row of
-// the action and the scope. Until the former own-level keys retire (R2b),
-// the old row (account:own:read) is the record of an own scope of its
-// action: writes keep both (mirrorLegacyOwn), reads take the old row
-// (ownShadowed), so cores of the previous version, which read only
-// role_permissions, and this one agree during a rolling upgrade.
+// the action and the scope.
 
 // grant is a resolved grant: the permission and its scope, "" for every row.
 type grant struct {
@@ -117,68 +112,20 @@ WHERE rs.role_id = $1 AND p.id = rs.permission_id AND p.status <> 'removed'
   AND (rs.permission_id, rs.scope) NOT IN (SELECT * FROM unnest($2::bigint[], $3::text[]))`, roleID, scopedIDs, scopes); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO role_permission_scopes (role_id, permission_id, scope)
-SELECT $1, * FROM unnest($2::bigint[], $3::text[]) ON CONFLICT DO NOTHING`, roleID, scopedIDs, scopes); err != nil {
-		return err
-	}
-	return mirrorLegacyOwn(ctx, tx, roleID)
-}
-
-// legacyOwnPairs are the actions with a former own-level key and that key.
-var legacyOwnPairs = func() (actions, legacy []string) {
-	for _, old := range slices.Sorted(maps.Keys(perm.LegacyOwnKeys())) {
-		p, _ := perm.Parse(old)
-		actions, legacy = append(actions, string(p.Action)), append(legacy, old)
-	}
-	return actions, legacy
-}
-
-// legacyOwnKeys lists the former own-level keys.
-func legacyOwnKeys() []string {
-	_, legacy := legacyOwnPairs()
-	return legacy
-}
-
-// mirrorLegacyOwn gives role roleID the former own-level key of each own
-// scope it holds (R2a; see above). A row it has without the scope stays:
-// it still grants the scope, as an alias.
-func mirrorLegacyOwn(ctx context.Context, tx pgx.Tx, roleID int64) error {
-	actions, legacy := legacyOwnPairs()
-	_, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id)
-SELECT s.role_id, lp.id FROM role_permission_scopes s
-JOIN permissions ap ON ap.id = s.permission_id
-JOIN unnest($2::text[], $3::text[]) l(action, legacy) ON l.action = ap.key
-JOIN permissions lp ON lp.key = l.legacy
-WHERE s.role_id = $1 AND s.scope = 'own'
-ON CONFLICT DO NOTHING`, roleID, actions, legacy)
+	_, err := tx.Exec(ctx, `INSERT INTO role_permission_scopes (role_id, permission_id, scope)
+SELECT $1, * FROM unnest($2::bigint[], $3::text[]) ON CONFLICT DO NOTHING`, roleID, scopedIDs, scopes)
 	return err
 }
 
-// ownShadowed is the condition, on a role_permission_scopes row rs of
-// permission p, of an own scope whose former own-level key is still live:
-// that key's role_permissions row is then the record of the grant (R2a), so
-// a revoke by an older core, which deletes only that row, holds on every
-// node. Once the aliases are retired (R2b) the scoped row is the record.
-var ownShadowed = func() string {
-	actions, legacy := legacyOwnPairs()
-	c := "rs.scope = 'own' AND EXISTS (SELECT 1 FROM permissions lp WHERE lp.status <> 'removed' AND lp.key = CASE p.key"
-	for i, a := range actions {
-		c += " WHEN '" + a + "' THEN '" + legacy[i] + "'"
-	}
-	return c + " END)"
-}()
-
 // roleGrantsJoin joins, to each role r, g.key: the canonical grants of r
-// (former own-level rows as they are; PermissionSet.Add reads them as
-// aliases; own scopes they shadow left out) whose permission p passes
-// status, an SQL condition on p.
+// whose permission p passes status, an SQL condition on p.
 func roleGrantsJoin(status string) string {
 	return `
 LEFT JOIN LATERAL (
     SELECT p.key FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id AND ` + status + ` WHERE rp.role_id = r.id
     UNION ALL
     SELECT p.key || ':' || rs.scope FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id AND ` + status + `
-    WHERE rs.role_id = r.id AND NOT (` + ownShadowed + `)
+    WHERE rs.role_id = r.id
 ) g ON true`
 }
 

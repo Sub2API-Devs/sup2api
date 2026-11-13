@@ -12,7 +12,7 @@ describe('useAccountCaps', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('an all-level caller binds groups and creates custom upstreams without the extra keys', () => {
-    signIn('account:create', 'account:own:update')
+    signIn('account:create', 'account:update:own')
     const create = useAccountCaps()
     expect(create.scope.value).toBe('all')
     expect([create.bindGroups.value, create.relay.value, create.creatable({ custom_upstream: true })]).toEqual([true, true, true])
@@ -23,12 +23,12 @@ describe('useAccountCaps', () => {
   })
 
   it('an own-level caller needs account:group:bind or group:manage, and account:relay', () => {
-    signIn('account:own:create', 'account:group:bind')
+    signIn('account:create:own', 'account:group:bind')
     const c = useAccountCaps()
     expect(c.bindGroups.value).toBe(true)
     expect(c.creatable({ custom_upstream: true })).toBe(false)
     expect(c.creatable({ custom_upstream: false })).toBe(true)
-    signIn('account:own:create', 'group:manage', 'account:relay')
+    signIn('account:create:own', 'group:manage', 'account:relay')
     expect([c.bindGroups.value, c.creatable({ custom_upstream: true })]).toEqual([true, true])
   })
 
@@ -42,7 +42,7 @@ describe('useAccountCaps', () => {
     signIn('account:create')
     const c = useAccountCaps()
     expect([c.proxyByURL.value, c.customSettings.value]).toEqual([false, false])
-    signIn('account:create', 'proxy:own:manage', 'account:settings:custom')
+    signIn('account:create', 'proxy:manage:own', 'account:settings:custom')
     expect([c.proxyByURL.value, c.customSettings.value]).toEqual([true, true])
     // proxy/<id> reaches existing proxies only: it creates none.
     signIn('account:create', 'proxy:manage:proxy/8')

@@ -62,7 +62,7 @@ func TestUpdateHostPrivate(t *testing.T) {
 	engine := gin.New()
 	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
 		admin: {"proxy:read", "proxy:manage"},
-		alice: {"proxy:own:read", "proxy:own:manage"},
+		alice: {"proxy:read:own", "proxy:manage:own"},
 	}}))
 	code, out := do(t, engine, alice, "POST", "/proxies", map[string]any{"name": "p", "protocol": "http", "host": "h.example", "port": 8080})
 	if code != 201 {

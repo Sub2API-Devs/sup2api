@@ -26,7 +26,7 @@ const ownership = vi.hoisted(() => ({ scope: 'all' as 'all' | 'own' }))
 const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown, slotEntries: (() => []) as (slot: string) => unknown[] }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => pluginStore, assetURL: () => '' }))
 const perms = vi.hoisted(() => ({ denied: [] as string[] }))
-// Keys compare in their canonical spelling (CONTRACTS §21): denying proxy:own:manage denies proxy:manage:own.
+// Keys compare in their canonical spelling (CONTRACTS §21).
 vi.mock('@/stores/auth', async () => {
   const { canonicalPermission } = await import('@/authz/implies')
   const canonical = (k: string) => canonicalPermission(k) ?? k
@@ -945,7 +945,7 @@ describe('account field permissions', () => {
   })
 
   it('offers pasting a proxy URL only with a proxy management key', async () => {
-    perms.denied = ['proxy:manage', 'proxy:own:manage']
+    perms.denied = ['proxy:manage', 'proxy:manage:own']
     const w = render(savedAccount())
     await flushPromises()
     expect(w.find('[data-testid="proxy-mode"]').exists()).toBe(false)

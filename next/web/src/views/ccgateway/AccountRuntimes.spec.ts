@@ -288,7 +288,7 @@ describe('account runtime debug log levels', () => {
   })
 
   it('leaves an own-level caller the level as read only, without the clear action', async () => {
-    mocks.granted = ['account:own:read', 'account:own:update']
+    mocks.granted = ['account:read:own', 'account:update:own']
     try {
       worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
       const w = await render()
@@ -642,7 +642,7 @@ describe('account request log settings of the core', () => {
 describe('account runtime actions of an own-level caller', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.granted = ['account:own:read', 'account:own:update']
+    mocks.granted = ['account:read:own', 'account:update:own']
     mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'mine', type: 'managed', created_by: 1 }, { id: 26, name: 'theirs', type: 'managed', created_by: 2 }] })
     mocks.get.mockImplementation(async (path: string) => path.endsWith('/status') ? { status: 'blocked', reason: 'account_parked', container: 'cc' } : { enabled: true })
     i18n.global.locale.value = 'zh'

@@ -13,7 +13,7 @@ describe('useScope', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('rates the reach of an action: every row, a restricted scope, or none', () => {
-    signIn(['account:update', 'account:read:group/12', 'account:own:test'])
+    signIn(['account:update', 'account:read:group/12', 'account:test:own'])
     const s = useScope()
     expect([s.level('account:update'), s.level('account:read'), s.level('account:test'), s.level('account:delete')]).toEqual(['all', 'own', 'own', null])
     signIn([], true)
@@ -33,7 +33,7 @@ describe('useScope', () => {
   })
 
   it('keeps the supplier rule: only rows the caller created, never a row without a creator', () => {
-    signIn(['account:own:update', 'proxy:own:manage'])
+    signIn(['account:update:own', 'proxy:manage:own'])
     const s = useScope()
     expect(s.can(row(1, 7), 'account:update')).toBe(true)
     expect(s.can(row(1, null), 'account:update')).toBe(false)

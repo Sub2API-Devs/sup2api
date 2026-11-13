@@ -239,9 +239,9 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 		t.Fatalf("super_admin: %+v", byKey[RoleSuperAdmin])
 	}
 	// The admin holds every core permission but the five reserved for the
-	// super admin (decision D2) and the former own-level aliases.
+	// super admin (decision D2).
 	superOnly := superOnlyKeys()
-	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly)-len(legacyOwnKeys()) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
+	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
 		t.Fatalf("admin perms = %d of %d: %v", len(got), n, got)
 	}
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
@@ -1138,7 +1138,7 @@ func TestMenus(t *testing.T) {
 	// A caller who only manages its own accounts sees them with proxies in the
 	// gateway section, and nothing of system.
 	role, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "vendor", Name: core.LocalizedText{"en": "Vendor"},
-		PermissionKeys: []string{"account:own:read", "proxy:own:read", "proxy:own:manage"}})
+		PermissionKeys: []string{"account:read:own", "proxy:read:own", "proxy:manage:own"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1158,7 +1158,7 @@ func TestMenus(t *testing.T) {
 	// The menus follow the list endpoints: the create keys alone, which
 	// GET /accounts and GET /proxies refuse, open neither page.
 	role, err = s.CreateRole(ctx, admin, CreateRoleInput{Key: "creator", Name: core.LocalizedText{"en": "Creator"},
-		PermissionKeys: []string{"account:own:create", "proxy:own:manage"}})
+		PermissionKeys: []string{"account:create:own", "proxy:manage:own"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1235,9 +1235,10 @@ func join(s []string) string {
 	return out
 }
 
-// TestOwnershipCatalog pins the CONTRACTS §21.1 keys: labels in both
-// languages, credential views and own deletion are sensitive, the user role is
-// unchanged and the account/proxy menus accept the own keys.
+// TestOwnershipCatalog pins the CONTRACTS §21.1 keys: the scopable actions
+// with their resource, labels in both languages, credential views and
+// deletion are sensitive, the user role is unchanged and the account/proxy
+// menus accept any scope.
 func TestOwnershipCatalog(t *testing.T) {
 	t.Parallel()
 	defs := map[string]core.PermissionDef{}
@@ -1245,9 +1246,9 @@ func TestOwnershipCatalog(t *testing.T) {
 		defs[d.Key] = d
 	}
 	want := map[string]bool{ // key -> sensitive
-		"account:own:read": false, "account:own:create": false, "account:own:update": false,
-		"account:own:delete": true, "account:own:test": false, "account:own:credential:view": true,
-		"account:settings:custom": false, "proxy:own:read": false, "proxy:own:manage": false,
+		"account:read": false, "account:create": false, "account:update": false,
+		"account:delete": true, "account:test": false, "account:credential:view": true,
+		"account:settings:custom": false, "proxy:read": false, "proxy:manage": true,
 	}
 	for key, sensitive := range want {
 		d, ok := defs[key]
@@ -1260,8 +1261,12 @@ func TestOwnershipCatalog(t *testing.T) {
 		if d.Label.Get("en") == "" || d.Label.Get("zh") == "" || d.Label.Get("en") == d.Label.Get("zh") {
 			t.Fatalf("%s label = %v", key, d.Label)
 		}
-		if mod := strings.SplitN(key, ":", 2)[0]; d.Module != mod {
+		mod := strings.SplitN(key, ":", 2)[0]
+		if d.Module != mod {
 			t.Fatalf("%s module = %s", key, d.Module)
+		}
+		if scopable := key != "account:settings:custom"; scopable != (d.ScopeType == mod) || !scopable && d.ScopeType != "" {
+			t.Fatalf("%s scope type = %q", key, d.ScopeType)
 		}
 	}
 	if join(userRolePermissions) != "apikey:self:manage,balance:self:read,usage:self:read,gateway:use" {
@@ -1276,7 +1281,7 @@ func TestOwnershipCatalog(t *testing.T) {
 	if menuKeys["accounts"] != "GET /accounts" || menuKeys["proxies"] != "GET /proxies" {
 		t.Fatalf("menus: %v", menuKeys)
 	}
-	set := core.PermissionSetOf("proxy:own:read")
+	set := core.PermissionSetOf("proxy:read:own")
 	if !hasAny(set, []string{"proxy:read"}) || hasAny(set, []string{"proxy:manage"}) || set.Has("proxy:read") {
 		t.Fatal("hasAny")
 	}

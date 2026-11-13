@@ -81,25 +81,12 @@ export const SCOPE_TYPE = {
 
 export type ScopableKey = keyof typeof SCOPE_TYPE
 
-/** The former own-level key of each scopable action: a deprecated alias of <action>:own, still in /me (CONTRACTS §21). */
-export const LEGACY_OWN = {
-  'account:read': 'account:own:read',
-  'account:create': 'account:own:create',
-  'account:update': 'account:own:update',
-  'account:delete': 'account:own:delete',
-  'account:test': 'account:own:test',
-  'account:credential:view': 'account:own:credential:view',
-  'proxy:read': 'proxy:own:read',
-  'proxy:manage': 'proxy:own:manage'
-} as const
-
-export type LegacyOwnKey = (typeof LEGACY_OWN)[ScopableKey]
 /** A scopable action with a scope: account:read:own, account:update:group/12, … */
 export type ScopedPermKey = `${ScopableKey}:${string}`
 /** A plugin permission: plugin.<plugin key>:<local key>. */
 export type PluginPermKey = `plugin.${string}:${string}`
 /** Any permission key the console names in code. */
-export type PermRef = PermKey | ScopedPermKey | LegacyOwnKey | PluginPermKey
+export type PermRef = PermKey | ScopedPermKey | PluginPermKey
 
 export interface PermMeta {
   module: string

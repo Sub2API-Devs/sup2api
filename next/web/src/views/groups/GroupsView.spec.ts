@@ -10,7 +10,7 @@ import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 
 const { get, denied } = vi.hoisted(() => ({ get: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', () => ({ api: { get } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !denied.has(key), hasAction: (a: string) => [a, a.replace(':', ':own:')].some((key) => !denied.has(key)) }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !denied.has(key), hasAction: (a: string) => [a, `${a}:own`].some((key) => !denied.has(key)) }) }))
 vi.mock('@/composables/lookups', async original => ({ ...(await original<object>()), useGroupsLookup: vi.fn() }))
 const group = (id: number, name: string, over: Partial<Group> = {}): Group => ({
   id,

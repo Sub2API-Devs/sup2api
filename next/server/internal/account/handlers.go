@@ -82,7 +82,7 @@ type row struct {
 	// usageLimitSource or '' (plugins and failure policies).
 	AutoDisabledSource string
 	// AdminLocked: disabled by a caller with the full scope who did not
-	// create the account (0100); see checkAdminLock.
+	// create the account (migration 0097); see checkAdminLock.
 	AdminLocked bool
 }
 
@@ -1124,12 +1124,11 @@ func (s *Service) checkOwnChange(ctx context.Context, scope core.DataScope, ch o
 var errAdminLocked = core.NewError(403, "account_locked_by_admin", "the account was disabled by an administrator")
 
 // checkAdminLock refuses an own-level caller moving a locked account (cur,
-// nil on create) to status: only active is refused, and only from disabled,
-// the status the lock was set with (automatic states never apply to a
-// disabled account). A stale lock, left by an older node that enabled the
-// account, does not hold back an account the gateway disabled since.
+// nil on create) to active. The lock is set with disabled and every way the
+// full scope brings the account back clears it (automatic states never
+// apply to a disabled account), so a locked account is a disabled one.
 func checkAdminLock(ctx context.Context, cur *row, status *string) error {
-	if cur == nil || !cur.AdminLocked || status == nil || *status != "active" || cur.Status != "disabled" {
+	if cur == nil || !cur.AdminLocked || status == nil || *status != "active" {
 		return nil
 	}
 	return errAdminLocked.WithMessage(t(ctx,
@@ -1139,16 +1138,12 @@ func checkAdminLock(ctx context.Context, cur *row, status *string) error {
 
 // adminLockAfter is what a requested status does to the lock, nil for no
 // change: the full scope locks when it disables an account somebody else
-// created and unlocks when it enables. An own-level caller only drops a
-// stale lock, one left on an account which is not disabled (a node older
-// than the lock enabled it), when disabling it: the disable is the owner's.
-// checkAdminLock already refused enabling a locked account.
+// created and unlocks when it enables. A restricted caller never changes
+// it (checkAdminLock already refused enabling a locked account).
 func adminLockAfter(scope core.DataScope, uid int64, cur *row, status string) *bool {
 	switch {
 	case scope.Restricted():
-		if status == "disabled" && cur.Status != "disabled" {
-			return new(false)
-		}
+		return nil
 	case status == "active":
 		return new(false)
 	case status == "disabled" && (cur.CreatedBy == nil || *cur.CreatedBy != uid):
@@ -1833,9 +1828,8 @@ func (s *Service) resetStatus(c *gin.Context) {
 		}
 		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
 		if statusReset {
-			// A reset unlocks: the full scope's, or an own-level one which
-			// got past checkAdminLock (a stale lock on an account that is
-			// not disabled).
+			// A reset unlocks (an own-level reset of a locked account was
+			// refused above).
 			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL,
 				admin_locked = false, updated_at = clock_timestamp()
 				WHERE id = $1`, id); err != nil {

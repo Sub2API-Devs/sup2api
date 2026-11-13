@@ -325,7 +325,7 @@ func TestProxyURL(t *testing.T) {
 	alice, bob, carol := e.addUser("alice@x.com"), e.addUser("bob@x.com"), e.addUser("carol@x.com")
 	authz.keys[admin], authz.keys[alice], authz.keys[bob] = adminKeys, supplierKeys, supplierKeys
 	// carol may create accounts but holds no proxy key at all.
-	authz.keys[carol] = []string{"account:own:create", "account:own:read", "account:own:update"}
+	authz.keys[carol] = []string{"account:create:own", "account:read:own", "account:update:own"}
 
 	proxies := func() int {
 		var n int
@@ -399,7 +399,7 @@ func TestProxyURL(t *testing.T) {
 		return v
 	}
 	if allowPrivate(d1["proxy_id"]) {
-		t.Fatal("proxy created under proxy:own:manage has allow_private")
+		t.Fatal("proxy created under proxy:manage:own has allow_private")
 	}
 	ad2 := e.createAs(admin, "ad2", map[string]any{"proxy_url": "http://manage.example:8080"})
 	if ad2["proxy_created"] != true || !allowPrivate(ad2["proxy_id"]) {
@@ -616,8 +616,8 @@ func TestGuardedSettings(t *testing.T) {
 	if gjson.GetBytes(raw, "data.schema.properties.base_url.enum").Exists() || gjson.GetBytes(raw, "data.ui_schema").Raw != "null" {
 		t.Fatalf("relay form: %s", raw)
 	}
-	// Suppliers reach the type endpoints through account:own:create alone.
-	authz.keys[alice] = []string{"account:own:create"}
+	// Suppliers reach the type endpoints through account:create:own alone.
+	authz.keys[alice] = []string{"account:create:own"}
 	for _, p := range []string{"/platforms", "/account-types", "/account-types/anthropic/apikey/form"} {
 		if code, _ := e.doAs(alice, "GET", p, nil); code != 200 {
 			t.Fatalf("own:create %s: %d", p, code)
@@ -777,7 +777,7 @@ func TestMaskedSecretToNewAddress(t *testing.T) {
 	op, ownViewer := e.addUser("op@x.com"), e.addUser("ownview@x.com")
 	authz.keys[admin] = adminKeys
 	authz.keys[op] = []string{"account:read", "account:update", "account:test"}
-	authz.keys[ownViewer] = []string{"account:read", "account:create", "account:update", "account:test", "account:own:credential:view"}
+	authz.keys[ownViewer] = []string{"account:read", "account:create", "account:update", "account:test", "account:credential:view:own"}
 
 	key := "sk-good-key-123"
 	acc := e.createAs(admin, "relay", map[string]any{"plugin_key": "relay", "type": "relay_key",

@@ -21,8 +21,8 @@ describe('choiceOf / scopesOf', () => {
 })
 
 describe('granted keys', () => {
-  it('replaces the scopes of one action, aliases included', () => {
-    const granted = new Set(['account:own:update', 'account:update:group/1', 'user:read', 'account:read'])
+  it('replaces the scopes of one action', () => {
+    const granted = new Set(['account:update:own', 'account:update:group/1', 'user:read', 'account:read'])
     expect([...withScopes(granted, 'account:update', [s('account/7')])].sort()).toEqual(['account:read', 'account:update:account/7', 'user:read'])
     expect([...withScopes(granted, 'account:update', [])].sort()).toEqual(['account:read', 'user:read'])
   })

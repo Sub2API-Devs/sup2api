@@ -12,18 +12,13 @@
 // vectors of next/sdk/permvectors/vectors.json (implies.spec.ts), so they
 // cannot drift. Pure: no Vue, no store (the mock server imports it too).
 // Relative: the mock server (tsconfig.node) imports this module without the @ alias.
-import { LEGACY_OWN, SCOPE_TYPE, type ScopableKey } from '../generated/permissions'
+import { SCOPE_TYPE, type ScopableKey } from '../generated/permissions'
 
 /** The row kind the scope of an action ranges over (the catalog's scope_type). */
 export type ScopeResource = (typeof SCOPE_TYPE)[ScopableKey]
 
 /** The actions that take a scope, with their resource (perm.scopable; the generated catalog). */
 export const SCOPABLE: Readonly<Record<string, ScopeResource>> = SCOPE_TYPE
-
-/** The former own-level keys and their scoped form: accepted as aliases (R2a). */
-const LEGACY_OWN_ALIAS: Readonly<Record<string, string>> = Object.fromEntries(
-  Object.entries(LEGACY_OWN).map(([action, old]) => [old, `${action}:own`])
-)
 
 /** Whether the scope of action may name rows (an id range means nothing for creating a row). */
 export const takesRowIds = (action: string) => action !== 'account:create'
@@ -54,9 +49,8 @@ export const ALL_SCOPE: Scope = Object.freeze({ all: true, own: false, group: 0,
 export const OWN_SCOPE: Scope = Object.freeze({ all: false, own: true, group: 0, id: 0 })
 const MAX_ID = 9223372036854775807n
 
-/** Reads a key, aliases and trailing wildcards included, into its canonical pattern; null when it does not parse. */
-export function parsePermission(key: string): Pattern | null {
-  const k = LEGACY_OWN_ALIAS[key] ?? key
+/** Reads a key, trailing wildcards included, into its canonical pattern; null when it does not parse. */
+export function parsePermission(k: string): Pattern | null {
   const i = k.lastIndexOf(':')
   const last = k.slice(i + 1)
   if (i < 0 || (last !== '*' && last !== 'own' && !last.includes('/'))) return { action: k, scope: ALL_SCOPE }
@@ -66,7 +60,7 @@ export function parsePermission(key: string): Pattern | null {
   return scope ? { action, scope } : null
 }
 
-/** The canonical spelling of key (aliases rewritten, trailing "/*" dropped, a scope of everything left out); null when invalid. */
+/** The canonical spelling of key (trailing "/*" dropped, a scope of everything left out); null when invalid. */
 export function canonicalPermission(key: string): string | null {
   const p = parsePermission(key)
   return p && patternKey(p)

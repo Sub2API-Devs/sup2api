@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), t
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get: mocks.get, post: mocks.post, patch: mocks.patch } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a), confirm: (...a: unknown[]) => mocks.confirm(...a) }))
 // Any of the keys asked for, as the store answers.
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (keys: string | string[]) => [keys].flat().some((key) => !mocks.denied.has(key)), hasAction: (a: string) => [a, a.replace(':', ':own:')].some((key) => !mocks.denied.has(key)) }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (keys: string | string[]) => [keys].flat().some((key) => !mocks.denied.has(key)), hasAction: (a: string) => [a, `${a}:own`].some((key) => !mocks.denied.has(key)) }) }))
 enableAutoUnmount(afterEach)
 
 /** What ran, in order: the group's own request and each sub-editor's save with the id it got. */

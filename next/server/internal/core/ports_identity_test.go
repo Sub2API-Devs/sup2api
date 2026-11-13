@@ -140,14 +140,14 @@ func codeOf(err error) string {
 
 // Has asks whether the set implies a key (CONTRACTS §21): an unscoped key
 // asks for every row, so a holder of account:read:own does not have
-// account:read; the former own-level spelling reads as its scope.
+// account:read; the former own-level spelling is no permission at all.
 func TestPermissionSetScoped(t *testing.T) {
 	t.Parallel()
-	own := PermissionSetOf("account:own:read", "account:update:group/12", "proxy:read")
+	own := PermissionSetOf("account:read:own", "account:update:group/12", "proxy:read")
 	for k, want := range map[string]bool{
 		"account:read":                      false,
 		"account:read:own":                  true,
-		"account:own:read":                  true,
+		"account:own:read":                  false,
 		"account:read:*":                    false,
 		"account:update:group/12":           true,
 		"account:update:group/12/account/5": true,
@@ -191,7 +191,6 @@ func TestRestrictScoped(t *testing.T) {
 		want []string
 	}{
 		{[]string{"account:read"}, []string{"account:read:own"}},
-		{[]string{"account:own:read"}, []string{"account:read:own"}},
 		{[]string{"account:update"}, []string{"account:update:group/12"}},
 		{[]string{"account:update:group/12/account/5"}, []string{"account:update:group/12/account/5"}},
 		{[]string{"account:update:own"}, nil},

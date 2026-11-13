@@ -105,24 +105,6 @@ func TestAdminLock(t *testing.T) {
 	ok("admin resets", code, out)
 	want("admin reset", "active", "", false)
 
-	// A stale lock on an account which runs (a node older than the lock
-	// enabled it) does not strand the owner: their disable drops it.
-	e.exec1(`UPDATE accounts SET admin_locked = true WHERE id = $1 RETURNING id`, id)
-	code, out = patch(alice, map[string]any{"status": "disabled"})
-	ok("owner disables with a stale lock", code, out)
-	want("stale lock dropped", "disabled", "disabled by owner", false)
-	code, out = patch(alice, map[string]any{"status": "active"})
-	ok("owner enables after a stale lock", code, out)
-	// Nor when the gateway disabled it since: only a disabled account is
-	// held back, and the owner's reset or enable clears the stale lock.
-	e.exec1(`UPDATE accounts SET admin_locked = true, status = 'auto_disabled', status_reason = 'upstream 401' WHERE id = $1 RETURNING id`, id)
-	code, out = e.doAs(alice, "POST", path+"/reset-status", nil)
-	ok("owner resets an auto-disabled account with a stale lock", code, out)
-	want("stale lock reset", "active", "", false)
-	e.exec1(`UPDATE accounts SET admin_locked = true, status = 'auto_disabled', status_reason = 'upstream 401' WHERE id = $1 RETURNING id`, id)
-	code, out = patch(alice, map[string]any{"status": "active"})
-	ok("owner enables an auto-disabled account with a stale lock", code, out)
-
 	// An account without a creator (older than ownership) is somebody else's.
 	legacy := e.exec1(`INSERT INTO accounts (name, plugin_key, type, credentials_enc) SELECT 'legacy', plugin_key, type, credentials_enc FROM accounts WHERE id = $1 RETURNING id`, id)
 	code, out = e.doAs(admin, "PATCH", fmt.Sprintf("/accounts/%d", legacy), map[string]any{"status": "disabled"})

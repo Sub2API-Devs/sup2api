@@ -125,8 +125,8 @@ func newFixture(t *testing.T) *fixture {
 
 	engine := gin.New()
 	authz := fakeAuthz{
-		f.admin: {"user:read", "group:read", "usage:all:read", "account:read", "account:own:read", "price:read", "proxy:read", "proxy:own:read"},
-		f.alice: {"apikey:self:manage", "account:own:read", "proxy:own:read"},
+		f.admin: {"user:read", "group:read", "usage:all:read", "account:read", "account:read:own", "price:read", "proxy:read", "proxy:read:own"},
+		f.alice: {"apikey:self:manage", "account:read:own", "proxy:read:own"},
 		f.carol: {"account:group:bind", fmt.Sprintf("account:read:group/%d", f.zeta)},
 		f.dave: {fmt.Sprintf("account:read:group/%d", f.hidden), fmt.Sprintf("account:update:group/%d/account/%d", f.alpha, f.acctB),
 			"account:test:group/*", "proxy:read:own"},
@@ -369,10 +369,10 @@ func TestLookupAccessKey(t *testing.T) {
 		{"a kind the key was given", key(f.admin, "group:read"), "groups?q=zeta", []string{"lk zeta"}},
 		{"a kind the key was not given", key(f.admin, "group:read"), "users", nil},
 		{"a permission the user does not hold", key(f.alice, "user:read"), "users", nil},
-		{"the own permission of a user who holds the full one", key(f.admin, "account:own:read"), "accounts", []string{"lk acct b"}},
+		{"the own permission of a user who holds the full one", key(f.admin, "account:read:own"), "accounts", []string{"lk acct b"}},
 		{"mine, given its permission", key(f.alice, "apikey:self:manage"), "api-keys?mine=true", []string{"lk key one"}},
-		{"mine, not given its permission", key(f.alice, "account:own:read"), "api-keys?mine=true", nil},
-		{"groups mine needs no permission", key(f.alice, "account:own:read"), "groups?mine=true&q=zeta", []string{"lk zeta"}},
+		{"mine, not given its permission", key(f.alice, "account:read:own"), "api-keys?mine=true", nil},
+		{"groups mine needs no permission", key(f.alice, "account:read:own"), "groups?mine=true&q=zeta", []string{"lk zeta"}},
 		{"groups named by the key's scopes", key(f.dave, fmt.Sprintf("account:read:group/%d", f.hidden)), "groups", []string{"lk hidden"}},
 		{"groups named by the user but not the key", key(f.dave, "proxy:read:own"), "groups", nil},
 	}

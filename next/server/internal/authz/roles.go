@@ -48,7 +48,7 @@ SELECT r.id, r.key, r.name, r.description, r.builtin, r.superuser, r.created_at,
         SELECT p.key, p.sort FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = r.id
         UNION ALL
         SELECT p.key || ':' || rs.scope, p.sort FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id
-        WHERE rs.role_id = r.id AND NOT (` + ownShadowed + `)) g), '{}'),
+        WHERE rs.role_id = r.id) g), '{}'),
     COALESCE((SELECT array_agg(ar.key ORDER BY ar.key) FROM role_assignable_roles ra
         JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser WHERE ra.role_id = r.id), '{}'),
     r.assign_custom,
@@ -696,14 +696,12 @@ type PermissionModule struct {
 }
 
 // ListPermissions returns the catalog grouped by module: core modules in
-// catalog order, then plugin modules by plugin key. The former own-level
-// keys are left out: the editor grants <action>:own instead.
+// catalog order, then plugin modules by plugin key.
 func (s *Service) ListPermissions(ctx context.Context) ([]*PermissionModule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 SELECT p.key, p.module, p.label, p.description, p.source, p.plugin_key, p.sensitive, p.status, p.scope_type, pl.name
 FROM permissions p LEFT JOIN plugins pl ON pl.key = p.plugin_key
-WHERE p.key <> ALL($1)
-ORDER BY p.source, p.module, p.sort, p.key`, legacyOwnKeys())
+ORDER BY p.source, p.module, p.sort, p.key`)
 	if err != nil {
 		return nil, err
 	}

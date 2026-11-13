@@ -45,7 +45,7 @@ describe('the parts of the CCGateway page', () => {
   })
 
   it('keeps the containers part for a settings reader without account keys: it checks its own keys', () => {
-    auth.denied = ['account:read', 'account:own:read']
+    auth.denied = ['account:read', 'account:read:own']
     expect(parts()).toEqual({ settings: true, runtimes: 1, nested: true })
   })
 

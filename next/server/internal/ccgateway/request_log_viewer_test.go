@@ -100,9 +100,9 @@ func TestRequestLogViewerPermissions(t *testing.T) {
 		keys viewerAuth
 		path string
 	}{
-		{viewerAuth{"account:own:read": true}, ""},
-		{viewerAuth{"account:own:read": true}, "/" + viewerLogID},
-		{viewerAuth{"account:update": true, "account:own:update": true}, ""},
+		{viewerAuth{"account:read:own": true}, ""},
+		{viewerAuth{"account:read:own": true}, "/" + viewerLogID},
+		{viewerAuth{"account:update": true, "account:update:own": true}, ""},
 		{viewerAuth{"settings:read": true, "account:read": true, "account:update": true}, "/" + viewerLogID + "/files/request.body"},
 	} {
 		engine := gin.New()

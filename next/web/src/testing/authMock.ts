@@ -5,7 +5,7 @@ const canonical = (k: string) => canonicalPermission(k) ?? k
 /**
  * The permission answers of an auth store mock whose caller holds every key
  * but the denied ones (read on every call: specs reassign the list). Keys
- * compare in their canonical spelling (account:own:read = account:read:own);
+ * compare in their canonical spelling (account:read:own/* = account:read:own);
  * a scoped action is held at every row with its key, else at its own rows
  * with its own scope (group and id scopes are not modelled).
  */

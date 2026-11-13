@@ -9,22 +9,6 @@
    "out": "account:update"
   },
   {
-   "in": "account:own:update",
-   "out": "account:update:own"
-  },
-  {
-   "in": "account:own:credential:view",
-   "out": "account:credential:view:own"
-  },
-  {
-   "in": "proxy:own:manage",
-   "out": "proxy:manage:own"
-  },
-  {
-   "in": "proxy:own:read",
-   "out": "proxy:read:own"
-  },
-  {
    "in": "account:update:own",
    "out": "account:update:own"
   },
@@ -187,22 +171,6 @@
   {
    "in": "plugin.x:y:own",
    "invalid": true
-  },
-  {
-   "in": "account:own:read",
-   "out": "account:read:own"
-  },
-  {
-   "in": "account:own:create",
-   "out": "account:create:own"
-  },
-  {
-   "in": "account:own:delete",
-   "out": "account:delete:own"
-  },
-  {
-   "in": "account:own:test",
-   "out": "account:test:own"
   },
   {
    "in": "account:create:group/12/account/*",
@@ -527,11 +495,6 @@
   },
   {
    "have": "account:read",
-   "want": "account:read:own",
-   "ok": true
-  },
-  {
-   "have": "account:own:read",
    "want": "account:read:own",
    "ok": true
   },
@@ -861,7 +824,7 @@
   },
   {
    "have": [
-    "account:own:update"
+    "account:update:own"
    ],
    "action": "account:update",
    "me": 7,
@@ -950,7 +913,7 @@
   },
   {
    "have": [
-    "proxy:own:manage"
+    "proxy:manage:own"
    ],
    "action": "proxy:manage",
    "me": 7,

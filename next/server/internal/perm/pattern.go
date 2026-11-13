@@ -44,39 +44,6 @@ var scopable = map[Key]Resource{
 // action takes no scope (the permissions.scope_type column).
 func ScopeType(action Key) Resource { return scopable[action] }
 
-// legacyOwn maps the former own-level keys to their scoped form. They stay
-// accepted as aliases (R2a); this table is the only place they are spelled.
-var legacyOwn = map[string]Key{
-	"account:own:read":            AccountRead + ":own",
-	"account:own:create":          AccountCreate + ":own",
-	"account:own:update":          AccountUpdate + ":own",
-	"account:own:delete":          AccountDelete + ":own",
-	"account:own:test":            AccountTest + ":own",
-	"account:own:credential:view": AccountCredentialView + ":own",
-	"proxy:own:read":              ProxyRead + ":own",
-	"proxy:own:manage":            ProxyManage + ":own",
-}
-
-// LegacyOwnKeys lists the former own-level keys with their scoped form.
-func LegacyOwnKeys() map[string]Key {
-	out := make(map[string]Key, len(legacyOwn))
-	for k, v := range legacyOwn {
-		out[k] = v
-	}
-	return out
-}
-
-// LegacyOwnKey is the former own-level key of action ("account:own:read"
-// for account:read), "" when it had none.
-func LegacyOwnKey(action Key) string {
-	for old, k := range legacyOwn {
-		if k == action+":own" {
-			return old
-		}
-	}
-	return ""
-}
-
 // ErrInvalidKey: a scope that does not parse, on an action that takes none,
 // or that the action does not accept.
 var ErrInvalidKey = errors.New("invalid permission key")
@@ -103,12 +70,9 @@ type Pattern struct {
 	Scope  Scope
 }
 
-// Parse reads a key, aliases and trailing wildcards included, into its
-// canonical pattern.
+// Parse reads a key, trailing wildcards included, into its canonical
+// pattern.
 func Parse(k string) (Pattern, error) {
-	if alias, ok := legacyOwn[k]; ok {
-		k = string(alias)
-	}
 	i := strings.LastIndexByte(k, ':')
 	if i < 0 {
 		return Pattern{Action: Key(k), Scope: Scope{All: true}}, nil
@@ -128,8 +92,8 @@ func Parse(k string) (Pattern, error) {
 	return Pattern{Action: action, Scope: s}, nil
 }
 
-// Canonical is the canonical spelling of k: aliases rewritten, trailing
-// "/*" dropped, a scope of everything left out.
+// Canonical is the canonical spelling of k: trailing "/*" dropped, a scope
+// of everything left out.
 func Canonical(k string) (Key, error) {
 	p, err := Parse(k)
 	if err != nil {
@@ -295,19 +259,4 @@ func CanonicalSet(keys []string) []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
-}
-
-// WithLegacyOwn is keys followed by the former own-level key of each
-// <action>:own among them that had one, for readers of the previous
-// version (R2a: access keys a previous core verifies, GET /me for plugin
-// pages). The next version drops it.
-func WithLegacyOwn(keys []string) []string {
-	out := slices.Clone(keys)
-	for old, k := range legacyOwn {
-		if slices.Contains(keys, string(k)) && !slices.Contains(keys, old) {
-			out = append(out, old)
-		}
-	}
-	slices.Sort(out)
-	return out
 }

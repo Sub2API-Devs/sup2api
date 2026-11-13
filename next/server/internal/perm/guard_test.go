@@ -10,13 +10,14 @@ import (
 	"testing"
 )
 
-// The former own-level keys (account:own:read …) are spelled in one place,
-// legacyOwn: production code names actions and scopes (CONTRACTS §21.0).
+// The former own-level keys (account:own:read …) are gone: production code
+// names actions and scopes (CONTRACTS §21.0); only the migrations that
+// rewrote them spell them.
 func TestNoLegacyOwnLiterals(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
 	err := filepath.WalkDir("..", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || path == "../perm/pattern.go" {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return err
 		}
 		file, err := parser.ParseFile(fset, path, nil, 0)

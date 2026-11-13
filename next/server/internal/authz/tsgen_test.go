@@ -40,9 +40,6 @@ func TestPermissionsTSNames(t *testing.T) {
 			t.Errorf("constant name %s of %s is taken twice or not an identifier", n, p.key)
 		}
 		seen[n] = true
-		if perm.ScopeType(p.key) != "" && perm.LegacyOwnKey(p.key) == "" {
-			t.Errorf("scopable %s has no former own-level alias", p.key)
-		}
 	}
 	for in, want := range map[string]string{"plugin:grant:db_schema_unconfined": "PluginGrantDbSchemaUnconfined", "self:plugin_ui": "SelfPluginUi"} {
 		if got := tsName(perm.Key(in)); got != want {
