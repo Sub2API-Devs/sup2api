@@ -116,9 +116,12 @@ func TestMigration0011Rolling(t *testing.T) {
 	}
 	before := write("before")
 	read()
-	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
+	// 0.9.3 ran beside 0.10.0, on the migrations up to 0012 (0013 drops the
+	// ai_* columns 0.9.3 reads; 0.11.0 needs 0.10.0 before it).
+	pluginsdktest.ApplyMigrations(t, dsn, schema, migrationDir(t, func(n string) bool { return n < "0013" }))
 	after := write("after")
 	read()
+	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
 
 	fh := pluginsdktest.NewFakeHost()
 	fh.SetDSN(dsn, schema)

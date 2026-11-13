@@ -317,8 +317,11 @@ func (s *snapshot) isSelf(text string) bool {
 type watchEntry struct {
 	Level   string
 	Expires time.Time // zero = no expiry
-	Locked  bool      // mirrors a user list (locks.go)
+	Locked  bool      // puts the user on a list (locks.go)
 }
+
+// lock names the list of a locked entry ("" = not locked).
+func (e watchEntry) lock() string { return lockOf(e.Locked, e.Level) }
 
 func secretContext(id int64, what string) string {
 	return "channel:" + strconv.FormatInt(id, 10) + ":" + what
@@ -607,6 +610,13 @@ func (p *Plugin) reloadWatch(ctx context.Context) error {
 	p.watch.Store(&m)
 	p.watchVersion.Store(version)
 	return nil
+}
+
+// userLock names the list that uid's live entry in memory puts the user on
+// ("" = none).
+func (p *Plugin) userLock(uid int64) string {
+	e, _ := p.liveWatch(uid)
+	return e.lock()
 }
 
 // liveWatch returns the user's live watch entry (ok = watched).

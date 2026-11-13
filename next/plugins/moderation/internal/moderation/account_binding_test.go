@@ -275,7 +275,7 @@ func noteFlow(r *pluginv1.GatewayRequestHookResponse, flow int64) bool {
 // 0.8.0 a group bound to a disabled flow falls back to the default flow.
 func TestUpgradeKeepsGroupBindings(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -339,7 +339,7 @@ func TestUpgradeKeepsGroupBindings(t *testing.T) {
 // group and settles the request. GET /bindings marks them inactive.
 func TestInactiveAccountBindingDoesNotDeferToAttempt(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -420,7 +420,7 @@ func TestInactiveAccountBindingDoesNotDeferToAttempt(t *testing.T) {
 // is sent to it, and a flow runs once per request.
 func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -515,7 +515,7 @@ func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 // its flow, also for a published and enabled flow whose spec it cannot read.
 func TestBindingInactiveFollowsSnapshot(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	inactive := func() bool {
 		t.Helper()

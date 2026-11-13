@@ -1130,13 +1130,12 @@ export default {
       confirm: {
         blocklist: '用户 #{id} 的每个请求都先审后发，命中即拒绝（这不是封禁）。名单条目锁定为拦截级，不会到期，也不会被规则调整。',
         allowlist: '用户 #{id} 只在请求放行后审核：从不拦截、不会被封禁。名单条目锁定为观察级，不会到期，也不会被规则调整。',
-        unlock: '用户 #{id} 移出“{list}”名单，名单条目不再锁定。'
+        unlock: '用户 #{id} 移出“{list}”名单，锁定条目从观察名单中移除。'
       },
       save: '保存',
       locked: '已锁定用户 #{id}',
       unlocked: '已解锁用户 #{id}',
       fixed: '锁定：级别由名单决定、不会到期，解锁后才能修改或移出',
-      badge: '锁定',
       refused: '该用户在名单里或条目已锁定，请先解锁'
     },
     settingsTab: {
@@ -1155,12 +1154,6 @@ export default {
       clearUrl: '清除 Webhook 地址',
       clearSecret: '清除签名密钥',
       reenter: '修改设置需要重新填写这个密钥（你没有核心的插件管理权限）',
-      legacyKey: '0.1 API Key',
-      legacyKeyKept: '仍保存着 0.1 版的 API Key。它已在 0.2 首次启动时转成渠道的密钥，不再使用；只持有“管理提示词审核”权限的用户在它清除之前无法保存设置。',
-      legacyKeyCleared: '保存时将清除 0.1 版的 API Key。',
-      legacyKeyClear: '清除',
-      legacyKeyUndo: '撤销',
-      legacyKeyReenter: '请先清除 0.1 版的 API Key 再保存',
       jevBuiltin: '内置（{v}）',
       jevCustom: '自定义',
       jevCopyBuiltin: '重置为内置内容',
@@ -1172,7 +1165,8 @@ export default {
       clearCacheHint: '立即丢弃所有节点上已缓存的结论。人工处理记录后，个别节点可能在缓存到期前仍沿用旧结论，清空可以兜底。',
       clearCacheConfirm: '清空后所有内容会按当前配置重新审核，一段时间内审核调用和费用会上升。',
       cacheCleared: '已清空',
-      cacheOff: '判定缓存目前是关闭的（缓存天数为 0，或旧设置 cache_ttl_seconds 为 0）。在上面填写 1–30 天并保存后开启。',
+      cacheOff: '判定缓存目前是关闭的（缓存天数为 0）。在上面填写 1–30 天并保存后开启。',
+      listsPending: '名单导入尚未完成，暂时不能保存设置',
     },
   },
   en: {
@@ -2227,13 +2221,12 @@ export default {
       confirm: {
         blocklist: 'Every request of user #{id} is checked before it is sent on and refused on a hit (this is not a ban). The watch entry is locked at the enforce level: it does not expire and no rule changes it.',
         allowlist: 'User #{id} is only moderated after the requests were sent on: never refused, never banned. The watch entry is locked at the observe level: it does not expire and no rule changes it.',
-        unlock: 'User #{id} leaves the “{list}” list; the watch entry is no longer locked.'
+        unlock: 'User #{id} leaves the “{list}” list; the locked entry is removed from the watch list.'
       },
       save: 'Save',
       locked: 'User #{id} locked',
       unlocked: 'User #{id} unlocked',
       fixed: 'Locked: the list sets the level and it does not expire; unlock it to change or remove it',
-      badge: 'Locked',
       refused: 'The user is on a list or the entry is locked; unlock it first'
     },
     settingsTab: {
@@ -2252,12 +2245,6 @@ export default {
       clearUrl: 'Clear the webhook URL',
       clearSecret: 'Clear the signing secret',
       reenter: 'Enter this secret again to change the settings (you do not have the core plugin management permission)',
-      legacyKey: '0.1 API key',
-      legacyKeyKept: 'The 0.1 API key is still stored. The first 0.2 start made it the key of a channel and it is no longer used; until it is cleared, users who only hold "Manage prompt moderation" cannot save the settings.',
-      legacyKeyCleared: 'The 0.1 API key will be cleared on save.',
-      legacyKeyClear: 'Clear',
-      legacyKeyUndo: 'Undo',
-      legacyKeyReenter: 'Clear the 0.1 API key first, then save',
       jevBuiltin: 'Built-in ({v})',
       jevCustom: 'Custom',
       jevCopyBuiltin: 'Reset to the built-in set',
@@ -2269,7 +2256,8 @@ export default {
       clearCacheHint: 'Drops the cached verdicts of every node at once. After records are reviewed by hand, a node may keep an old verdict until it expires; clearing the cache settles that.',
       clearCacheConfirm: 'After clearing, all content is moderated again under the current configuration; moderation calls and cost rise for a while.',
       cacheCleared: 'Cleared',
-      cacheOff: 'The verdict cache is off (the cache days are 0, or the retired setting cache_ttl_seconds is 0). Enter 1–30 days above and save to turn it on.',
+      cacheOff: 'The verdict cache is off (the cache days are 0). Enter 1–30 days above and save to turn it on.',
+      listsPending: 'The import of the user lists has not finished yet; the settings cannot be saved for now',
     },
   }
 }

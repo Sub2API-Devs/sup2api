@@ -21,7 +21,7 @@ var prefill = conversation("a harmless question", "MOD-HIT-sexual prefill")
 // effect at once, without a publish.
 func TestFlowScopeAPI(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	auditor := newAuditor(t, h, mod.srv.URL, AuditorOpenAI, map[string]int64{})
 	draft := map[string]any{"stages": []any{map[string]any{"auditors": []int64{auditor}}}}
 	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": draft}))
@@ -92,7 +92,7 @@ func TestFlowScopeAPI(t *testing.T) {
 // those there are.
 func TestRecordFlowSource(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	bound := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	def := setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	source := func(rid string, group int64) gjson.Result {
@@ -149,7 +149,7 @@ func TestRecordFlowSource(t *testing.T) {
 func TestFailPolicy(t *testing.T) {
 	mod := newFakeMod(t)
 	settings := map[string]any{"mode": ModeEnforce}
-	p, h, _ := startDB(t, nil, settings)
+	p, h, _ := startDB(t, settings)
 	openAIFlow(t, h, mod.srv.URL)
 	// On the plugin and not through the harness: the hook call itself ends
 	// with ctx.

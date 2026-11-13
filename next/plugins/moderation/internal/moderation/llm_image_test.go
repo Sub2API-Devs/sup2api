@@ -885,7 +885,7 @@ func llmImageFlow(t *testing.T, h *pluginsdktest.Harness, modBase string, group 
 // cached does not bring the cached text of its request back into the plan.
 func TestLLMReviewerSeesTheImage(t *testing.T) {
 	base, _, calls := imageMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	reviewer, flow, reviewed := llmImageFlow(t, h, base, 9)
 	if snap := p.snap.Load(); snap.mixedImages(snap.flows[flow]) || !snap.sendsImages(snap.flows[flow]) {
 		t.Fatal("a flow of an OpenAI auditor and an LLM auditor with images on is mixed, or sends no images")
@@ -1072,7 +1072,7 @@ func TestLLMReviewerSeesAWrappedImage(t *testing.T) {
 	}{{"with an empty cache", false}, {"with the text cached by another request", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			base, _, calls := imageMod(t)
-			p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+			p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 			_, _, reviewed := llmImageFlow(t, h, base, 9)
 			data := encodePNG(t, filled(64, 41, red))
 			wrapped := lineWrapped(data, 76, "\r\n")
@@ -1164,7 +1164,7 @@ func (b *lockedBuffer) String() string {
 // that says nothing about the images stays an error.
 func TestLLMImagesRefusedIsVisible(t *testing.T) {
 	var logged lockedBuffer
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true},
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true},
 		withLog(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn}))))
 	// The upstream answers a call with images withImages and a call without
 	// them withText (200 = a pass).
@@ -1325,7 +1325,7 @@ func TestLLMImagesRefusedIsVisible(t *testing.T) {
 // reason, the refusal of the images is marked, counted and logged.
 func TestLLMRefusalOfEveryCallIsNotAboutTheImages(t *testing.T) {
 	var logged lockedBuffer
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true},
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true},
 		withLog(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn}))))
 	var withImages, withText atomic.Int64
 	llm := newFakeProto(t, ProtocolAnthropic, func(_ int, r protoReq) (int, scriptTurn) {

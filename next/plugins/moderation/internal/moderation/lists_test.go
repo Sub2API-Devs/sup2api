@@ -1,29 +1,17 @@
 package moderation
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
-// Timing and the user lists (DESIGN-2026-11-10 §6): the default level, the
-// allowlist and the blocklist.
-
-// listConfig compiles settings with mode and the two user lists.
-func listConfig(mode string, allow, block []string) *config {
-	s := DefaultSettings()
-	s.Mode, s.AllowlistUserIDs, s.BlocklistUserIDs = mode, allow, block
-	return compile(s)
-}
+// Timing and the user lists (DESIGN-2026-11-10 §6): the default level and
+// the locked entries of the allowlist and the blocklist.
 
 // watchLevel is the level of uid's live watch entry in memory ("" = not
 // watched).
@@ -32,118 +20,74 @@ func (p *Plugin) watchLevel(uid int64) string {
 	return e.Level
 }
 
-// preModerated093 is the decision of 0.9.3 (hook.go preModerated and
-// effectiveLevel at 2dc20f2363), the reference decideHandling keeps for
-// every input without a locked entry.
-func preModerated093(c *config, level string, uid int64) bool {
+// handling010 is the decision of 0.10.0 (hook.go decideHandling at
+// 48339b0668), when the settings lists decided and a locked entry only
+// mirrored them: blocklisted users enforce, allowlisted users observe,
+// everyone else the level of their unlocked live entry ("" = none), or the
+// default level.
+func handling010(defaultLevel string, allow, block bool, level string) handling {
 	switch {
-	case c.blocklisted(uid):
-		return true
-	case c.allowlisted(uid):
-		return false
+	case block:
+		return handling{LevelEnforce, LevelSourceBlocklist}
+	case allow:
+		return handling{LevelObserve, LevelSourceAllowlist}
+	case level != "":
+		return handling{level, LevelSourceWatch}
 	}
-	if level == "" {
-		level = c.defaultLevel
-	}
-	return level == LevelEnforce
+	return handling{defaultLevel, LevelSourceDefault}
 }
 
-// decideHandling (§72.5): blocklisted users enforce, allowlisted users
-// observe, everyone else the level of their live watch entry or the default
-// level without one - the decisions of 0.9.3 for every mode, entry and list,
-// now with their source. A locked entry never decides by itself.
+// decideHandling (§72.5) decides from the watch entry alone: a locked entry
+// at its list's level, an unlocked live one at its own, the default level
+// without one - for every mode and entry the decision of 0.10.0 with the
+// lists that the locked entries stand for.
 func TestDecideHandling(t *testing.T) {
 	p := New()
 	now := time.Now()
 	p.now = func() time.Time { return now }
 	const (
-		none, observed, enforced, expired, lockedObs, lockedEnf = 1, 2, 3, 4, 5, 6 // users by watch entry
+		none, observed, enforced, expired, allowlisted, blocklisted = 1, 2, 3, 4, 5, 6 // users by watch entry
 	)
 	watch := map[int64]watchEntry{
-		observed:  {Level: LevelObserve, Expires: now.Add(time.Hour)},
-		enforced:  {Level: LevelEnforce},
-		expired:   {Level: LevelEnforce, Expires: now.Add(-time.Second)},
-		lockedObs: {Level: LevelObserve, Locked: true},
-		lockedEnf: {Level: LevelEnforce, Locked: true},
+		observed:    {Level: LevelObserve, Expires: now.Add(time.Hour)},
+		enforced:    {Level: LevelEnforce},
+		expired:     {Level: LevelEnforce, Expires: now.Add(-time.Second)},
+		allowlisted: {Level: LevelObserve, Locked: true},
+		blocklisted: {Level: LevelEnforce, Locked: true},
 	}
 	p.watch.Store(&watch)
-	lists := []struct {
-		name         string
-		allow, block bool
-		source       string
-	}{{"unlisted", false, false, ""}, {"allowlisted", true, false, LevelSourceAllowlist},
-		{"blocklisted", false, true, LevelSourceBlocklist}, {"on both lists", true, true, LevelSourceBlocklist}}
 	for _, mode := range []string{ModeOff, ModeObserve, ModeEnforce} {
-		for uid := int64(none); uid <= lockedEnf; uid++ {
-			for _, l := range lists {
-				var allow, block []string
-				if l.allow {
-					allow = []string{strconv.FormatInt(uid, 10)}
-				}
-				if l.block {
-					block = []string{strconv.FormatInt(uid, 10)}
-				}
-				c := listConfig(mode, allow, block)
-				got := p.handlingOf(c, uid)
-				name := fmt.Sprintf("mode %s, user %d, %s", mode, uid, l.name)
-				wantSource := l.source
-				if wantSource == "" {
-					wantSource = LevelSourceDefault
-					if uid == observed || uid == enforced {
-						wantSource = LevelSourceWatch
-					}
-				}
-				if got.source != wantSource {
-					t.Errorf("%s: source %s, want %s", name, got.source, wantSource)
-				}
-				level := p.watchLevel(uid)
-				if uid == lockedObs || uid == lockedEnf {
-					level = "" // locked: the lists decide, as on a 0.9.3 node without the entry
-				}
-				if want := preModerated093(c, level, uid); got.pre() != want || (got.level == LevelEnforce) != want {
-					t.Errorf("%s: %+v, 0.9.3 pre = %v", name, got, want)
-				}
+		s := DefaultSettings()
+		s.Mode = mode
+		c := compile(s)
+		for uid := int64(none); uid <= blocklisted; uid++ {
+			level := p.watchLevel(uid)
+			if uid == allowlisted || uid == blocklisted {
+				level = "" // 0.10.0 ignored the locked entry
+			}
+			want := handling010(c.defaultLevel, uid == allowlisted, uid == blocklisted, level)
+			if got := p.handlingOf(c, uid); got != want {
+				t.Errorf("mode %s, user %d: %+v, 0.10.0 %+v", mode, uid, got, want)
 			}
 		}
 	}
-	// The rows the design names.
-	for _, tc := range []struct {
-		name string
-		c    *config
-		uid  int64
-		want handling
-	}{
-		{"default enforce + observe entry", listConfig(ModeEnforce, nil, nil), observed, handling{LevelObserve, LevelSourceWatch}},
-		{"default enforce, no entry", listConfig(ModeEnforce, nil, nil), none, handling{LevelEnforce, LevelSourceDefault}},
-		{"default enforce, expired entry", listConfig(ModeEnforce, nil, nil), expired, handling{LevelEnforce, LevelSourceDefault}},
-		{"allowlisted + enforce entry", listConfig(ModeObserve, []string{"3"}, nil), enforced, handling{LevelObserve, LevelSourceAllowlist}},
-		{"blocklisted + observe entry", listConfig(ModeObserve, nil, []string{"2"}), observed, handling{LevelEnforce, LevelSourceBlocklist}},
-		{"both lists", listConfig(ModeObserve, []string{"1"}, []string{"1"}), none, handling{LevelEnforce, LevelSourceBlocklist}},
-		{"locked enforce entry of a user who left the blocklist", listConfig(ModeObserve, nil, nil), lockedEnf, handling{LevelObserve, LevelSourceDefault}},
-	} {
-		if got := p.handlingOf(tc.c, tc.uid); got != tc.want {
-			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
-		}
-	}
-	both := listConfig(ModeObserve, []string{"1", "5"}, []string{"1"})
-	if both.allowlisted(1) || !both.blocklisted(1) || !both.allowlisted(5) || both.blocklisted(5) || both.allowlisted(6) ||
-		both.lockKind(1) != LockBlocklist || both.lockKind(5) != LockAllowlist || both.lockKind(6) != "" {
-		t.Error("a user on both lists is blocklisted")
+	if p.userLock(allowlisted) != LockAllowlist || p.userLock(blocklisted) != LockBlocklist || p.userLock(enforced) != "" || p.userLock(none) != "" {
+		t.Error("the list of a locked entry is its level")
 	}
 }
 
 // An allowlisted user is not exempt: a violating request passes and is
 // recorded. The user is only moderated in the background, so auto_watch
 // does not add the user (P8): the user's entry is the locked observe entry
-// of the list (locks.go), which counts the violations. The user is never
+// (locks.go), which counts the violations. The user is never
 // banned, nor watched by hand.
 func TestAllowlistIsRecordedNotWatched(t *testing.T) {
 	for _, mode := range []string{ModeObserve, ModeEnforce} {
 		t.Run(mode, func(t *testing.T) {
 			mod := newFakeMod(t)
-			p, h, _ := startDB(t, nil, map[string]any{"mode": mode, "allowlist_user_ids": []string{"8"}, "ban_threshold": 2})
+			p, h, _ := startDB(t, map[string]any{"mode": mode, "ban_threshold": 2})
 			setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
-			waitFor(t, "locked entry", func() bool { return p.watchLevel(8) == LevelObserve })
+			lockUser(t, h, 8, LockAllowlist)
 			for i := 1; i <= 3; i++ {
 				rid := fmt.Sprintf("allow-%d", i)
 				if r := mustHook(t, h, hookReqAs(8, rid, fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != queuedNote {
@@ -207,7 +151,7 @@ func TestAutoWatchUsesDefaultLevel(t *testing.T) {
 		defer mu.Unlock()
 		return now
 	}
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "watch_days": 10}, func(n *node) { n.now = clock })
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "watch_days": 10}, func(n *node) { n.now = clock })
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	entry := func(hits int) Watch {
 		t.Helper()
@@ -246,7 +190,7 @@ func TestAutoWatchUsesDefaultLevel(t *testing.T) {
 // violations.
 func TestEnforceEntriesCountOnlyUnderDefaultEnforce(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	added := decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 4, "level": LevelEnforce, "days": 5}))
 	for i := 1; i <= 2; i++ {
@@ -271,15 +215,12 @@ func TestEnforceEntriesCountOnlyUnderDefaultEnforce(t *testing.T) {
 	}
 }
 
-// The entries of the user lists are locked: the watch API refuses every
-// change of them (409 locked) - also of a user listed before the reconcile
-// made the entry - and the list shows which list locks each. A user on both
-// lists is blocklisted.
+// A locked entry refuses every change through the watch routes (409
+// locked), and the list shows which list locks each.
 func TestLockedEntriesRefuseWatchAPI(t *testing.T) {
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "allowlist_user_ids": []string{"8", "9"}, "blocklist_user_ids": []string{"9", "10"}})
-	waitFor(t, "locked entries", func() bool {
-		return p.watchLevel(8) == LevelObserve && p.watchLevel(9) == LevelEnforce && p.watchLevel(10) == LevelEnforce
-	})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
+	lockUser(t, h, 8, LockAllowlist)
+	lockUser(t, h, 9, LockBlocklist)
 	locked := func(what string, method, path string, body map[string]any) {
 		t.Helper()
 		resp := h.Do(method, path, nil, body)
@@ -297,8 +238,7 @@ func TestLockedEntriesRefuseWatchAPI(t *testing.T) {
 	for _, it := range decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"locked": "true"}, nil)) {
 		marks[it.UserID] = fmt.Sprintf("%v %v %v %s %s %s %v", it.Allowlisted, it.Blocklisted, it.Locked, it.Lock, it.Level, it.Source, it.ExpiresAt == nil)
 	}
-	if len(marks) != 3 || marks[8] != "true false true allowlist observe manual true" || marks[9] != "false true true blocklist enforce manual true" ||
-		marks[10] != "false true true blocklist enforce manual true" {
+	if len(marks) != 2 || marks[8] != "true false true allowlist observe manual true" || marks[9] != "false true true blocklist enforce manual true" {
 		t.Fatalf("locked entries = %v", marks)
 	}
 	if resp := h.Do("GET", "/watchlist", map[string]string{"locked": "x"}, nil); resp.GetStatus() != 400 {
@@ -307,13 +247,8 @@ func TestLockedEntriesRefuseWatchAPI(t *testing.T) {
 	if d := decodeData[UserDetail](t, h.Do("GET", "/users/9", nil, nil)); d.Allowlisted || !d.Blocklisted || d.Watch.Lock != LockBlocklist {
 		t.Fatalf("user state = %+v", d.UserState)
 	}
-	// A user listed while the reconcile has not run yet is refused too.
-	c := *p.cfg.Load()
-	c.block = map[int64]bool{9: true, 10: true, 11: true}
-	p.cfg.Store(&c)
-	locked("add before the reconcile", "POST", "/watchlist", map[string]any{"user_id": 11})
 	// A blocklisted user can be banned by hand.
-	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 10}); resp.GetStatus() != 200 {
+	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 9}); resp.GetStatus() != 200 {
 		t.Fatalf("ban of a blocklisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 }
@@ -322,15 +257,12 @@ func TestLockedEntriesRefuseWatchAPI(t *testing.T) {
 // close_pre 503 for a user who is moderated first, a pass for everyone else.
 func TestBusyUsesHandling(t *testing.T) {
 	mod := newFakeMod(t)
-	lists := map[string]any{"max_inflight_mb": 16, "allowlist_user_ids": []string{"8"}, "blocklist_user_ids": []string{"9"}, "fail_policy": FailClosePre}
 	settings := func(mode string) map[string]any {
-		m := map[string]any{"mode": mode}
-		for k, v := range lists {
-			m[k] = v
-		}
-		return m
+		return map[string]any{"mode": mode, "max_inflight_mb": 16, "fail_policy": FailClosePre}
 	}
-	p, h, _ := startDB(t, nil, settings(ModeEnforce))
+	p, h, _ := startDB(t, settings(ModeEnforce))
+	lockUser(t, h, 8, LockAllowlist)
+	lockUser(t, h, 9, LockBlocklist)
 	channels := map[string]int64{}
 	auditor := func() int64 { return newAuditor(t, h, mod.srv.URL, AuditorOpenAI, channels) }
 	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, auditor())}}, 9)
@@ -394,71 +326,29 @@ func TestBusyUsesHandling(t *testing.T) {
 	p.inflightBytes.Store(0)
 }
 
-// exempt_user_ids is the retired name of the allowlist: read while the
-// settings have no allowlist_user_ids, ignored once they have.
-func TestExemptBecomesAllowlist(t *testing.T) {
-	ids := func(raw string) (allow, block string, s Settings) {
-		t.Helper()
-		s, err := DecodeSettings([]byte(raw))
+// The retired user lists are read for the one-time import only:
+// exempt_user_ids while allowlist_user_ids is absent (null counts as
+// absent), entries that are no user id counted.
+func TestRetiredListsDecoding(t *testing.T) {
+	for _, tc := range []struct {
+		raw          string
+		allow, block []int64
+		invalid      int
+	}{
+		{`{"exempt_user_ids":["7",8," 9 ","x","",1.5,"0"]}`, []int64{7, 8, 9}, nil, 3},
+		{`{"exempt_user_ids":["7"],"allowlist_user_ids":["11","12"]}`, []int64{11, 12}, nil, 0},
+		{`{"exempt_user_ids":["7"],"allowlist_user_ids":[]}`, nil, nil, 0},
+		{`{"exempt_user_ids":["7"],"allowlist_user_ids":null}`, []int64{7}, nil, 0},
+		{`{"allowlist_user_ids":["3"],"blocklist_user_ids":["4",5,"y","12345678901234567890"]}`, []int64{3}, []int64{4, 5}, 2},
+		{`{}`, nil, nil, 0},
+	} {
+		s, err := DecodeSettings([]byte(tc.raw))
 		if err != nil {
 			t.Fatal(err)
 		}
-		return strings.Join(s.AllowlistUserIDs, ","), strings.Join(s.BlocklistUserIDs, ","), s
-	}
-	// Only the retired key: it is the allowlist. Entries are written and
-	// checked as before (strings or numbers, anything else dropped).
-	allow, block, s := ids(`{"exempt_user_ids":["7",8," 9 ","x","",1.5]}`)
-	if allow != "7,8,9" || block != "" {
-		t.Fatalf("exempt only: allow %q block %q", allow, block)
-	}
-	if c := compile(s); !c.allowlisted(7) || !c.allowlisted(9) || c.allowlisted(1) || c.blocklisted(7) {
-		t.Fatal("exempt users are not allowlisted")
-	}
-	// Both keys: the new one wins, also when it is empty.
-	if allow, _, _ = ids(`{"exempt_user_ids":["7"],"allowlist_user_ids":["11","12"]}`); allow != "11,12" {
-		t.Fatalf("both keys: allow %q", allow)
-	}
-	if allow, _, s = ids(`{"exempt_user_ids":["7"],"allowlist_user_ids":[]}`); allow != "" || compile(s).allowlisted(7) {
-		t.Fatalf("empty allowlist: allow %q", allow)
-	}
-	// A value that is no list is ignored like everywhere else.
-	if allow, _, _ = ids(`{"exempt_user_ids":["7"],"allowlist_user_ids":null}`); allow != "7" {
-		t.Fatalf("null allowlist: allow %q", allow)
-	}
-	if allow, block, _ = ids(`{"allowlist_user_ids":["3"],"blocklist_user_ids":["4",5,"y"]}`); allow != "3" || block != "4,5" {
-		t.Fatalf("new keys: allow %q block %q", allow, block)
-	}
-	if allow, block, _ = ids(`{}`); allow != "" || block != "" {
-		t.Fatalf("defaults: allow %q block %q", allow, block)
-	}
-	// Beyond 1000 entries a list is cut (the core refuses longer ones on
-	// save) and Configure is told.
-	long := make([]string, 1005)
-	for i := range long {
-		long[i] = strconv.Quote(strconv.Itoa(i + 1))
-	}
-	list := "[" + strings.Join(long, ",") + "]"
-	for _, tc := range []struct {
-		raw       string
-		truncated string
-	}{
-		{`{"exempt_user_ids":` + list + `}`, "allowlist_user_ids"},
-		{`{"allowlist_user_ids":` + list + `}`, "allowlist_user_ids"},
-		{`{"blocklist_user_ids":` + list + `}`, "blocklist_user_ids"},
-		{`{"allowlist_user_ids":` + list + `,"blocklist_user_ids":` + list + `}`, "allowlist_user_ids,blocklist_user_ids"},
-	} {
-		_, _, s := ids(tc.raw)
-		if len(s.AllowlistUserIDs) > maxUserList || len(s.BlocklistUserIDs) > maxUserList || len(s.AllowlistUserIDs)+len(s.BlocklistUserIDs) < maxUserList ||
-			strings.Join(s.truncated, ",") != tc.truncated {
-			t.Fatalf("%.40s…: allow %d block %d truncated %v", tc.raw, len(s.AllowlistUserIDs), len(s.BlocklistUserIDs), s.truncated)
+		if !slices.Equal(s.lists.allow, tc.allow) || !slices.Equal(s.lists.block, tc.block) || s.lists.invalid != tc.invalid {
+			t.Errorf("%s: %+v", tc.raw, s.lists)
 		}
-		c := compile(s)
-		if in := c.allowlisted(1000) || c.blocklisted(1000); !in || c.allowlisted(1001) || c.blocklisted(1001) {
-			t.Fatalf("%.40s…: the first 1000 entries are kept", tc.raw)
-		}
-	}
-	if _, _, s = ids(`{"allowlist_user_ids":["1"]}`); len(s.truncated) != 0 {
-		t.Fatalf("short list reported as cut: %v", s.truncated)
 	}
 }
 
@@ -466,7 +356,7 @@ func TestExemptBecomesAllowlist(t *testing.T) {
 // state decides itself.
 func TestSimulateNoneFollowsDefaultLevel(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	path := fmt.Sprintf("/flows/%d/simulate", flow)
 	simulate := func(state string) TestResult {
@@ -492,53 +382,5 @@ func TestSimulateNoneFollowsDefaultLevel(t *testing.T) {
 	}
 	if resp := h.Do("POST", path, nil, map[string]any{"text": "x", "user_state": "blocked"}); resp.GetStatus() != 400 {
 		t.Fatalf("bad user_state = %d", resp.GetStatus())
-	}
-}
-
-// The user id lists take ids of up to 18 digits in the form, and the decoder
-// reports what it drops.
-func TestUserIDListsPatternAndDrops(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "settings.schema.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var schema struct {
-		Properties map[string]struct {
-			Items struct {
-				Pattern string `json:"pattern"`
-			} `json:"items"`
-		} `json:"properties"`
-	}
-	if err := json.Unmarshal(raw, &schema); err != nil {
-		t.Fatal(err)
-	}
-	const long = "12345678901234567890" // 20 digits: no int64
-	for _, key := range []string{"allowlist_user_ids", "blocklist_user_ids", "exempt_user_ids"} {
-		pattern := schema.Properties[key].Items.Pattern
-		re, err := regexp.Compile(pattern)
-		if err != nil || pattern == "" {
-			t.Fatalf("%s: pattern %q: %v", key, pattern, err)
-		}
-		if re.MatchString(long) || re.MatchString("1234567890123456789") || !re.MatchString("123456789012345678") || !re.MatchString("7") ||
-			re.MatchString("") || re.MatchString("-7") {
-			t.Errorf("%s: pattern %q does not take exactly 1 to 18 digits", key, pattern)
-		}
-	}
-	// Whatever reaches the decoder all the same is dropped and counted.
-	s, err := DecodeSettings([]byte(`{"allowlist_user_ids": ["8", "` + long + `", "x"], "blocklist_user_ids": ["` + long + `", "9"], "exempt_user_ids": ["` + long + `"]}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(s.AllowlistUserIDs, []string{"8"}) || !slices.Equal(s.BlocklistUserIDs, []string{"9"}) ||
-		fmt.Sprint(s.droppedIDs) != fmt.Sprint(map[string]int{"allowlist_user_ids": 2, "blocklist_user_ids": 1}) {
-		t.Fatalf("lists = %v %v, dropped = %v", s.AllowlistUserIDs, s.BlocklistUserIDs, s.droppedIDs)
-	}
-	// The retired list counts while it is the allowlist.
-	s, err = DecodeSettings([]byte(`{"exempt_user_ids": ["8", "` + long + `"]}`))
-	if err != nil || !slices.Equal(s.AllowlistUserIDs, []string{"8"}) || s.droppedIDs["exempt_user_ids"] != 1 {
-		t.Fatalf("retired list: %v, dropped = %v (%v)", s.AllowlistUserIDs, s.droppedIDs, err)
-	}
-	if s, err = DecodeSettings([]byte(`{"allowlist_user_ids": ["8"], "blocklist_user_ids": []}`)); err != nil || s.droppedIDs != nil {
-		t.Fatalf("clean lists: dropped = %v (%v)", s.droppedIDs, err)
 	}
 }

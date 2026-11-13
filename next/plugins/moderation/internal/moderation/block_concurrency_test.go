@@ -15,12 +15,11 @@ import (
 // manual unblock finish here, then resurrects the block from that old count.
 // The per-user transaction now orders the whole decision before the unblock.
 func TestUnblockCannotBeOvertakenByAnOldAutoBan(t *testing.T) {
-	llm := mockLLM(t)
-	settings := map[string]any{"ban_threshold": 2, "ban_window_hours": 1, "ban_duration_hours": 0}
-	p, _, fh := startDB(t, llm, settings)
+	settings := map[string]any{"mode": ModeEnforce, "ban_threshold": 2, "ban_window_seconds": 3600, "ban_duration_hours": 0}
+	p, _, fh := startDB(t, settings)
 	fh2 := pluginsdktest.NewFakeHost()
 	fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
-	p2, _ := startNode(t, fh2, settingsMap(llm.srv.URL, ModeEnforce, settings))
+	p2, _ := startNode(t, fh2, settings)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	db, err := p.db(ctx)

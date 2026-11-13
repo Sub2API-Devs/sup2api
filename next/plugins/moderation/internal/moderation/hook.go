@@ -183,8 +183,8 @@ func (p *Plugin) precheck(c *config, in *pluginv1.GatewayRequestHookRequest) *pl
 // Level sources (events.level_source): what decided the level of a request
 // (decideHandling).
 const (
-	LevelSourceBlocklist = "blocklist"
-	LevelSourceAllowlist = "allowlist"
+	LevelSourceBlocklist = LockBlocklist
+	LevelSourceAllowlist = LockAllowlist
 	LevelSourceWatch     = "watch"
 	LevelSourceDefault   = "default"
 )
@@ -199,30 +199,25 @@ type handling struct {
 func (h handling) pre() bool { return h.level == LevelEnforce }
 
 // decideHandling is the one decision of a request's level (CONTRACTS §72.5,
-// new-api gate.go preModerated): blocklisted users enforce, allowlisted
-// users observe (the blocklist wins), everyone else the level of their live
-// watch entry w (watched = there is one), or the default level of mode
-// without one. A locked entry only mirrors the lists (locks.go) and never
-// decides by itself: while the lists of the settings decide (0.10.0), the
-// locked entry of a user who just left them is ignored until it is removed.
-// Moderators are moderated like everyone (staff.go).
-func decideHandling(c *config, w watchEntry, watched bool, uid int64) handling {
+// new-api gate.go preModerated): the level of the user's live watch entry w
+// (watched = there is one) - a locked entry's level is its list, blocklist
+// enforce and allowlist observe (locks.go) -, or the default level of mode
+// without one. Moderators are moderated like everyone (staff.go).
+func decideHandling(c *config, w watchEntry, watched bool) handling {
 	switch {
-	case c.blocklisted(uid):
-		return handling{LevelEnforce, LevelSourceBlocklist}
-	case c.allowlisted(uid):
-		return handling{LevelObserve, LevelSourceAllowlist}
-	case watched && !w.Locked:
-		return handling{w.Level, LevelSourceWatch}
+	case !watched:
+		return handling{c.defaultLevel, LevelSourceDefault}
+	case w.Locked:
+		return handling{w.Level, w.lock()}
 	}
-	return handling{c.defaultLevel, LevelSourceDefault}
+	return handling{w.Level, LevelSourceWatch}
 }
 
 // handlingOf decides the level of uid's request with the watch list in
 // memory.
 func (p *Plugin) handlingOf(c *config, uid int64) handling {
 	w, watched := p.liveWatch(uid)
-	return decideHandling(c, w, watched, uid)
+	return decideHandling(c, w, watched)
 }
 
 // requestModel is the client model of a hook request: the model field, or

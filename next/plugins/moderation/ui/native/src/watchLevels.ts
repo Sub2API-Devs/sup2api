@@ -1,10 +1,10 @@
 import type { WatchLevel } from './types'
 
 // The watch levels and actions shared by the inline watch actions, the watch
-// list rows and the watch entry editor. Since 0.10.0 a user on a user list
-// of the settings, or with a locked entry, cannot be added, set to a level
-// or removed (the watch API answers 409 locked): the list decides, and the
-// user is unlocked first (userLock.ts).
+// list rows and the watch entry editor. A user on a user list (a locked
+// entry, 0.10.0) cannot be added, set to a level or removed (the watch API
+// answers 409 locked): the list decides, and the user is unlocked first
+// (userLock.ts).
 
 export const WATCH_LEVELS: readonly WatchLevel[] = ['observe', 'enforce']
 

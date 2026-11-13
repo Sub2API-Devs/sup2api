@@ -331,7 +331,7 @@ func TestLLMQuestionsInFlow(t *testing.T) {
 		}
 		return 200, verdictCall(`{"q1":false,"q2":false,"reason":"nothing wrong"}`)
 	})
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	oc := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelOpenAI, "name": "o", "base_url": mod.srv.URL, "api_key": "k1"}))
 	lc := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelLLM, "name": "l", "base_url": llm.srv.URL, "model": "m1", "api_key": "k2"}))
 	oa := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "o", "type": AuditorOpenAI, "channel_id": oc.ID}))

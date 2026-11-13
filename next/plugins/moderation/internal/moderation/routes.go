@@ -32,6 +32,8 @@ func (p *Plugin) routes() {
 	p.Handle("POST", "/watchlist", p.createWatch)
 	p.Handle("PATCH", "/watchlist/:user_id", p.updateWatch)
 	p.Handle("DELETE", "/watchlist/:user_id", p.deleteWatch)
+	p.Handle("PUT", "/watchlist/:user_id/lock", p.lockWatch)
+	p.Handle("DELETE", "/watchlist/:user_id/lock", p.unlockWatch)
 	p.Handle("GET", "/watchlist/:user_id/events", p.listWatchEvents)
 	p.Handle("GET", "/users", p.getUsers)
 	p.Handle("GET", "/users/:user_id", p.getUserDetail)
@@ -252,8 +254,8 @@ type RelatedItem struct {
 // UserState is the record user's moderation state now.
 type UserState struct {
 	Watch *Watch `json:"watch"`
-	// Allowlisted, Blocklisted: the user lists of the settings (a user on
-	// both is blocklisted).
+	// Allowlisted, Blocklisted: the user's locked entry puts them on that
+	// list (Watch.Lock).
 	Allowlisted bool       `json:"allowlisted"`
 	Blocklisted bool       `json:"blocklisted"`
 	Staff       bool       `json:"staff"`
@@ -544,8 +546,7 @@ func eventExtras(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
 // moderator, block.
 func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (UserState, error) {
 	now := p.now().UTC()
-	c := p.cfg.Load()
-	st := UserState{Allowlisted: c.allowlisted(uid), Blocklisted: c.blocklisted(uid), Staff: p.isStaff(ctx, uid)}
+	st := UserState{Staff: p.isStaff(ctx, uid)}
 	if until, ok := (*p.blocked.Load())[uid]; ok && (until.IsZero() || now.Before(until)) {
 		st.Blocked = true
 		if !until.IsZero() {
@@ -556,8 +557,8 @@ func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (Us
 	w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, now))
 	switch {
 	case err == nil:
-		w = c.withLock(w)
 		st.Watch = &w
+		st.Allowlisted, st.Blocklisted = w.Lock == LockAllowlist, w.Lock == LockBlocklist
 	case !errors.Is(err, pgx.ErrNoRows):
 		return st, err
 	}
@@ -778,7 +779,7 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
 	}
 	if len(errs) == 0 {
-		errs = p.unbannableUser(ctx, p.cfg.Load(), uid)
+		errs = p.unbannableUser(ctx, uid)
 	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid block / 封禁参数无效", errs), nil

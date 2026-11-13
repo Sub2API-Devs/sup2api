@@ -5,7 +5,7 @@ import UserListBadge from './UserListBadge.vue'
 import UserRef from './UserRef.vue'
 import WatchActions from './WatchActions.vue'
 import { dt, enumLabel, num } from './format'
-import { canManage, canManageSettings, useModHost } from './host'
+import { canManage, useModHost } from './host'
 import { levelTone } from './tones'
 import type { UserState, Watch } from './types'
 import { coreUser } from './users'
@@ -13,10 +13,9 @@ import { userListOf, useUserLock } from './userLock'
 
 // The record user's state now (new-api record-user-section): watch level,
 // allowlist / blocklist, moderator, banned; manage users change the watch
-// level inline. Moderators are never put on the watch list; a user on a
-// user list keeps the level the list fixes. Those who may edit the settings
-// lock the user on a user list or unlock it (userLock.ts; lists-changed:
-// reload the state).
+// level inline and lock the user on a user list or unlock it (userLock.ts;
+// lists-changed: reload the state). Moderators are never put on the watch
+// list; a user on a user list keeps the level the list fixes.
 // openable: the user links to the user detail drawer (open-user).
 const props = defineProps<{ userId: number; state: UserState; openable?: boolean }>()
 const emit = defineEmits<{
@@ -31,7 +30,6 @@ const canWatch = computed(() => canManage() && !props.state.staff)
 /** core account status and roles (when user:read is granted) */
 const account = computed(() => coreUser(props.userId))
 const lock = useUserLock(() => emit('lists-changed'))
-const lockable = computed(() => canManageSettings() && !props.state.staff)
 const list = computed(() => userListOf(props.state))
 const onLock = (key: string) => lock.run(props.userId, key, list.value)
 </script>
@@ -58,9 +56,9 @@ const onLock = (key: string) => lock.run(props.userId, key, list.value)
         </SHint>
       </template>
       <SHint v-else-if="!state.staff" inline size="xs">{{ t('userState.notWatched') }}</SHint>
-      <span class="mod-ml-auto mod-inline mod-gap">
-        <WatchActions v-if="canWatch" :user-id="userId" :watch="w" :allowlisted="state.allowlisted" :blocklisted="state.blocklisted" @changed="emit('watch-changed', $event)" />
-        <SDropdown v-if="lockable" :actions="lock.items(list)" :label="t('lock.menu')" @select="onLock" />
+      <span v-if="canWatch" class="mod-ml-auto mod-inline mod-gap">
+        <WatchActions :user-id="userId" :watch="w" :allowlisted="state.allowlisted" :blocklisted="state.blocklisted" @changed="emit('watch-changed', $event)" />
+        <SDropdown :actions="lock.items(list)" :label="t('lock.menu')" @select="onLock" />
       </span>
     </div>
   </div>
