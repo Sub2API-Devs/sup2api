@@ -4,6 +4,171 @@
 
 ---
 
+## 发布说明（T85 汇总，2026-11-13）
+
+本节是期 1–4 的总览：发布约束、迁移与回滚、行为变化（相对 develop 的最终效果，被后续任务改写的只记最终口径）、运维清单、wontfix 与待决定。各任务的细节、测试与逐条回滚见下文各条目（期 1 T01 起，期 4 见“# 期 4”）。提交号是该任务的主提交，review fixes 紧随其后。
+
+### 1. 发布约束
+
+1. **一个版本发布全部迁移 0097–0103**：托管核心要求库里的迁移是本核心清单的连续前缀（`app/managed_checks.go` `appliedPrefix`）。发布前再合一次 develop：develop 若已新增 0097 及以后的迁移，本分支的迁移要整体后移重新编号（0098 的 checksum 已在期 4 P4F2 变过，测试库需重建；生产未跑过）。
+2. **S1–S4、S5、R0 与整合审查的 2FA 开启同版本发布**：后端改为 proof 之后，旧控制台的改密码、关 2FA、重新生成备用码、添加通行密钥、开启 2FA、超管移交、ccgateway 远程设置等都会 403 `verification_required`。只回滚其中一部分也会出同样的问题，要一起回滚。
+3. **资源范围两步走**：本版本是 R2a（0103 只新增，8 个旧 own key 作为别名保持 active）。R2b 在确认全部节点都已升级后的下一版本做：按旧 own 行重新同步新表 → 目录把旧 key 标 removed → 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥中的旧写法与冗余旧行（写审计）→ 前端删除 `LEGACY_OWN`（`implies.ts` 的别名表与 Go `Parse` 的别名表保留）。见“期 4 资源范围（R0–R7）发布说明”。
+4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。旧节点上 admin（0099 收回超管专属权限）与 operator（0102 收回 `role:define`）暂时不能管理角色，由超管处理；旧节点重启时会把 `role:manage` 等目录行的状态改回，新节点重启后恢复。托管升级先停副本再迁移，没有新旧混跑阶段。
+5. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.286`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.286 开始（moderation `hostUICompat ^3.15`）。发布号不是 0.1.286 时，把 `grep -rn 0.1.286 next/plugins next/sdk/manifest` 的结果与 `web/packages/ui/README.md`“UI SDK 3.15”一节一并改掉。dynweight 取 0.5.9（develop 已发布 0.5.8）。
+6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 在原生 UI 未构建时会加 `--allow-missing-ui`，开发包可以，正式包不行（五个插件的原生 UI 需各自 `npm ci && npm run build`）。
+7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。发布前按运维清单第 8 条查；有安装时先卸载再装，或由用户决定一次性改 `publisher_id`（写审计）。
+8. **存量多超管**：0098 遇到多个超管时停止启动，错误只列 user id。先 `sub2api admin recover-superadmin --email <要保留的那个>` 再启动（运维清单第 1 条）。
+9. **跨域部署**：服务端需 `Access-Control-Expose-Headers: X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）。
+10. **gateway 外壳的 tokenless 管理开关**：所有核心都带令牌后清除（运维清单第 7 条）。升级页把 preflight 的 `warnings` 显示为“提醒（不阻断升级）”。
+
+### 2. 迁移与回滚
+
+| 迁移 | 内容 | 任务（提交） | 可重跑 | 回滚 |
+|---|---|---|---|---|
+| 0097 | `role_assignable_roles`、`roles.assign_custom`，`role:manage` 持有者等价授予 | T13（2da8c978bc）、T09（934b1c5b23） | 是 | 表与列可留；托管见下 |
+| 0098 | 超管唯一：唯一索引 + 延迟触发器；软删除用户的超管行删除；多超管停启动 | T18（2e03d308fb）、P4F2（c0d59634a9） | 是 | `DROP TRIGGER user_roles_one_superuser ON user_roles; DROP FUNCTION user_roles_one_superuser(); DROP INDEX roles_one_superuser;`（不删也可） |
+| 0099 | 收回内置 admin、operator 的超管专属权限（审计 `authz.reclaim.super_only`） | T54（e6deef074e） | 是 | 不自动恢复；按审计补回（见 T54） |
+| 0100 | `accounts.admin_locked` | T63（7aa8c6654d） | 是 | 列可留 |
+| 0101 | 纠正内置 operator 的可分配清单 | T55（ac34dc10b8） | 是 | 按审计 `removed` 经 PUT 设回 |
+| 0102 | 收回内置 operator 的 `role:define`（审计 `authz.reclaim`，`via = migration 0102`） | P4F1（f9632c2896） | 是 | 不自动恢复；超管在角色页重新勾选 |
+| 0103 | `permissions.scope_type`、`role_permission_scopes`；旧 own 授予逐字复制为 `:own`；密钥补新写法 | R2a（d2e33448e7） | 是 | 新表、新列旧代码不读 |
+
+- 全部迁移都 `SET LOCAL lock_timeout = '10s'` 并先锁 `authz_meta`，有写入才推进 authz 版本，各节点约 30 秒内重新加载权限。
+- **托管部署回滚核心**：旧核心启动时发现库里有它不认识的迁移会拒绝启动（`database includes migrations unknown to this core`），所以必须先删除迁移记录：`DELETE FROM schema_migrations WHERE id IN ('0097_role_assignable.sql','0098_one_super_admin.sql','0099_reclaim_super_only.sql','0100_account_admin_locked.sql','0101_operator_assignable.sql','0102_operator_reclaim_role_define.sql','0103_scoped_permissions.sql');`。删了记录的迁移在再次升级时会重跑：0099、0101、0102 会再次收回期间由超管设回的授权（写审计）；删了 `admin_locked` 列等对象而没删记录则不会重建。非托管部署可以不删记录。
+- 回滚核心时插件也回滚到上一版本（新版本插件的 `hostCompat` 不接受旧核心）。访问密钥里新增的规范写法旧代码忽略，旧写法仍在。回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
+
+### 3. 行为变化（最终口径）
+
+| # | 变化 | 影响对象 | 任务（提交） |
+|---|---|---|---|
+| 1 | 授予超管角色比较超管标志，访问密钥不能借 super_admin 提权 | 访问密钥 | T01（46f2f183d2） |
+| 2 | 改密码、撤销会话、登出立即生效；用 JWT 且不续期的脚本在改密码后失效 | 会话、第三方脚本 | T06（3e78510840） |
+| 3 | 授予检查在事务内读库、计入 disabled 插件权限 | 角色写入 | T07（e9946e2b21） |
+| 4 | `role:manage` 拆为 `role:define` + `role:assign`；内置 operator 只有 `role:assign` | 角色管理者 | T09（934b1c5b23）、P4F1（f9632c2896） |
+| 5 | 超管全局唯一、角色冻结、只能本人移交（密码 + 第二因素）；服务器 CLI 恢复超管 | 超管 | T12、T16、T17、T18（2e03d308fb） |
+| 6 | 分配角色受“可管理角色”清单约束，撤销同样；作用于用户 = 操作权限 + 目标的非默认角色都在清单内且权限 ⊆ 操作者（含本人；不能禁用、删除自己，不能撤销自己的超管） | 用户管理者 | T13–T15、T56、FU6（fec1698e1b）、期 3 R1（ec3b6de722） |
+| 7 | 内置角色（含新增的 supplier）声明化，名称、权限、清单只允许超管改；admin 默认不含超管专属权限（存量收回）；operator 按白名单 | admin、operator | T50–T55 |
+| 8 | 访问密钥 = 用户实时权限 ∩ 密钥权限，可勾任何权限（含插件权限、`self:*`）；只有管理访问密钥本身与登录会话只允许会话 | 访问密钥 | S2（826eab1049）、S3（9bde44b7f2）、S4（5835a65248） |
+| 9 | 高危操作每次二次验证（通行密钥 / 2FA / 无强方式时密码，proof 5 分钟一次性，绑定用户、会话或密钥、scope、`METHOD path`）：明文回显、超管移交、本人改密码/邮箱/2FA/通行密钥（含开启 2FA）、改他人密码、清他人 2FA、删用户、插件上传/安装/同意/确认暂缓授予、发布者、核心升级与更新源、ccgateway 装码与拨号；改密码等接口不再收当前密码字段 | 控制台用户、脚本 | S1（dd8f66cbb9）、S3、S5（5626d84d91）、R0（8927849f66）、p4-review |
+| 10 | 插件代理：访问密钥按插件权限放行；空权限路由拒绝；按账号操作的插件路由要求调用者对这些账号有范围（只有插件权限的角色由 200 变 403） | 插件路由调用者 | T22、T24、T25、S4 |
+| 11 | own（受限档）规则：只在变化时校验分组、解绑也要权限、掩码回填改地址须重新输入、不能恢复被管理员禁用的账号、草稿与预备容器每人 3 个 | 供应商 | T28、T29、T63、T64 |
+| 12 | 代理拨号守卫（内网地址在拨号时拒绝）；他人账号在用的 own 代理不能改连接字段 | 代理属主 | T30、T31、FU1 |
+| 13 | WebSocket 每轮重新鉴权（撤销 1008、分组变化 1012） | API Key 客户端 | T32 |
+| 14 | 调余额、用户组成员、个人专属价走“作用于用户”口径；segment:manage 不能改自己所在组的定价与授权 | 财务、定价管理者 | T33、FU2、FU6 |
+| 15 | 用量详情对本人视图与无 `account:read` 的视图不返回账号字段；ccgateway 请求日志按白名单投影 | 只读者 | T34、T43、FU3 |
+| 16 | payment webhook 未接验签器时 501 | payment | T35 |
+| 17 | 账号运行时只认 `account:*`；`/system/ccgateway/connect` 删除；请求日志设置不接受受限档 | settings 管理者、供应商 | T36–T39 |
+| 18 | 插件 AuthzCheck 查非本插件 key 需 `authz.read`；设置密钥打码；OAuth 会话绑定发起人（升级时进行中的授权需重来） | 插件 | T40–T42 |
+| 19 | 清他人 2FA 需要 `user:password:reset` | 只有 `user:update` 的角色 | T48 |
+| 20 | 插件权限按 manifest `defaultRoles`/`inheritFrom` 授予；升级新增的敏感授予或给 user、自定义角色的授予需同意，内置插件的这类授予暂缓到插件页确认 | 插件管理者 | T58–T61、P4C（b2ce05e5dc、9954105816） |
+| 21 | 手动运行插件任务需 `task:run` | 插件管理者 | T62 |
+| 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`） | 角色管理者、供应商 | R1–R8 |
+| 23 | 启动时自检路由表与菜单（不一致拒绝启动）；控制台权限目录由服务端生成 | 运维、开发 | T68（7698df4d65）、T69（bb27dc839f） |
+| 24 | 控制台：X-Authz-Version 与 403 触发重新取权限；用户页、角色页、同意页只给可管理的对象；仪表盘账号状态卡片；财务区“余额流水”菜单；iframe 插件可查本插件权限 | 控制台用户 | T74–T83 |
+
+被后续任务取代、不再成立的中间口径：T10/T57 的 sessionOnly（S3 删除，改为二次验证）；T11 的明文回显拒绝访问密钥（S3 改为二次验证）；T33/FU5 的“不能作用于自己 / 超管自作用豁免”（FU6 改为可管理角色口径）；T41 的带密钥 schema 一律拒绝 `$ref`（FU4 支持本地引用）；own/all 成对 key（R1–R7 改为范围）。
+
+### 4. 运维清单（只读 SQL，执行需用户授权登录生产）
+
+```sql
+-- 1. 超管（0098 只允许一个；软删除用户的超管行会被迁移删除）
+SELECT u.id, u.status, u.deleted_at IS NOT NULL AS deleted
+FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id
+WHERE r.superuser ORDER BY u.id;
+
+-- 2. 与内置角色同 key 的自定义角色（T50：存在时 SyncCore 停止启动）
+SELECT id, key, builtin, superuser FROM roles
+WHERE key IN ('super_admin', 'admin', 'operator', 'supplier', 'user') AND NOT builtin;
+
+-- 3. codex / dynweight / volcengine 的插件权限授给了哪些角色、各有多少用户（M1；受限档角色有则先撤）
+SELECT p.plugin_key, p.key AS permission, r.key AS role, r.builtin,
+       (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id) AS users
+FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id JOIN roles r ON r.id = rp.role_id
+WHERE p.source = 'plugin' AND p.plugin_key IN ('codex', 'dynweight', 'volcengine')
+ORDER BY p.plugin_key, p.key, r.key;
+
+-- 4. 存量内置 operator 的角色管理权限（0102 之后应只剩 role:assign）
+SELECT r.key AS role, p.key, p.status
+FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
+WHERE r.builtin AND r.key = 'operator' AND p.key IN ('role:manage', 'role:define', 'role:assign');
+
+-- 5. C-M5：非官方发布者，与已授予关键宿主权限 / db.schema 的插件
+SELECT id, name, trust_level, status, created_at FROM publishers WHERE trust_level <> 'official';
+SELECT g.plugin_key, g.permission, g.plugin_version, g.status
+FROM plugin_permission_grants g
+WHERE g.status = 'granted'
+  AND g.permission IN ('ui.native', 'accounts.credentials', 'ledger.credit', 'ledger.debit', 'users.write', 'db.core_views', 'db.schema')
+ORDER BY g.plugin_key, g.permission;
+
+-- 6. 插件 defaultRoles 存量对照（D9 默认不回填）：manifest 声明的默认角色里，当前没有该权限的
+WITH d AS (
+    SELECT pl.key AS plugin_key, up->>'key' AS local, role
+    FROM plugins pl
+    JOIN plugin_versions pv ON pv.plugin_key = pl.key AND pv.version = pl.active_version,
+         jsonb_array_elements(pv.manifest->'userPermissions') up,
+         jsonb_array_elements_text(COALESCE(up->'defaultRoles', '["admin"]'::jsonb)) role
+)
+SELECT d.plugin_key, p.key AS permission, d.role
+FROM d
+JOIN permissions p ON p.key = 'plugin.' || d.plugin_key || ':' || regexp_replace(d.local, '^plugin\.[^:]+:', '')
+JOIN roles r ON r.key = d.role
+WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id)
+ORDER BY 1, 2, 3;
+
+-- 8. claude-oauth 的发布者（见发布约束 7）
+SELECT pl.key, pl.publisher_id, pub.name, pub.trust_level, pl.active_version
+FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.key = 'claude_oauth';
+```
+
+- 第 6 条只列差异。决定回填时（用户授权、写库），在一个事务里按结果逐行授予并推进版本：`INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = '<role>' AND p.key = '<permission>' ON CONFLICT DO NOTHING;`，每行另写一条 `audit_logs`（`action = 'authz.sync.grant'`，`detail = {"via": "manual backfill", "role", "key"}`），最后 `UPDATE authz_meta SET version = version + 1 WHERE id = 1;`。内置角色的授予只应由超管决定。
+- 7. gateway tokenless 开关：外壳配置 `allow_tokenless_management` 或环境变量 `SUB2API_ALLOW_TOKENLESS_MANAGEMENT`；在节点上带令牌读管理 socket 的指标：`curl -s --unix-socket <管理 socket> -H "Authorization: Bearer $(cat <management_token_file>)" http://gateway/metrics | grep gateway_management_tokenless`。`gateway_management_tokenless_enabled 1` 且 `..._accepted_total` 不再增长时即可清除开关（CONTRACTS §54 外壳管理 socket 令牌）。
+- 只读核查的已知结果（2026-11-12，DECISIONS）：超管 1 个；无 supplier 同名角色、无自定义角色；codex/dynweight/volcengine 的 6 个插件权限只授给内置 admin（0 用户）；operator 0 人；发布者只有 official 的 sub2api。发布前按当日数据重跑。
+
+### 5. wontfix 与延后（含期 3、期 4 的取舍）
+
+| 项 | 结论 | 理由 |
+|---|---|---|
+| W1-F17 `usage:all:read` / lookup api-keys 含用户邮箱 | wontfix | 与 `/usage` 的 `user_email` 同口径；目录描述写明（T67） |
+| W1-F7 GET 接口写副作用 | wontfix | 运行时观测事实，幂等；注释说明 |
+| W4-P10 插件本地 key 命名不统一 | wontfix | 改名会丢授权（改名只能经 `inheritFrom`） |
+| W5-A2 插件设置路由权限来自 manifest | wontfix | 静态路由写不出动态 key：路由 `self:plugin_ui`（S4）+ 处理函数按 manifest 判断，`UsesPluginKeys()` 登记 |
+| C-T1 AuthedRead 接受访问密钥 | wontfix | 结果都按密钥收窄后的权限计算 |
+| `/ui/plugins` 返回插件版本 | wontfix | `asset_base` 本身含版本哈希，去掉 version 无意义 |
+| remote-fingerprint 不接 netguard | wontfix | 连内网主机是正当用途；期 4 R0 起每次二次验证 `host.install` |
+| PUT `/segments/:id/groups` 与分组价格不做目标检查 | wontfix | 作用对象是整个用户组（职责分离问题）；FU2 只禁止改自己所在组 |
+| 插件代理 `/p/:key/*` 不进 RouteSpec | 记录 | 直接挂 gin group，权限来自 manifest 路由声明，由插件路由表与 T22/T24 检查 |
+| 只持有 `group/G/account/X` 范围的操作者在编辑器里没有候选 | 记录 | 候选按自己的范围裁剪（`offerOf`），这种组合要经 API 授出；后端照常按 Missing 判断 |
+| 升级页 preflight warnings 为网关英文原文 | 记录 | 文本来自外壳，控制台不翻译 |
+| T78 批量“移入用户组”与“用户组与定价”抽屉未按可管理过滤 | 记录 | 服务端 403 兜底 |
+| `/accounts/summary` 计入已停用插件的账号 | 记录 | 与概览口径一致（产品决定） |
+| TS 中大于 2^53 的 id 丢精度 | 记录 | 实际 id 远小于此 |
+| sdk corefloor 未加 `hostCompat` 下限校验 | 延后 | 会碰大量 pkgtest 夹具；发布约束 5 人工核对 |
+| proof 绑定 URL 不含请求体；路由级 proof 在处理函数前消费（校验失败也已用掉） | 接受 | 同主体、一次性、5 分钟；`PUT /me/password` 先校验再消费 |
+| 插件 `AuthzCheck`/`AccountScopeCheck` 按在途请求的密钥收窄，精确字符串求交，会话请求同时在途时也被收窄 | 接受 | 失败收紧 |
+| 访问密钥的新建与修改仍只要密码（只允许会话的路由） | 接受（待决定 4） | 不经访问密钥，与会话管理同级 |
+| 超管密钥里已禁用的插件权限 `Restrict` 仍保留 | 接受 | 此前就有，与已删除的核心权限相同 |
+| `LEGACY_OWN` 与旧别名 | 随 R2b | 服务端 R2b 前仍输出别名 |
+| 插件 defaultRoles 存量回填 | 不做（D9） | 运维清单第 6 条给出差异与 SQL |
+| 期 1 PLAN §6 其余延后项（超管登录通知、raw_cost、volcengine own 化、payment 真实验签、/plugin-ui 验签缓存、tokenless 开关删除、refund ActOnOthers、usage:settle 界面、WebSocket 空闲复检） | 延后 | 见 PLAN §6 |
+
+### 6. 待用户决定（期 4 整合审查提出，未改）
+
+1. **插件升级授权的两条路径规则不同**：第三方插件升级的同意页里，来自 `defaultRoles`/`inheritFrom` 的需同意授予（敏感、或给 user、自定义角色）只要 `plugin:install` + 二次验证就能批准；内置插件同一授予在插件页确认要 `role:define` + 能修改每个角色（内置角色只有超管）。可以统一为严的（同意页对需同意的计划授予也跑 `checkRolesGrantable`，admin 不能再批这类升级）或宽的（确认只要 `plugin:install`）。
+2. **`apikey:self:manage` 没有 step-up 标记**，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。
+3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。
+4. **访问密钥的新建与修改**仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
+5. **超管只用一个因素就能清掉自己的全部因素**（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
+6. **ccgateway 运行时镜像上传**（`runtime/uploads*` 创建与分片）不要二次验证，只有 `load` 要；DECISIONS 原文是“安装与上传”。
+
+### 7. 契约索引
+
+- CONTRACTS §4：核心权限目录（`scope_type`、`step_up`、`sensitive`、`description`、`requires`，`GET /permissions`）与内置角色默认。
+- CONTRACTS §21：资源范围（§21.0 key 语法与蕴含、§21.5 控制台判断、§21.6 共享向量）。
+- CONTRACTS §43.6：授予与作用于用户（可管理角色、防提权 `Missing`，范围按蕴含比较）。
+- CONTRACTS §80：访问密钥（用户权限 ∩ 密钥权限、self 虚拟权限）与二次验证（§80.2 scope 表）。
+
+---
+
 ## T01 H1：授予超管角色比较超管标志
 
 - 改动：授予与作用对象的比较统一用 `core.PermissionSet.Missing`，同时比较超管标志和权限 key。`SetUserRoles` 判断操作者是否超管改用有效权限集（受访问密钥收窄），不再直接查库；`createUserTx` 删掉事务外的重复预检，只保留同一事务里的 `SetUserRoles`。
@@ -660,6 +825,8 @@
 
 # 期 4
 
+> 按任务组排列：访问密钥与二次验证（S1–S5、R0）→ 插件升级授权（P4C、P4CFIX、P4C 前端、T82）→ 期 3 遗留（P4F1–P4F5、T81）→ 前端（T74–T83、前端遗留）→ 资源范围（R1–R8 与发布说明）→ 目录与路由表（T67–T69）→ 插件统一升版本（T84）→ 整合审查。后面的任务改写了前面条目的，在前面条目里用“后续：”注明。发布约束与运维清单见文首“发布说明”。
+
 ## S1–S4 访问密钥按权限可配置 + 高危操作二次验证（产品性改动，设计：DESIGN-access-key-stepup.md 第 8 节定稿）
 
 - 改动：
@@ -731,6 +898,92 @@
 - 影响对象：控制台用户。高危操作每次弹出验证；改密码不再在表单里填当前密码（在验证弹窗里填）。必须与 S1–S4 同版本发布。
 - 回滚：revert S5 及其 review fixes 的提交（含上面那处后端错误码，回滚后通行密钥验证失败恢复 401）。单独回滚 S5 而保留 S1–S4 会让上述流程重新 403，应一起回滚。
 
+## 期 4 R0：settings:manage 守护的装码与拨号接口挂二次验证（决策“插件升级授权”p4s 交回后补充）
+
+- 改动：泄露的会话或带 `settings:manage` 的访问密钥原本可以把核心指向另一台主机、装另一份运行时或换更新源。新增 scope `host.install`（`core.StepUpHostInstall`，iam `stepUpScopes` 登记，不要求密码）。挂 `Router.StepUp`：
+  - ccgateway（`host.install`）：PUT `remote-config`（SSH 目标与凭据）、POST `remote-fingerprint`、`remote-test`（拨号）、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（装载或运行代码）。上传会话的创建与分片 PUT 不挂（只传字节、分片很多，装载那一步才要 proof），读取、`cleanup`、`purge`、`cli` 不挂。
+  - PUT `/system/update-source`：复用 `system.update`（与执行升级同一类：决定下一次升级运行的代码）。
+  - 目录 `settings:manage` 加 `stepUp` 展示标记（访问密钥选择器提示“使用时需二次验证”）。
+- 测试：ccgateway `TestHostInstallRoutesStepUp`（`testutil.StepUpRefused`，逐条断言哪些要、哪些不要）；updater `TestCoreUpdateRoutesStepUp` 增加 update-source；iam `TestFormerSessionOnlyPermissionsInAccessKeys`（带 `settings:manage` 的密钥改 remote-config：无 proof 403，带 `host.install` proof 200）；authz `TestCatalogFlaggedSets`。
+- 影响对象：控制台在 ccgateway 设置页、运行时安装与更新源设置时会弹出二次验证（S5 的 StepUpDialog 按 403 `verification_required` 自动处理）；脚本化调用需先 `POST /me/verify` 取 `host.install`/`system.update` proof。须与 S5 同版本发布。
+- 回滚：revert 这个提交。
+
+## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
+
+- 改动：`plugin/install/rolegrants.go`。`planRoleGrants` 复用 `catalogKeys` + `roleGrants`，列出一次不覆盖角色的同意会做的授予（目录里还没有的权限的 `defaultRoles`，以及当下持有其 `inheritFrom` 旧 key 的角色；超管角色不计），`sensitive` 或授予对象不是内置 `admin`/`operator`/`supplier` 的标为需要同意。`Review.resolveDefaultRoles` 一并填 `new_role_grants`、`role_grants_need_consent`。
+  - 上传或市场升级：`carryOverConsent` 在需要同意时不沿用；同意事务里（`autoRoleGrants`，与写入同一快照）再判断一次，需要同意就回滚、版本留在 `awaiting_consent`。沿用时写 `plugin.consent.auto`。
+  - 内置插件（系统同意）：版本照常 `approved`（`BuiltinsReady`/`BuiltinsCommitted` 需要，否则节点不就绪、托管升级无法提交），需要同意的授予不写入：涉及的权限改为按名字授予其余不需同意的角色、不再走 `inheritFrom`（持有者已在同一事务里解析），暂缓的授予写进 `plugin.consent.auto` 的 `pending`。插件列表与详情 `role_grants_to_review` 从这些审计算出；`POST …/role-grants/confirm` 需要同意页显式指定角色的同样资格（`checkRolesGrantable`：`role:define` + `CanGrantToRoles`），经新增的 `core.PermissionCatalog.GrantPluginPermission` 写入（`authz.sync.grant`，`via: review`，移动 authz 版本）；`…/reject` 不写入，只清除提示（后续：P4CFIX 起拒绝对所有版本的同一授予生效）。均写审计（`plugin.role_grants.confirm`/`reject`）。不加迁移。
+  - 首次安装与操作者自己点同意不变。
+  - 审查后（P4C review fixes）：自动同意（沿用或系统）时，本次新建的每个权限都按计划**按名字**授予不需同意的角色、不再走 `inheritFrom`（`withholdGrants`），执行的授予就是计划的授予，避免计划之后才加入的旧 key 持有者被继承；这些授予的 `authz.sync.grant` 因此是 `via: default`，来源（default/inherit）见 `plugin.consent.auto` 的 `granted`。激活时（rollout 的 `ApplyDefaults(…, nil)`）新建的权限不再继承（`PermissionDefs` 对 nil grants 不带 `inheritFrom`）：那时才建出的只可能是同意后被删掉的权限，没有人审查过它的授予。reject 与 confirm 要求相同资格。待确认清单只看插件本次安装（`plugins.installed_at`）之后的审计。
+- 测试：install `TestUpgradeRoleGrantsNeedConsent`（新增 sensitive 授予、新增授予给 user、经 inheritFrom 授予自定义角色 → 不沿用，版本 `awaiting_consent`；只给 admin/operator/supplier 的非敏感授予 → 沿用并有审计；之后操作者同意照常授予）、`TestBuiltinUpgradeWithholdsRoleGrants`（EnsureBuiltin 升级批准版本，只写不需同意的授予，暂缓项列出；无 `role:define` 或角色不可改时 confirm 403；confirm 写入并清空；下一次升级再暂缓，reject 清空且不写入）；authz `TestGrantPluginPermission`；plugin/api `TestAPIRoleGrantsToReview`。
+- 影响对象：升级时 manifest 新增敏感权限或把新权限给 user、自定义角色的插件——上传不再自动批准，要有人在同意页确认；内置插件这类授予要在插件页确认后才生效（之前随升级直接生效）。前端（插件页提示与确认按钮、同意页展示 `new_role_grants`）已由“P4C 前端”与 T82 完成。后续：期 4 整合审查起 confirm 每次二次验证 `plugin.grant`，控制台只对能指定全部所列角色的人显示按钮。
+- 回滚：revert 这个提交即可；回滚后暂缓的授予不会被自动补上（审计里有清单，需要时手工授予）。
+
+## 期 4 P4CFIX：拒绝暂缓授予对所有版本生效
+
+- 问题：待确认清单（`PendingRoleGrants(key, "")`）按 (permission, role) 跨版本去重，只显示最早版本；前端按清单里的版本逐个 POST `…/role-grants/reject`，后来版本也暂缓的同一授予在重新加载后又出现。
+- 改动：`reject` 记下的每个 (permission, role) 同时清除该插件在这次拒绝之前（按审计先后，不论版本高低：直接 API 只拒后一版本也会清掉前一版本的同一项）所有版本里暂缓的同一授予（`PendingRoleGrants` 的 NOT EXISTS 增加按 `grants` 包含匹配的条件）；版本自身的清单照旧整体清除。之后的升级再次暂缓同一授予时重新列出。confirm 行为不变：只清本版本，其他版本的同一项因角色已持有而不再列出（若之后从角色收回该权限，会在其他版本下重新出现，与修复前相同）。前端不改。
+- 测试：install `TestRejectWithheldGrantAcrossVersions`（两个版本暂缓同一授予只列一次；拒一次后只剩后一版本独有的项；全部拒绝后为空且无写入；之后的升级再暂缓时重新列出）。
+- 回滚：revert 提交即可；无迁移。规则按查询计算，库里已有的 reject 审计上线后同样生效（清除之前跨版本残留的同一授予，即本次要修的情况）；回滚后这些残留重新列出。
+
+## P4C 前端：插件列表与详情的“有待确认的新授权”
+
+- 改动：`PluginSummary`/`PluginDetail` 类型补 `role_grants_to_review`。插件列表状态列在非空时提示“N 项授权待确认”；详情页顶部 `parts/RoleGrantsReview.vue`（复用同意页的 `NewRoleGrants` 列表，需要确认的高亮）：持有 `plugin:install` 与 `role:define` 时显示“确认”“全部拒绝”，按版本依次 POST `…/versions/:version/role-grants/confirm|reject`，完成后重新加载详情；没有资格的只显示提示与所需权限（角色级资格 `CanGrantToRoles` 由服务端裁决，403 照常提示）。
+- 测试：`RoleGrantsReview.spec`（列表与高亮、按版本确认、全部拒绝、缺任一权限不显示按钮）。
+- 回滚：revert 提交即可，纯前端。
+
+## T82 同意页：逐权限授予角色（P4-B）、按权限预填默认角色、无 role:define 不显示、预判 db_schema_unconfined、展示新授予（P4C 前端）
+
+- 后端（只加只读字段）：`Review.needs_db_schema_unconfined` = manifest 申请 db.schema 且 `dbSchemaUnconfined(trust == official)`；`dbSchemaUnconfined`（有 schema 管理、未启用角色隔离、不是官方发布者）是同意检查 `checkGrantRights` 与评审共用的唯一判断。同意时前端把勾选的宿主权限都作为显式授予发送，所以以前授予过的 db.schema 同样会被检查，字段不区分沿用。`ReviewUserPerm.new` = 目录里还没有该权限（`catalogKeys`）。上传与评审两处返回都填。
+- 前端：`consent/newPermissionRoles.ts`（`useNewPermissionRoles`）是逐权限角色的唯一状态：只有 `role:define` 才有选项；超管可选全部（`/me/assignable-roles`，不含超管角色），其他人只可选清单内、可授予、自己不持有的自定义角色（与服务端规则一致）。每个 `new` 权限从 manifest 默认角色起步，只发送改动过的权限（`new_permission_roles`，逐 key），未改动的保持 manifest 默认（含操作者不能指定的内置角色）；改动后操作者不能指定的默认角色会被去掉，界面提示。不再发送全局字段 `role_keys_for_new_permissions`。已存在的权限标注“其授予不变”。db.schema 行在 `needs_db_schema_unconfined` 且缺 `plugin:grant:db_schema_unconfined` 时与其他缺权限的行一样置灰并禁用同意按钮。新增 `consent/NewRoleGrants.vue` 列出 `new_role_grants`（需要确认的高亮）并在 `role_grants_need_consent` 时提示不会自动通过（插件页的待确认授予复用它）。
+- 影响对象：插件同意页的操作者。非超管不再看到内置角色（原来勾了 403）；勾一个角色不再替换全部新权限的默认授予。
+- 测试：install `TestReviewConsentFlags`（官方不标记、new 只标目录里没有的、verified 无隔离标记且同意 403、开启隔离后两者都放行）；web `ConsentView.spec`（逐权限预填与只发改动、无 role:define 无选择、非超管只列可指定的自定义角色并提示去掉默认、db_schema_unconfined 预判、新授予列表）。CONTRACTS 同步。
+- 回滚：revert 提交即可；新增字段只读，旧控制台忽略。
+
+## 期 4 P4F1 决策 D3：内置 operator 不再持有 role:define（启动同步 + 迁移 0102，产品性收紧）
+
+- 来源：`role:manage` 的拆分由启动同步完成（catalog `role:define`/`role:assign` 的 `inherits`，`grantInherited` 在新 key 首次创建时授予所有持有 `role:manage` 的角色），不是迁移 0097。生产从 develop 升级时，迁移先跑、同步后跑，所以只靠迁移收不回来。
+- 改动：
+  1. `authz/sync.go`：核心权限拆分继承时跳过默认集合不含该 key 的内置角色（`builtinsWithout`）。内置角色的核心权限就是其默认集合，旧 key 上的授予来自旧默认、不是管理员选择，所以拆分不带过去；自定义角色照常继承。目前只影响 `role:define` 在内置 operator 上（admin 默认含两半，operator 默认含 `role:assign`；user、supplier 没有 `role:manage`）。插件权限的继承不受影响。
+  2. `0102_operator_reclaim_role_define.sql`：收回本版本更早启动已经给出的那条授予（测试库、预发、做过生产备份验证的库）。只删除内置（`builtin AND NOT superuser`）`operator` 上的核心权限 `role:define`，每条写 `authz.reclaim` 审计（actor 为系统，`detail.via = "migration 0102"`、`role`、`key`），有收回才移动 `authz_meta.version`。写法同 0099/0101：`SET LOCAL lock_timeout = '10s'`，先 `SELECT … FROM authz_meta FOR UPDATE`。自定义角色与 operator 的其他权限不动；超管之后仍可再授予。
+- 测试：authz `TestSyncCoreSplitsRoleManage`（持有 `role:manage` 的内置 admin、operator 与自定义角色首次同步后：operator 只有 `role:assign`，admin 两半都有，自定义角色两半都有并有继承审计）；migrations `TestOperatorReclaimRoleDefineMigration`（新库不写不移版本；收回 operator 的、保留 admin 与自定义角色的、一条审计、版本 +1；再跑无变化）。
+- 影响对象：内置 operator 的持有者不能再定义角色（新建、改权限、删除角色）（生产 operator 0 人）。发布说明草稿：回滚到旧版本后 admin（0099）与 operator（本项）暂时都不能管理角色，由超管处理。
+- 回滚：revert 同步改动即恢复拆分时的继承（只对之后首次创建的 key 生效）；迁移不可逆向执行，需要时由超管在角色页给 operator 重新勾选 `role:define`，或按 `authz.reclaim`（`via = migration 0102`）审计手工补回。
+
+## 期 4 P4F2：0098 多超管报错不再含用户邮箱
+
+- 改动：`0098_one_super_admin.sql` 的 `RAISE EXCEPTION` 只列 user id（`several super admins: user ids 3, 7; keep one with "sub2api admin recover-superadmin --email <the email of the one to keep>" …`）。迁移失败的信息原样成为启动失败的错误与日志，是唯一出处（启动代码不另行拼接用户信息）。处理时按 id 查邮箱：`SELECT id, email FROM users WHERE id IN (…)`。
+- 0098 尚未发布（只在 feat/authz-hardening），改文本会改变它的 checksum：已用旧 0098 跑过的测试库需重建；托管核心的迁移前缀校验（`managed_checks`）只在已发布版本之间比较，不受影响。
+- 测试：migrations `TestOneSuperAdminMigration` 断言错误列出两个 id、且不含 `@`。
+- 影响对象：无行为变化，仅错误信息。回滚：revert 这个提交（同样会改回 checksum，适用同一说明）。
+
+## 期 4 P4F3：SyncCore 新建内置角色的默认授予写审计
+
+- 改动：`authz/sync.go` `grantDefaults`（唯一一处）：新建的内置角色（新库的全部内置角色、升级带来的 supplier）得到的默认权限与可分配清单每一项都写 `authz.sync.grant`（actor 为系统，`detail.via` 为 `default` 或 `assignable`，另带 `role_created: true`）；已有角色只授予本次新建的默认，与之前相同。此前新建角色的授予不审计，生产验证时 supplier 的 8 项默认授权没有审计行。
+- 测试：authz `TestBuiltinAssignableDefaults`（新库可分配清单 5 项各一条、均标 `role_created`）、`TestSyncCoreAddsSupplierToExistingRoles`（supplier 的 8 项默认权限各一条）。
+- 影响对象：仅审计；新库首次启动多出一批 `authz.sync.grant` 行。回滚：revert 这个提交。
+
+## 期 4 P4F4：小清理（期 3 审查小问题）
+
+- 预备容器：`abandonPreparation` 并入 `disposePreparation(ctx, p, reason)`（`account/preparations.go`，唯一一处）。`reason` 为 `cancelled`（本人取消，插件 cancel 回调拒绝时中止，同前）、`abandoned`（首次准备失败，调用方已持锁；只处理 `pending`，成功后删行，归还名额与幂等键，同前）、`expired`（清理任务，筛选同前）。三者都回调插件 cancel 阶段：本人取消在改状态前回调（插件拒绝即中止，同前），放弃与清理在该行真正开始撤销（由非 `cancelling` 改为 `cancelling`）后回调一次，失败只记日志、不阻止清理，被续期而未清理的、重试中的不再回调（此前放弃与清理不回调；审查后修正回调时机），撤销资源后写 `account.preparation.cancel` 审计（`detail.reason`；actor 为创建者，清理任务为系统；此前放弃不写审计，取消在撤销前写）。
+- 插件同意：`new_permission_roles`、`role_keys_for_new_permissions` 里的未知角色由 install 先校验（`checkNamedRolesExist`），400 的字段名与请求一致，目录已有的权限写的未知角色也 400（此前静默忽略；authz `CanGrantToRoles` 的 `role_keys` 字段只作兜底）。
+- 删除：`buildReview` 里随即被 `resolveDefaultRoles` 覆盖的 `DefaultRoles` 赋值；无生产调用方的 `core.Authorizer.CanActOn` 与 `authz.Service.CanActOn`（以及各测试替身）；`authz/menus.go`、`plugin/api/ui.go` 传给 `manifest.FilterUI` 的判断里重复的 `perm == ""`（`FilterUI` 自己处理）。
+- 测试：account `TestAccountPreparationLimit`（放弃各有审计与插件 cancel 回调）；install `TestConsentRoleGrantRights`（未知角色的字段名，含已有权限）；其余为现有测试。
+- 影响对象：仅错误信息、审计与插件回调；回滚：revert 这个提交。
+
+## 期 4 P4F5 T81 后端：GET /accounts/summary（供应商仪表盘账号状态卡片）
+
+- 改动：`account/summary.go` 新增 `account.Counts` 与 `CountAccounts(ctx, q, scope)`（范围条件复用 `scoped`，`scope` 由 `core.OwnerScope(ctx, "account:read")` 决定：全量权限为全部，own 级为自己创建的；后续：R2a 起路由为 `PermScoped(account:read)`，R3 起按 `DataScope` 计数，分组与 id 范围同样计入），`GET /accounts/summary` 以 `PermAny(account:read, account:own:read)` 注册，返回 `{total, available, auto_disabled, disabled}`。`usage` 概览的 `accounts` 改为调用同一个函数（scope=nil），JSON 形状不变。前端卡片由期 4 前端任务做（决策 D25：只做账号状态，不显示用量与成本）。
+- 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
+- 影响对象：新增只读接口；回滚：revert 这个提交。
+
+## T81 W2-G5 前端：仪表盘账号状态卡片
+
+- 改动：新增 `dashboard/AccountStatusCard.vue`（可用/总数、自动停用与手动禁用、无可用为红、有自动停用为琥珀），管理员仪表盘改用它（原内联卡片与 tone 计算移入）。非管理员仪表盘：持有 `account:read` 或 `account:own:read`（后续：R8 起为任意范围的 `account:read`，`hasAction`）时取 `GET /accounts/summary` 显示该卡片，不依赖 `usage:self:read`（供应商只有 own 级账号权限也能看到自己的账号状态）；刷新按钮一并重取。`AccountCounts` 类型共用；web mock 增加 `/accounts/summary`。
+- 审查补充：mock 的 `/accounts/summary` 同样计入孤立账号（随 followups 提交）。已知：同时有 `usage:all:read` 与只有 `account:own:read`（没有 `account:read`）的少见组合走管理员仪表盘，其账号卡片来自 `/usage/overview`，不显示；加载失败时卡片显示“—”不弹提示（次要卡片）。
+- 测试：新增 `UserDashboard.spec`（own 级账号权限显示卡片与计数、无账号读权限不请求不显示）；`AdminDashboard.spec` 照常通过。
+- 回滚：revert 提交即可，纯前端。
+
 ## T74 B1 前端：X-Authz-Version 与 403 触发重新取权限
 
 - 改动：`@sub2api/host` 的 `configureHttp` 增加 `onAuthzVersion(v)`（每个带 `X-Authz-Version` 的响应，含错误响应）与 `onForbidden(e)`（每个 403）。控制台 `stores/authzWatch.ts` 是唯一的判断处：头值大于 `max(me.authz_version, 已触发过的头值)` 时防抖 1 秒重取一次（多节点下同一版本至多一次，版本变小或相等不取）；`permission_denied` 的 403 节流 10 秒取一次（二次验证等其他 403 不算）；还没有 `/me` 时都不取。`auth.refreshPermissions()` = `loadMe()` + `refreshShell()`（插件模块与菜单），并发调用共用一次；完成后 `permissionsEpoch` 加一，当前路由按 `router/guard.ts` 的 `deniedRoute`（与导航守卫同一判断）不再允许时跳走（/forbidden 或该页的 deniedRedirect）。角色页改自己的角色后调 `refreshPermissions`（原来只 `loadMe`）。
@@ -741,6 +994,7 @@
 ## T75 账号表单字段级权限 useAccountCaps（G1、G2、W5-B3、W5-B4 前端）
 
 - 改动：新增 `composables/useAccountCaps(editing)`，`ACCOUNT_FIELD_KEYS`（relay、groupBind、groupManage、settingsCustom）放在 `useOwnership.ts`。scope 取 `account:update`（编辑）或 `account:create`（新建）的 all/own 级；`bindGroups = all || group:manage || account:group:bind`、`relay = all || account:relay`（与后端 `checkOwnChange` 只对 own 级检查一致）、`proxyByURL = proxy:manage || proxy:own:manage`、`customSettings = account:settings:custom`；`creatable(t) = !t.custom_upstream || relay` 只在这里计算。账号编辑器：无 bindGroups 时分组只读并提示所需权限；保存（新建与编辑）只在 `group_ids` 与原值（新建为空）不同时带上；无 proxyByURL 时不出现“粘贴代理串”；认证方式里不可建的类型置灰；类型有 `guarded_settings` 且无 customSettings 时提示只能用官方值；新建时拉取模型同样要求 creatable。批量编辑：无 bindGroups 时分组项禁用并提示。类型选择器：不可建的类型置灰、不可选并提示需要 `account:relay`。`AccountType` 类型补 `guarded_settings`、`custom_upstream`。
+- 后续：R8 起 `useOwnership` 改为 `useScope()`，all/own 两档改为“全部 / 受限档”（own、分组、id 范围都按受限档），`proxy:own:manage` 写作 `proxy:manage:own`；字段口径不变。
 - 偏离：spec 写的 `useAccountCaps(account?)` 改为 `useAccountCaps(editing)`（只需要“新建还是编辑”，批量编辑没有单个账号）；另加 `customSettings` 只用于提示，受限设置的表单改写仍由服务端完成。
 - 影响对象：own 级账号用户（供应商）。原来提交后才 403 的分组、粘贴代理、relay 类型，现在在表单上直接不可操作。编辑账号不再总是带 `group_ids`：没改分组的保存不再触发分组权限检查。
 - 测试：`useAccountCaps.spec`、`AccountEditor.spec`（无 bind 权限分组只读不提交、group_ids 没变不带、无代理管理权限无粘贴 URL、own 且无 relay 时 custom 认证方式置灰、受限设置提示）、`AccountTypePicker.spec`、`AccountBulkDialogs.spec`。
@@ -780,76 +1034,6 @@
 - 测试：新增 `PluginIframe.spec`（本地 key 判断、核心 key 与带前缀 key 为 false、超过 50 个或非数组 invalid_argument）。CONTRACTS §23 同步。
 - 回滚：revert 提交即可，纯前端。
 
-## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
-
-- 改动：`plugin/install/rolegrants.go`。`planRoleGrants` 复用 `catalogKeys` + `roleGrants`，列出一次不覆盖角色的同意会做的授予（目录里还没有的权限的 `defaultRoles`，以及当下持有其 `inheritFrom` 旧 key 的角色；超管角色不计），`sensitive` 或授予对象不是内置 `admin`/`operator`/`supplier` 的标为需要同意。`Review.resolveDefaultRoles` 一并填 `new_role_grants`、`role_grants_need_consent`。
-  - 上传或市场升级：`carryOverConsent` 在需要同意时不沿用；同意事务里（`autoRoleGrants`，与写入同一快照）再判断一次，需要同意就回滚、版本留在 `awaiting_consent`。沿用时写 `plugin.consent.auto`。
-  - 内置插件（系统同意）：版本照常 `approved`（`BuiltinsReady`/`BuiltinsCommitted` 需要，否则节点不就绪、托管升级无法提交），需要同意的授予不写入：涉及的权限改为按名字授予其余不需同意的角色、不再走 `inheritFrom`（持有者已在同一事务里解析），暂缓的授予写进 `plugin.consent.auto` 的 `pending`。插件列表与详情 `role_grants_to_review` 从这些审计算出；`POST …/role-grants/confirm` 需要同意页显式指定角色的同样资格（`checkRolesGrantable`：`role:define` + `CanGrantToRoles`），经新增的 `core.PermissionCatalog.GrantPluginPermission` 写入（`authz.sync.grant`，`via: review`，移动 authz 版本）；`…/reject` 不写入，只清除提示。均写审计（`plugin.role_grants.confirm`/`reject`）。不加迁移。
-  - 首次安装与操作者自己点同意不变。
-  - 审查后（P4C review fixes）：自动同意（沿用或系统）时，本次新建的每个权限都按计划**按名字**授予不需同意的角色、不再走 `inheritFrom`（`withholdGrants`），执行的授予就是计划的授予，避免计划之后才加入的旧 key 持有者被继承；这些授予的 `authz.sync.grant` 因此是 `via: default`，来源（default/inherit）见 `plugin.consent.auto` 的 `granted`。激活时（rollout 的 `ApplyDefaults(…, nil)`）新建的权限不再继承（`PermissionDefs` 对 nil grants 不带 `inheritFrom`）：那时才建出的只可能是同意后被删掉的权限，没有人审查过它的授予。reject 与 confirm 要求相同资格。待确认清单只看插件本次安装（`plugins.installed_at`）之后的审计。
-- 测试：install `TestUpgradeRoleGrantsNeedConsent`（新增 sensitive 授予、新增授予给 user、经 inheritFrom 授予自定义角色 → 不沿用，版本 `awaiting_consent`；只给 admin/operator/supplier 的非敏感授予 → 沿用并有审计；之后操作者同意照常授予）、`TestBuiltinUpgradeWithholdsRoleGrants`（EnsureBuiltin 升级批准版本，只写不需同意的授予，暂缓项列出；无 `role:define` 或角色不可改时 confirm 403；confirm 写入并清空；下一次升级再暂缓，reject 清空且不写入）；authz `TestGrantPluginPermission`；plugin/api `TestAPIRoleGrantsToReview`。
-- 影响对象：升级时 manifest 新增敏感权限或把新权限给 user、自定义角色的插件——上传不再自动批准，要有人在同意页确认；内置插件这类授予要在插件页确认后才生效（之前随升级直接生效）。前端（插件页提示与确认按钮、同意页展示 `new_role_grants`）由期 4 前端任务做；在此之前可直接调接口。
-- 回滚：revert 这个提交即可；回滚后暂缓的授予不会被自动补上（审计里有清单，需要时手工授予）。
-
-## 期 4 P4F1 决策 D3：内置 operator 不再持有 role:define（启动同步 + 迁移 0102，产品性收紧）
-
-- 来源：`role:manage` 的拆分由启动同步完成（catalog `role:define`/`role:assign` 的 `inherits`，`grantInherited` 在新 key 首次创建时授予所有持有 `role:manage` 的角色），不是迁移 0097。生产从 develop 升级时，迁移先跑、同步后跑，所以只靠迁移收不回来。
-- 改动：
-  1. `authz/sync.go`：核心权限拆分继承时跳过默认集合不含该 key 的内置角色（`builtinsWithout`）。内置角色的核心权限就是其默认集合，旧 key 上的授予来自旧默认、不是管理员选择，所以拆分不带过去；自定义角色照常继承。目前只影响 `role:define` 在内置 operator 上（admin 默认含两半，operator 默认含 `role:assign`；user、supplier 没有 `role:manage`）。插件权限的继承不受影响。
-  2. `0102_operator_reclaim_role_define.sql`：收回本版本更早启动已经给出的那条授予（测试库、预发、做过生产备份验证的库）。只删除内置（`builtin AND NOT superuser`）`operator` 上的核心权限 `role:define`，每条写 `authz.reclaim` 审计（actor 为系统，`detail.via = "migration 0102"`、`role`、`key`），有收回才移动 `authz_meta.version`。写法同 0099/0101：`SET LOCAL lock_timeout = '10s'`，先 `SELECT … FROM authz_meta FOR UPDATE`。自定义角色与 operator 的其他权限不动；超管之后仍可再授予。
-- 测试：authz `TestSyncCoreSplitsRoleManage`（持有 `role:manage` 的内置 admin、operator 与自定义角色首次同步后：operator 只有 `role:assign`，admin 两半都有，自定义角色两半都有并有继承审计）；migrations `TestOperatorReclaimRoleDefineMigration`（新库不写不移版本；收回 operator 的、保留 admin 与自定义角色的、一条审计、版本 +1；再跑无变化）。
-- 影响对象：内置 operator 的持有者不能再定义角色（新建、改权限、删除角色）（生产 operator 0 人）。发布说明草稿：回滚到旧版本后 admin（0099）与 operator（本项）暂时都不能管理角色，由超管处理。
-- 回滚：revert 同步改动即恢复拆分时的继承（只对之后首次创建的 key 生效）；迁移不可逆向执行，需要时由超管在角色页给 operator 重新勾选 `role:define`，或按 `authz.reclaim`（`via = migration 0102`）审计手工补回。
-
-## 期 4 P4F2：0098 多超管报错不再含用户邮箱
-
-- 改动：`0098_one_super_admin.sql` 的 `RAISE EXCEPTION` 只列 user id（`several super admins: user ids 3, 7; keep one with "sub2api admin recover-superadmin --email <the email of the one to keep>" …`）。迁移失败的信息原样成为启动失败的错误与日志，是唯一出处（启动代码不另行拼接用户信息）。处理时按 id 查邮箱：`SELECT id, email FROM users WHERE id IN (…)`。
-- 0098 尚未发布（只在 feat/authz-hardening），改文本会改变它的 checksum：已用旧 0098 跑过的测试库需重建；托管核心的迁移前缀校验（`managed_checks`）只在已发布版本之间比较，不受影响。
-- 测试：migrations `TestOneSuperAdminMigration` 断言错误列出两个 id、且不含 `@`。
-- 影响对象：无行为变化，仅错误信息。回滚：revert 这个提交（同样会改回 checksum，适用同一说明）。
-
-## 期 4 P4F3：SyncCore 新建内置角色的默认授予写审计
-
-- 改动：`authz/sync.go` `grantDefaults`（唯一一处）：新建的内置角色（新库的全部内置角色、升级带来的 supplier）得到的默认权限与可分配清单每一项都写 `authz.sync.grant`（actor 为系统，`detail.via` 为 `default` 或 `assignable`，另带 `role_created: true`）；已有角色只授予本次新建的默认，与之前相同。此前新建角色的授予不审计，生产验证时 supplier 的 8 项默认授权没有审计行。
-- 测试：authz `TestBuiltinAssignableDefaults`（新库可分配清单 5 项各一条、均标 `role_created`）、`TestSyncCoreAddsSupplierToExistingRoles`（supplier 的 8 项默认权限各一条）。
-- 影响对象：仅审计；新库首次启动多出一批 `authz.sync.grant` 行。回滚：revert 这个提交。
-
-## 期 4 P4F4：小清理（期 3 审查小问题）
-
-- 预备容器：`abandonPreparation` 并入 `disposePreparation(ctx, p, reason)`（`account/preparations.go`，唯一一处）。`reason` 为 `cancelled`（本人取消，插件 cancel 回调拒绝时中止，同前）、`abandoned`（首次准备失败，调用方已持锁；只处理 `pending`，成功后删行，归还名额与幂等键，同前）、`expired`（清理任务，筛选同前）。三者都回调插件 cancel 阶段：本人取消在改状态前回调（插件拒绝即中止，同前），放弃与清理在该行真正开始撤销（由非 `cancelling` 改为 `cancelling`）后回调一次，失败只记日志、不阻止清理，被续期而未清理的、重试中的不再回调（此前放弃与清理不回调；审查后修正回调时机），撤销资源后写 `account.preparation.cancel` 审计（`detail.reason`；actor 为创建者，清理任务为系统；此前放弃不写审计，取消在撤销前写）。
-- 插件同意：`new_permission_roles`、`role_keys_for_new_permissions` 里的未知角色由 install 先校验（`checkNamedRolesExist`），400 的字段名与请求一致，目录已有的权限写的未知角色也 400（此前静默忽略；authz `CanGrantToRoles` 的 `role_keys` 字段只作兜底）。
-- 删除：`buildReview` 里随即被 `resolveDefaultRoles` 覆盖的 `DefaultRoles` 赋值；无生产调用方的 `core.Authorizer.CanActOn` 与 `authz.Service.CanActOn`（以及各测试替身）；`authz/menus.go`、`plugin/api/ui.go` 传给 `manifest.FilterUI` 的判断里重复的 `perm == ""`（`FilterUI` 自己处理）。
-- 测试：account `TestAccountPreparationLimit`（放弃各有审计与插件 cancel 回调）；install `TestConsentRoleGrantRights`（未知角色的字段名，含已有权限）；其余为现有测试。
-- 影响对象：仅错误信息、审计与插件回调；回滚：revert 这个提交。
-
-## 期 4 P4F5 T81 后端：GET /accounts/summary（供应商仪表盘账号状态卡片）
-
-- 改动：`account/summary.go` 新增 `account.Counts` 与 `CountAccounts(ctx, q, scope)`（范围条件复用 `scoped`，`scope` 由 `core.OwnerScope(ctx, "account:read")` 决定：全量权限为全部，own 级为自己创建的），`GET /accounts/summary` 以 `PermAny(account:read, account:own:read)` 注册，返回 `{total, available, auto_disabled, disabled}`。`usage` 概览的 `accounts` 改为调用同一个函数（scope=nil），JSON 形状不变。前端卡片由期 4 前端任务做（决策 D25：只做账号状态，不显示用量与成本）。
-- 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
-- 影响对象：新增只读接口；回滚：revert 这个提交。
-
-
-## T82 同意页：逐权限授予角色（P4-B）、按权限预填默认角色、无 role:define 不显示、预判 db_schema_unconfined、展示新授予（P4C 前端）
-
-- 后端（只加只读字段）：`Review.needs_db_schema_unconfined` = manifest 申请 db.schema 且 `dbSchemaUnconfined(trust == official)`；`dbSchemaUnconfined`（有 schema 管理、未启用角色隔离、不是官方发布者）是同意检查 `checkGrantRights` 与评审共用的唯一判断。同意时前端把勾选的宿主权限都作为显式授予发送，所以以前授予过的 db.schema 同样会被检查，字段不区分沿用。`ReviewUserPerm.new` = 目录里还没有该权限（`catalogKeys`）。上传与评审两处返回都填。
-- 前端：`consent/newPermissionRoles.ts`（`useNewPermissionRoles`）是逐权限角色的唯一状态：只有 `role:define` 才有选项；超管可选全部（`/me/assignable-roles`，不含超管角色），其他人只可选清单内、可授予、自己不持有的自定义角色（与服务端规则一致）。每个 `new` 权限从 manifest 默认角色起步，只发送改动过的权限（`new_permission_roles`，逐 key），未改动的保持 manifest 默认（含操作者不能指定的内置角色）；改动后操作者不能指定的默认角色会被去掉，界面提示。不再发送全局字段 `role_keys_for_new_permissions`。已存在的权限标注“其授予不变”。db.schema 行在 `needs_db_schema_unconfined` 且缺 `plugin:grant:db_schema_unconfined` 时与其他缺权限的行一样置灰并禁用同意按钮。新增 `consent/NewRoleGrants.vue` 列出 `new_role_grants`（需要确认的高亮）并在 `role_grants_need_consent` 时提示不会自动通过（插件页的待确认授予复用它）。
-- 影响对象：插件同意页的操作者。非超管不再看到内置角色（原来勾了 403）；勾一个角色不再替换全部新权限的默认授予。
-- 测试：install `TestReviewConsentFlags`（官方不标记、new 只标目录里没有的、verified 无隔离标记且同意 403、开启隔离后两者都放行）；web `ConsentView.spec`（逐权限预填与只发改动、无 role:define 无选择、非超管只列可指定的自定义角色并提示去掉默认、db_schema_unconfined 预判、新授予列表）。CONTRACTS 同步。
-- 回滚：revert 提交即可；新增字段只读，旧控制台忽略。
-
-## P4C 前端：插件列表与详情的“有待确认的新授权”
-
-- 改动：`PluginSummary`/`PluginDetail` 类型补 `role_grants_to_review`。插件列表状态列在非空时提示“N 项授权待确认”；详情页顶部 `parts/RoleGrantsReview.vue`（复用同意页的 `NewRoleGrants` 列表，需要确认的高亮）：持有 `plugin:install` 与 `role:define` 时显示“确认”“全部拒绝”，按版本依次 POST `…/versions/:version/role-grants/confirm|reject`，完成后重新加载详情；没有资格的只显示提示与所需权限（角色级资格 `CanGrantToRoles` 由服务端裁决，403 照常提示）。
-- 测试：`RoleGrantsReview.spec`（列表与高亮、按版本确认、全部拒绝、缺任一权限不显示按钮）。
-- 回滚：revert 提交即可，纯前端。
-
-## T81 W2-G5 前端：仪表盘账号状态卡片
-
-- 改动：新增 `dashboard/AccountStatusCard.vue`（可用/总数、自动停用与手动禁用、无可用为红、有自动停用为琥珀），管理员仪表盘改用它（原内联卡片与 tone 计算移入）。非管理员仪表盘：持有 `account:read` 或 `account:own:read` 时取 `GET /accounts/summary` 显示该卡片，不依赖 `usage:self:read`（供应商只有 own 级账号权限也能看到自己的账号状态）；刷新按钮一并重取。`AccountCounts` 类型共用；web mock 增加 `/accounts/summary`。
-- 审查补充：mock 的 `/accounts/summary` 同样计入孤立账号（随 followups 提交）。已知：同时有 `usage:all:read` 与只有 `account:own:read`（没有 `account:read`）的少见组合走管理员仪表盘，其账号卡片来自 `/usage/overview`，不显示；加载失败时卡片显示“—”不弹提示（次要卡片）。
-- 测试：新增 `UserDashboard.spec`（own 级账号权限显示卡片与计数、无账号读权限不请求不显示）；`AdminDashboard.spec` 照常通过。
-- 回滚：revert 提交即可，纯前端。
-
 ## 期 4 前端遗留（FOLLOWUPS）
 
 - 新建角色用了内置角色保留的 key：`fields[{field:"key", code:"reserved"}]` 按控制台语言显示（`roles.keyReserved`），不再只显示服务端英文。
@@ -860,31 +1044,6 @@
 - 访问密钥页（合并期 4 前端分支时补做）：`lost` 按新语义显示为“暂不可用”，说明原因（被收回或所属插件停用）、重新获得后自动恢复、保存修改会移除；选中带 `step_up` 的权限时提示用密钥调用要先 `POST /me/verify` 取 proof（`X-Verify-Proof`），密钥只能用两步验证或密码。不再有“你已经没有这些权限”的旧 sessionOnly 口径。中文合并时把 S5 新增文案里指 TOTP 的“二次验证”改为“两步验证”。
 - 测试：`RolesView.spec`（reserved 中文提示）、新增 `UpgradesView.spec`（warnings 显示且不阻断）；`AccessKeysCard.spec`（lost 恢复说明、选中 step_up 权限才显示 proof 提示）。
 - 回滚：revert 提交即可，纯前端与 mock。
-
-## 期 4 P4CFIX：拒绝暂缓授予对所有版本生效
-
-- 问题：待确认清单（`PendingRoleGrants(key, "")`）按 (permission, role) 跨版本去重，只显示最早版本；前端按清单里的版本逐个 POST `…/role-grants/reject`，后来版本也暂缓的同一授予在重新加载后又出现。
-- 改动：`reject` 记下的每个 (permission, role) 同时清除该插件在这次拒绝之前（按审计先后，不论版本高低：直接 API 只拒后一版本也会清掉前一版本的同一项）所有版本里暂缓的同一授予（`PendingRoleGrants` 的 NOT EXISTS 增加按 `grants` 包含匹配的条件）；版本自身的清单照旧整体清除。之后的升级再次暂缓同一授予时重新列出。confirm 行为不变：只清本版本，其他版本的同一项因角色已持有而不再列出（若之后从角色收回该权限，会在其他版本下重新出现，与修复前相同）。前端不改。
-- 测试：install `TestRejectWithheldGrantAcrossVersions`（两个版本暂缓同一授予只列一次；拒一次后只剩后一版本独有的项；全部拒绝后为空且无写入；之后的升级再暂缓时重新列出）。
-- 回滚：revert 提交即可；无迁移。规则按查询计算，库里已有的 reject 审计上线后同样生效（清除之前跨版本残留的同一授予，即本次要修的情况）；回滚后这些残留重新列出。
-
-## 期 4 T84：本轮改动过的插件统一升版本
-
-- 改动（只改版本、hostCompat 与 claude-oauth 发布者名，不改功能）：ccgateway 0.1.132→0.1.133、claude-oauth 0.2.2→0.2.3、codex 0.1.3→0.1.4、dynweight 0.5.7→0.5.9（develop 已发布 0.5.8，合并后取 0.5.9 以免同版本不同内容）、volcengine 0.12.6→0.12.7、growth 0.1.6→0.2.0、moderation 0.11.2→0.12.0（growth、moderation 权限语义拆分，用 minor）、payment 0.1.0→0.1.1、guard 0.2.8→0.2.9、anthropic 0.3.1→0.3.2。这些就是本分支相对 develop 改了 manifest 的全部插件。
-- hostCompat 下限统一提到 `>=0.1.286 <0.2.0`：十个插件都用了本轮新增的 manifest 字段（`defaultRoles`、`inheritFrom`、路由 `accounts`、`upstreamFields`），旧核心忽略它们（`"defaultRoles": []` 被当作省略 = admin，路由不做账号归属检查）。develop 当前核心已是 0.1.285，不认识这些语义，本分支随之后的核心发布，所以下限取 0.1.286。插件 hostCompat 下限 = 本轮核心发布版本，发布时核对；发布号不同时，把这十个 manifest 与 ccgateway/volcengine/moderation 的 manifest 测试里的 0.1.286 一并改掉（`grep -rn 0.1.286 next/plugins`）。
-- claude-oauth `publisher` 由 `sup2api` 改为 `sub2api`（与其他插件和签名者一致，否则签名包上传 400）。
-- 包内版本：codex `internal/codex/plugin.go` 的 `Version`；guard 测试包 overlay `0.2.9-test`；anthropic 升级测试包 overlay 由 `0.3.2-test` 改为 `0.3.3-test`（须新于发布版 0.3.2，同步 build-demo.sh、tools 测试、deploy/ci/check.sh、e2e AC05）。`deploy/docker/build-go.sh` 从 manifest 读版本，没有单独的内置包清单要改。
-- 回滚：revert 提交即可。已按这些新版本安装到库里的插件回滚核心时需同时回滚插件版本。
-
-## 期 4 R0：settings:manage 守护的装码与拨号接口挂二次验证（决策“插件升级授权”p4s 交回后补充）
-
-- 改动：泄露的会话或带 `settings:manage` 的访问密钥原本可以把核心指向另一台主机、装另一份运行时或换更新源。新增 scope `host.install`（`core.StepUpHostInstall`，iam `stepUpScopes` 登记，不要求密码）。挂 `Router.StepUp`：
-  - ccgateway（`host.install`）：PUT `remote-config`（SSH 目标与凭据）、POST `remote-fingerprint`、`remote-test`（拨号）、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（装载或运行代码）。上传会话的创建与分片 PUT 不挂（只传字节、分片很多，装载那一步才要 proof），读取、`cleanup`、`purge`、`cli` 不挂。
-  - PUT `/system/update-source`：复用 `system.update`（与执行升级同一类：决定下一次升级运行的代码）。
-  - 目录 `settings:manage` 加 `stepUp` 展示标记（访问密钥选择器提示“使用时需二次验证”）。
-- 测试：ccgateway `TestHostInstallRoutesStepUp`（`testutil.StepUpRefused`，逐条断言哪些要、哪些不要）；updater `TestCoreUpdateRoutesStepUp` 增加 update-source；iam `TestFormerSessionOnlyPermissionsInAccessKeys`（带 `settings:manage` 的密钥改 remote-config：无 proof 403，带 `host.install` proof 200）；authz `TestCatalogFlaggedSets`。
-- 影响对象：控制台在 ccgateway 设置页、运行时安装与更新源设置时会弹出二次验证（S5 的 StepUpDialog 按 403 `verification_required` 自动处理）；脚本化调用需先 `POST /me/verify` 取 `host.install`/`system.update` proof。须与 S5 同版本发布。
-- 回滚：revert 这个提交。
 
 ## 期 4 R1：带范围的权限 key 原语 + T66 常量化（设计：DESIGN-scoped-bindings.md §1、§3）
 
@@ -968,7 +1127,7 @@
   - 本版本可以滚动发布，不需要停机。0103 只做新增。
   - 前端（R8）上线前，旧控制台角色页的权限树里没有 `…:own` 这类规范 key，own 授予可能显示不出来。后端照常接受 `account:own:*` 与新写法。
 - 回滚：
-  - revert 代码即可，新表与新列旧代码都不读。
+  - revert 代码即可，新表与新列旧代码都不读。托管部署（托管核心启动时核对迁移清单）回滚核心前还要按文首“发布说明 · 回滚”删除 `schema_migrations` 里 0097–0103 的记录，否则旧核心拒绝启动。
   - 访问密钥里的新写法在旧代码下被忽略，旧写法仍在，按审计 before 可还原。
   - 回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
 
@@ -1043,7 +1202,7 @@
   - lookup `TestLookup` 新增分组范围用例，测试替身改为规范化的 `PermissionSetOf`。
   - sdk `TestUserPermissionKeyNotAScope`。
   - account `TestGroupScopedAccounts` 新增 `core.AuthorizeAccounts` 用例，插件账号路由与宿主 RPC 都走这条路径：范围内放行，范围外或未指定 id 时拒绝。
-- 未做，交给 R8 / 插件：插件 UI 宿主的 `hasAction` / `scope` API 与 moderation `host.ts` 的检查属于前端代码，兼容期内旧别名仍然有效。
+- 未做，交给 R8 / 插件：插件 UI 宿主的 `hasAction` / `scope` API 与 moderation `host.ts` 的检查属于前端代码，兼容期内旧别名仍然有效。后续：R8 已完成，宿主 UI 3.15。
 - 回滚：revert。
 
 ## 期 4 R6：防提权与访问密钥的范围回归测试
@@ -1079,6 +1238,64 @@
   - §21 开头注明：全文其他位置的 `account:own:<x>` 读作 `account:<x>:own`，“自己级”读作“受限范围”。
 - 测试：httpapi `TestPermAny` 改为无范围 key；全量 server 测试见期 4 R 组汇总。
 - 回滚：revert（纯代码）。
+
+## 期 4 资源范围（R0–R7）发布说明
+
+- 两步走，滚动发布：
+  - **本版本（R2a）**：迁移 0103 只做新增；8 个旧 own key 保持 active，作为别名使用。
+    - 新节点写入时同时写新表与旧行；旧 own key 仍为 active 时，以旧行为准。
+    - 访问密钥两种写法都保存。
+    - 新旧节点混跑时 supplier 不中断；分组或 id 范围在旧节点上不生效（fail-closed）。
+    - 升级期间不要修改角色权限，全部节点升级后再改。
+  - **下一版本（R2b，确认全部节点已升级后）**：
+    1. 按旧 own 行重新同步新表的 own 行（补齐缺的，删除没有对应旧行的），写审计。
+    2. 目录把 8 个旧 key 标 removed（`ownShadowed` 随即不再遮蔽，新表成为唯一记录）。
+    3. 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥里的旧写法与冗余旧行（写审计）。
+    4. `Parse` 的别名表保留，用于读取旧请求。
+- 同版本：R0 的二次验证依赖 S5 前端（StepUpDialog）。
+- 前端（R8）上线前：
+  - 分组或 id 范围暂时只能经 API 使用：控制台路由守卫、账号运行时、分组编辑与插件 UI（moderation、dynweight `host.ts`）按 key 原文精确比较，持有这类范围的人能看到菜单却进不了页面（fail-closed）。
+  - 旧控制台的角色页不认识 `…:own` 等规范 key，own 授予可能显示不出来，但后端照常接受新旧两种写法。
+  - 账号页、代理页的“自己的”判断仍按旧别名（`/me` 仍输出旧别名），可以继续工作。
+- 回滚：revert 代码即可（新表、新列旧代码不读；访问密钥中的旧写法仍在）。回滚期间写入的分组或 id 范围授予不生效。托管部署（托管核心启动时核对迁移清单）回滚核心前还要按文首“发布说明 · 回滚”删除 `schema_migrations` 里 0097–0103 的记录，否则旧核心拒绝启动。
+- 混跑分析只适用于非托管的多节点部署：托管升级先停副本再迁移，没有新旧节点同库的阶段。
+
+## 期 4 R8：控制台的资源范围（判断、路由、范围选择、密钥、摘要、mock）
+
+- 影响对象：控制台（next/web）、moderation 插件 UI（只改代码，不升版本），没有后端改动。
+- 判断：
+  - `web/src/authz/implies.ts` 是 `perm.Parse/Canonical/Implies` 与 `DataScope.AllowsRow` 的 TS 版本（纯函数），与 Go 共用 `sdk/permvectors/vectors.json`（`implies.spec.ts`）。
+  - `auth.has(k)` 改为“持有的某个模式蕴含 k”：`has('account:read')` 仍然只对全量为真；`has('account:own:read')` 被 `account:read:own` 蕴含。
+  - 新增 `auth.hasAction(a)`（任意范围持有该动作）与 `auth.scopes(a)`（持有的范围，超管为全部）。
+  - `useOwnership` 改为 `useScope()`：`level(a)` 为 `'all' | 'own' | null`（`'own'` 即受限档，包括 own、分组、id 范围，沿用 own 级限制）；`can(row, a)` 按全部持有范围判断行（own 比 `created_by`，`account/X` 比 id，分组比 `row.group_ids`）。
+- 路由：`meta.action`（任意范围）与 `meta.perm` 二者满足其一即可进入（`mayOpen`，面包屑同样使用）。账号页、代理页与 CCGateway 改用 `action`，分组或 id 范围的用户不再“看得到菜单却进不了页面”。
+- 页面：
+  - 账号页、代理页、分组编辑、模型测试、账号编辑器的行按钮按 `useScope().can` 判断。
+  - 新建按钮：账号用 `hasAction('account:create')`；代理用 `has('proxy:manage:own')`，因为 `proxy/<id>` 范围不能新建代理。代理页的操作列按 `hasAction('proxy:manage')`。
+  - 分组范围的新建者或编辑者可以改分组（服务端对范围内的分组免 `account:group:bind`）。
+  - 实体查找（账号、代理）、仪表盘、用量详情、CCGateway 授权页改用 `hasAction`。
+  - 全量语义保持不变的判断：请求日志、用量的账号列、`/system/ccgateway/accounts` 动作。
+- 角色编辑器（`PermissionTree` + `ScopePicker`，取代原 T76 的 own/all 三态）：
+  - 每个动作一行。`scope_type` 非空的动作勾选后展开范围选择：全部 / 自己创建的 / 指定分组 / 指定账号（或指定代理）/ 分组内的指定账号（先选分组，再选账号，账号查找优先列出该分组），可以叠加。`account:create` 不能指定账号，只提供全部 / 自己创建的 / 指定分组。
+  - 选“全部”后只保留全部，其余选项置灰。
+  - 不提供的范围（`group/*` 等）显示为可删除的标签。
+  - id 经 `/lookup/*` 显示名称；查找已回答但没有该 id 时显示“#12（已删除）”（`useEntityNames().gone`）。
+  - 提交规范 key。候选按操作者自己的范围裁剪（`offerOf`）：操作者没有全部范围时，分组和 id 只能在自己持有的范围里勾选；后端仍然用 Missing 拒绝。
+- 访问密钥：复用同一个权限树，`scope-limit` 为用户自己的范围；打开已有密钥时，权限先做规范化（旧别名与规范写法合并为同一个选择）；二次验证提示按动作判断。
+- 用户页：角色徽章的提示显示该角色的范围摘要（`useScopeLabels().summary`）。
+- 错误提示：
+  - `would_leave_scope` 与 `permission_denied{permission: proxy:manage:own}`（不能新建代理）在控制台按当前语言显示（`errorMessage` 的 `KNOWN_ERRORS`）。
+  - `group_ids` 字段的 `not_in_scope` 由账号保存的字段码表翻译。
+- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名。`HOST_UI_VERSION` 升到 3.15.0（期 4 整合审查），moderation 0.12.0 的 `hostUICompat` 改为 `^3.15`（版本号不再升）；`sdk/manifest` 记 UI 3.15 → 核心 0.1.286 的下限。
+- mock：`hasPerm` 按蕴含判断，`ownerScope(who, action)` 返回范围，行过滤复用 `scopeAllowsRow`。
+  - `/permissions` 带 `scope_type`，不再列 8 个 own key。
+  - 内置 supplier 与 vendor 使用规范 key，vendor 的 `/me` 附带旧别名。
+  - 新增示例角色 group_ops。
+  - 新建账号校验 `not_in_scope`，修改账号校验 `would_leave_scope`（在关联代理之前）；新建代理要求 `proxy:manage:own`，按代理串关联已有代理只要求任意范围的 `proxy:manage`。
+  - 角色写入接受任意写法，存成规范 key，未被蕴含的 key 返回 403 `missing`。
+- 已知限制：大于 2^53 的 id 在 TS 中会丢精度（Go 允许到 int64，实际 id 远小于此）。`scopeAllowsRow` 与 Go `DataScope.AllowsRow` 的共享向量在期 4 整合审查补上（`sdk/permvectors/vectors.json` 的 `allows` 段）。
+- 测试：web vitest 全量（含共享向量 148 项、`scopeChoice`、`ScopePicker`、`PermissionTree` 范围、`useScope`、`mayOpen`、`AccessKeysCard` 范围、`lookup.gone`、`errors`）、vue-tsc、eslint；moderation UI vitest、vue-tsc。供应商相关 spec 的断言不变，只是 mock 增加了 `hasAction`/`scopes`。
+- 回滚：revert（纯前端）。旧控制台见 R0–R7 发布说明中的“前端（R8）上线前”。
 
 ## 期 4 T67：权限目录描述化（description、requires）
 
@@ -1142,65 +1359,28 @@
   - 没有生成 `PAIRS`：own/all 已由范围取代，改为 `SCOPE_TYPE` + `LEGACY_OWN`。
   - 没有生成 `PAGE_PERMS`：菜单可见性现在在启动时从路由表绑定（T68），生成器拿不到路由表，前端菜单本来就来自 `/me/menus`。
   - 没有生成 TS 版 Implies：`auth.has` 的实现归 R8。
-  - 旧 own 别名保留为 `LEGACY_OWN` 与 `LegacyOwnKey`：`/me` 在 R2b 之前仍输出这些别名，现有前端靠它们判断“自己的”。R8 的 useScope 会改用规范 key。
+  - 旧 own 别名保留为 `LEGACY_OWN` 与 `LegacyOwnKey`：`/me` 在 R2b 之前仍输出这些别名，现有前端靠它们判断“自己的”。R8 的 useScope 会改用规范 key。后续：R8 已改用规范 key，但 `LEGACY_OWN` 与 `implies.ts` 的别名表保留：R2b 之前服务端仍接受并在 `/me` 输出旧别名，共享向量含别名用例；随 R2b 一起删除。
 - 影响对象：无运行时行为变化；前端写错权限 key 会在类型检查阶段失败；核心目录变化后必须重新生成前端文件，否则 Go 测试失败。
 - 测试：authz `TestGeneratedPermissionsTS`、`TestPermissionsTSNames`；web `src/generated/permissions.spec.ts`；ConsentView spec 的 auth mock 补了 `hasDynamic`。
 - 回滚：revert（纯代码）。
 
-## 期 4 资源范围（R0–R7）发布说明
+## 期 4 T84：本轮改动过的插件统一升版本
 
-- 两步走，滚动发布：
-  - **本版本（R2a）**：迁移 0103 只做新增；8 个旧 own key 保持 active，作为别名使用。
-    - 新节点写入时同时写新表与旧行；旧 own key 仍为 active 时，以旧行为准。
-    - 访问密钥两种写法都保存。
-    - 新旧节点混跑时 supplier 不中断；分组或 id 范围在旧节点上不生效（fail-closed）。
-    - 升级期间不要修改角色权限，全部节点升级后再改。
-  - **下一版本（R2b，确认全部节点已升级后）**：
-    1. 按旧 own 行重新同步新表的 own 行（补齐缺的，删除没有对应旧行的），写审计。
-    2. 目录把 8 个旧 key 标 removed（`ownShadowed` 随即不再遮蔽，新表成为唯一记录）。
-    3. 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥里的旧写法与冗余旧行（写审计）。
-    4. `Parse` 的别名表保留，用于读取旧请求。
-- 同版本：R0 的二次验证依赖 S5 前端（StepUpDialog）。
-- 前端（R8）上线前：
-  - 分组或 id 范围暂时只能经 API 使用：控制台路由守卫、账号运行时、分组编辑与插件 UI（moderation、dynweight `host.ts`）按 key 原文精确比较，持有这类范围的人能看到菜单却进不了页面（fail-closed）。
-  - 旧控制台的角色页不认识 `…:own` 等规范 key，own 授予可能显示不出来，但后端照常接受新旧两种写法。
-  - 账号页、代理页的“自己的”判断仍按旧别名（`/me` 仍输出旧别名），可以继续工作。
-- 回滚：revert 代码即可（新表、新列旧代码不读；访问密钥中的旧写法仍在）。回滚期间写入的分组或 id 范围授予不生效。
+- 改动（只改版本、hostCompat 与 claude-oauth 发布者名，不改功能）：ccgateway 0.1.132→0.1.133、claude-oauth 0.2.2→0.2.3、codex 0.1.3→0.1.4、dynweight 0.5.7→0.5.9（develop 已发布 0.5.8，合并后取 0.5.9 以免同版本不同内容）、volcengine 0.12.6→0.12.7、growth 0.1.6→0.2.0、moderation 0.11.2→0.12.0（growth、moderation 权限语义拆分，用 minor）、payment 0.1.0→0.1.1、guard 0.2.8→0.2.9、anthropic 0.3.1→0.3.2。这些就是本分支相对 develop 改了 manifest 的全部插件。
+- hostCompat 下限统一提到 `>=0.1.286 <0.2.0`：十个插件都用了本轮新增的 manifest 字段（`defaultRoles`、`inheritFrom`、路由 `accounts`、`upstreamFields`），旧核心忽略它们（`"defaultRoles": []` 被当作省略 = admin，路由不做账号归属检查）。develop 当前核心已是 0.1.285，不认识这些语义，本分支随之后的核心发布，所以下限取 0.1.286。插件 hostCompat 下限 = 本轮核心发布版本，发布时核对；发布号不同时，把这十个 manifest 与 ccgateway/volcengine/moderation 的 manifest 测试里的 0.1.286 一并改掉（`grep -rn 0.1.286 next/plugins`）。
+- claude-oauth `publisher` 由 `sup2api` 改为 `sub2api`（与其他插件和签名者一致，否则签名包上传 400）。
+- 包内版本：codex `internal/codex/plugin.go` 的 `Version`；guard 测试包 overlay `0.2.9-test`；anthropic 升级测试包 overlay 由 `0.3.2-test` 改为 `0.3.3-test`（须新于发布版 0.3.2，同步 build-demo.sh、tools 测试、deploy/ci/check.sh、e2e AC05）。`deploy/docker/build-go.sh` 从 manifest 读版本，没有单独的内置包清单要改。
+- 回滚：revert 提交即可。已按这些新版本安装到库里的插件回滚核心时需同时回滚插件版本。
 
-## 期 4 R8：控制台的资源范围（判断、路由、范围选择、密钥、摘要、mock）
+## 期 4 整合审查（p4-review）
 
-- 影响对象：控制台（next/web）、moderation 插件 UI（只改代码，不升版本），没有后端改动。
-- 判断：
-  - `web/src/authz/implies.ts` 是 `perm.Parse/Canonical/Implies` 与 `DataScope.AllowsRow` 的 TS 版本（纯函数），与 Go 共用 `sdk/permvectors/vectors.json`（`implies.spec.ts`）。
-  - `auth.has(k)` 改为“持有的某个模式蕴含 k”：`has('account:read')` 仍然只对全量为真；`has('account:own:read')` 被 `account:read:own` 蕴含。
-  - 新增 `auth.hasAction(a)`（任意范围持有该动作）与 `auth.scopes(a)`（持有的范围，超管为全部）。
-  - `useOwnership` 改为 `useScope()`：`level(a)` 为 `'all' | 'own' | null`（`'own'` 即受限档，包括 own、分组、id 范围，沿用 own 级限制）；`can(row, a)` 按全部持有范围判断行（own 比 `created_by`，`account/X` 比 id，分组比 `row.group_ids`）。
-- 路由：`meta.action`（任意范围）与 `meta.perm` 二者满足其一即可进入（`mayOpen`，面包屑同样使用）。账号页、代理页与 CCGateway 改用 `action`，分组或 id 范围的用户不再“看得到菜单却进不了页面”。
-- 页面：
-  - 账号页、代理页、分组编辑、模型测试、账号编辑器的行按钮按 `useScope().can` 判断。
-  - 新建按钮：账号用 `hasAction('account:create')`；代理用 `has('proxy:manage:own')`，因为 `proxy/<id>` 范围不能新建代理。代理页的操作列按 `hasAction('proxy:manage')`。
-  - 分组范围的新建者或编辑者可以改分组（服务端对范围内的分组免 `account:group:bind`）。
-  - 实体查找（账号、代理）、仪表盘、用量详情、CCGateway 授权页改用 `hasAction`。
-  - 全量语义保持不变的判断：请求日志、用量的账号列、`/system/ccgateway/accounts` 动作。
-- 角色编辑器（`PermissionTree` + `ScopePicker`，取代原 T76 的 own/all 三态）：
-  - 每个动作一行。`scope_type` 非空的动作勾选后展开范围选择：全部 / 自己创建的 / 指定分组 / 指定账号（或指定代理）/ 分组内的指定账号（先选分组，再选账号，账号查找优先列出该分组），可以叠加。`account:create` 不能指定账号，只提供全部 / 自己创建的 / 指定分组。
-  - 选“全部”后只保留全部，其余选项置灰。
-  - 不提供的范围（`group/*` 等）显示为可删除的标签。
-  - id 经 `/lookup/*` 显示名称；查找已回答但没有该 id 时显示“#12（已删除）”（`useEntityNames().gone`）。
-  - 提交规范 key。候选按操作者自己的范围裁剪（`offerOf`）：操作者没有全部范围时，分组和 id 只能在自己持有的范围里勾选；后端仍然用 Missing 拒绝。
-- 访问密钥：复用同一个权限树，`scope-limit` 为用户自己的范围；打开已有密钥时，权限先做规范化（旧别名与规范写法合并为同一个选择）；二次验证提示按动作判断。
-- 用户页：角色徽章的提示显示该角色的范围摘要（`useScopeLabels().summary`）。
-- 错误提示：
-  - `would_leave_scope` 与 `permission_denied{permission: proxy:manage:own}`（不能新建代理）在控制台按当前语言显示（`errorMessage` 的 `KNOWN_ERRORS`）。
-  - `group_ids` 字段的 `not_in_scope` 由账号保存的字段码表翻译。
-- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名。`HOST_UI_VERSION` 升到 3.15.0（期 4 整合审查），moderation 0.12.0 的 `hostUICompat` 改为 `^3.15`（版本号不再升）；`sdk/manifest` 记 UI 3.15 → 核心 0.1.286 的下限。
-- mock：`hasPerm` 按蕴含判断，`ownerScope(who, action)` 返回范围，行过滤复用 `scopeAllowsRow`。
-  - `/permissions` 带 `scope_type`，不再列 8 个 own key。
-  - 内置 supplier 与 vendor 使用规范 key，vendor 的 `/me` 附带旧别名。
-  - 新增示例角色 group_ops。
-  - 新建账号校验 `not_in_scope`，修改账号校验 `would_leave_scope`（在关联代理之前）；新建代理要求 `proxy:manage:own`，按代理串关联已有代理只要求任意范围的 `proxy:manage`。
-  - 角色写入接受任意写法，存成规范 key，未被蕴含的 key 返回 403 `missing`。
-- 已知限制：大于 2^53 的 id 在 TS 中会丢精度（Go 允许到 int64，实际 id 远小于此）。`scopeAllowsRow` 与 Go `DataScope.AllowsRow` 的共享向量在期 4 整合审查补上（`sdk/permvectors/vectors.json` 的 `allows` 段）。
-- 测试：web vitest 全量（含共享向量 148 项、`scopeChoice`、`ScopePicker`、`PermissionTree` 范围、`useScope`、`mayOpen`、`AccessKeysCard` 范围、`lookup.gone`、`errors`）、vue-tsc、eslint；moderation UI vitest、vue-tsc。供应商相关 spec 的断言不变，只是 mock 增加了 `hasAction`/`scopes`。
-- 回滚：revert（纯前端）。旧控制台见 R0–R7 发布说明中的“前端（R8）上线前”。
-
+- **两步验证的开启改为二次验证**（产品性收紧）：`POST /me/two-factor/setup` 原来只要密码。只有通行密钥的账号，拿到会话（或带 `self:security` 的访问密钥）再加上密码，就能给它添加 TOTP，此后这个 TOTP 能通过它的每一次二次验证（改密码、删通行密钥、明文回显……），绕开“配了通行密钥或 2FA 时只接受这两种”。现在挂 `StepUp(self.2fa.enable)`，与 `/me/passkeys/begin` 一致，不再收 `{password}`；还没有任何因素的用户仍用密码取得 proof，体验不变。控制台“开启两步验证”直接发请求，由二次验证弹窗询问；mock 与文案同步。
+  - 影响对象：只有通行密钥的用户开启 2FA 时要先用通行密钥验证；脚本化调用需先 `POST /me/verify` 取 `self.2fa.enable` proof。
+  - 测试：iam `TestTwoFactorSetupNeedsAProof`、`TestTwoFactorEnrolmentNeedsACode`；web `TwoFactorCard.spec`。
+  - 回滚：revert 提交（前后端同一提交，一起回滚）。
+- **确认暂缓的角色授予挂二次验证**：`POST …/role-grants/confirm` 把权限写进角色，与同意页同一类决定，改为 `StepUp(plugin.grant)`；reject 不写入，不挂。插件页的“确认 / 全部拒绝”只对能指定全部所列角色的人显示（与同意页同一规则 `useNameableRoles`：超管任意角色，其他人只有可管理、可授予、自己不持有的自定义角色），原来 admin 看到按钮、点击后 403。测试：plugin/api `TestPluginRoutesStepUp`；web `RoleGrantsReview.spec`。回滚：revert。
+- **宿主 UI 3.15**：`HOST_UI_VERSION` 与 host/ui/vite-preset 包 3.15.0；`sdk/manifest` 记 UI 3.15 → 核心 0.1.286；moderation 0.12.0 `hostUICompat ^3.15`（不再升版本）。见 R8 与 `web/packages/ui/README.md`。
+- **共享向量 `allows`**：`sdk/permvectors/vectors.json` 新增行判断用例，Go `DataScope.AllowsRow` 与 TS `scopeAllowsRow` 各跑一遍（CONTRACTS §21.6）。
+- **其他**：e2e `guardTestVersion` 改为 0.2.9-test（与 guard overlay 一致）；`PLUGIN-CODEX.md` 补 0.1.4；mock 的明文回显、删除用户、插件上传/市场安装/同意也走二次验证；二次验证弹窗补 `host.install` 文案（R0 新增的 scope 原来显示原文）；期 4 条目按任务组重排并标注被后续任务改写的地方；R2a 与资源范围发布说明补托管部署的回滚步骤。
+- 审查确认无问题的：proof 绑定（用户、会话或密钥、scope、`METHOD path`）与一次性消费；无验证器时失败收紧；`X-Verify-Proof` 不转发给插件；`Restrict`/`Implies` 不会让密钥宽于用户；`Router.Self` 与 `withSelf` 只给有效用户；`KeyAllowed`、`sessionOnly`、`SelfConfirmation` 已删干净；0102/0103 在生产形态数据上可执行且可重跑；T84 版本与测试包版本一致。
+- 留给用户决定（未改）：见文首“发布说明 · 待决定”。

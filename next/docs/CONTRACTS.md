@@ -1112,6 +1112,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
   - `GET /lookup/accounts`、`/lookup/proxies` 按调用者 `account:read` / `proxy:read` 的范围过滤（任意范围都可调用），`mine=true` 在范围内再收窄。`/lookup/groups` 不变。
   - 插件 manifest 的 `userPermissions[].key`（及 `inheritFrom`）最后一段不能是 `own`，否则 400 `invalid_format`（会被读成范围）。
   - `GET /me` 的 `permissions` 除规范 key 外附带旧 own 别名，兼容一个小版本。插件页面可继续检查 `account:own:read`，新代码应改用“动作的任意范围”。
+- **相关章节**：目录里哪些动作可带范围（`scope_type`）见 §4；授出范围与可管理目标的防提权按蕴含比较见 §43.6；访问密钥的交集与二次验证见 §80、§80.2。
 
 ### 21.1 权限（§4 表同步更新）
 
@@ -2813,6 +2814,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 所有授权写操作（角色写入、POST `/roles`、PUT `/users/:id/roles`）的授权检查都放在同一事务的 `Bump` 之后、用该事务读库：`Bump` 串行化了授权变更，检查看到的是最新且不会被并发改动的状态，不读本节点可能落后的缓存。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制（超级管理员角色冻结除外）。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
 - 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:define` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。
+- **相关章节**（期 4 汇总）：带范围的 key 在 `Missing`、`CanGrant`、`editableRole`、可管理目标里都按蕴含比较（§21.0，`TestScopedGrantsAndManagement`）；“能不能做”经访问密钥时 = 用户权限 ∩ 密钥权限，“能对谁做”按用户本身的角色（§80）；作用于超管本人身份的操作经访问密钥时要 `superadmin.identity` proof（§80.2）；目录的 `sensitive`、`step_up`、`scope_type` 见 §4。
 
 ### 43.7 迁移从 0026 起必须可重跑
 
@@ -6990,6 +6992,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - **`Authorization: Bearer sak_…`**：核心路由（`httpapi`）和插件路由（`/api/v1/p/:key/*`，期 4 S4 起）都接受，走 `core.AuthenticateBearer`。插件拿到的调用者仍是用户 id，不知道经由密钥；但插件在处理该请求期间问宿主的 `AuthzCheck`、`AccountScopeCheck`（SDK `RequirePermission`、`RequireAccounts`）会按该用户在途请求的密钥收窄（同一用户有多个密钥请求在途时取它们的交集，失败收紧）；admin 写操作审计行记 `via: "access_key"`、`access_key_id`。不在请求处理期间（后台任务）问到的仍是用户本身的权限。`X-Verify-Proof` 不转发给插件。
 - **一条规则**：密钥能做什么 = 用户实时权限 ∩ 密钥选中的权限（`core.RestrictToAccessKey`）。创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）；每次检查权限时取交集，所以用户失去权限，密钥立刻跟着失去；重新获得（含插件重新启用）时也恢复（`GET /me/access-keys` 的 `lost` 列出暂时失效的）。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn` 看到的也是这个限制后的集合；“能对谁做”（`UserGuard`）按用户本身的角色算（§43.6）。只限制密钥所属用户，查询其他用户的权限不受影响。此前（2026-11-12 至期 4）有一份“只认会话”的权限清单（`session_only`、`authz.KeyAllowed`），期 4 S3 删除：那些权限现在都可以选，高危接口改为二次验证。
+- **相关章节**：交集按模式逐个求（`PermissionSet.Restrict`，带范围的 key 取较窄者，不可比的组合丢弃，§21.0）；目录里带 `step_up` 标记的权限（§4）经密钥使用时同样每次二次验证（§80.2）；密钥“能对谁做”按用户本身的可管理角色，不被密钥收窄（§43.6）。
 - **只允许登录会话**（结构性风险，不是配置问题）：访问密钥自身的管理（`/me/access-keys*`，否则密钥能给自己续命或扩权）、登录会话管理（`/me/sessions*`、`POST /auth/logout`，否则密钥能把主人踢下线）。用 `Router.SessionOnly().Handle` 注册，密钥 403 `access keys cannot use this endpoint`。
 - **只读自助接口**：`GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`、`/lookup/:kind`、`/me/verify/methods`（`AuthedRead`）接受任意密钥，返回按密钥收窄后的内容（`/me/assignable-roles` 在密钥下为 `[]`）。
 
