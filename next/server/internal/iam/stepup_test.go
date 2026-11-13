@@ -21,7 +21,7 @@ const testOperation = "TEST /op"
 func withProof(t *testing.T, s *Service, ctx context.Context, userID int64, scope string) context.Context {
 	t.Helper()
 	ctx = core.WithUserID(ctx, userID)
-	token, err := s.createFlow(ctx, flowStepUpProof, userID, proofPayload{Scope: scope, Operation: testOperation, Subject: stepUpSubject(ctx), Method: methodPassword})
+	token, err := s.createFlow(ctx, flowStepUpProof, userID, proofPayload{Scope: scope, Operation: testOperation, Subject: stepUpSubject(ctx), Method: methodPassword, Password: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,6 +423,10 @@ func TestSuperAdminLastFactorTakesThePassword(t *testing.T) {
 	check(root, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", true)
 	check(root, core.StepUpUserSecurityReset, reset(root), true)
 	check(root, core.StepUpUserSecurityReset, reset(plain.ID), false)
+	// The id as the route reads it, however it is spelled.
+	for _, id := range []string{"0" + fmt.Sprint(root), "+" + fmt.Sprint(root)} {
+		check(root, core.StepUpUserSecurityReset, "DELETE /api/v1/users/"+id+"/security", true)
+	}
 	check(plain.ID, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", false)
 	check(plain.ID, core.StepUpUserSecurityReset, reset(plain.ID), false)
 	// A code alone is refused, with the password it issues a proof.
@@ -439,6 +443,21 @@ func TestSuperAdminLastFactorTakesThePassword(t *testing.T) {
 	// Two-factor and a passkey: dropping one leaves the other.
 	addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
 	check(root, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", false)
+	// A proof issued then, without the password, is not enough once the
+	// passkey is gone: the policy is applied again when it is spent.
+	disable := "POST /api/v1/me/two-factor/disable"
+	clearLastStep(t, s, root)
+	p, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, VerifyInput{Scope: core.StepUpSelf2FADisable, Context: disable, Method: methodTOTP, Code: codeAt(t, secret, time.Now())}, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM user_passkeys WHERE user_id = $1`, root); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ConsumeStepUp(core.WithStepUp(core.WithUserID(ctx, root), p.Proof, disable), core.StepUpSelf2FADisable); !isVerificationRequired(err) {
+		t.Fatalf("a proof without the password after the last passkey went: %v", err)
+	}
+	addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
 	check(root, core.StepUpSelfPasskeyDelete, "DELETE /api/v1/me/passkeys/1", false)
 	check(root, core.StepUpUserSecurityReset, reset(root), true)
 	// The only passkey, without two-factor.

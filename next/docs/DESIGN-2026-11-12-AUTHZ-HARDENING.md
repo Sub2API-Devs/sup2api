@@ -1419,9 +1419,10 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 ### F4 超管清掉自己的全部验证因素要密码 + 第二因素（产品性收紧，待决定 5）
 
 - 改动：`iam.StepUpMethods` 增加操作参数，`lastSuperFactor` 一处判断：超管本人 `user.security.reset` 作用于自己（操作 `DELETE /api/v1/users/<自己>/security`）、`self.2fa.disable` 而没有通行密钥、`self.passkey.delete` 删唯一的通行密钥而没有 2FA 时，`password_required = true`，与超管移交、改自己密码同一策略机制（`VerifyStepUp` 先验密码再验因素）。`GET /me/verify/methods` 接受可选 `context`，`POST /me/verify` 用请求的 `context`，403 `verification_required` 用本请求的操作，三处同一函数；`/me/verify/begin` 只看方式是否可用，不受影响。非超管、仍留有另一个强因素的操作不变。
+- 审查修复：自己的判断按路由读 id 的方式解析操作（`resetTarget`，与 `httpapi.PathID` 一致，`/users/01/security`、`/users/+1/security` 同样算本人；原来按字符串比较可被绕过）；proof 记下签发时是否验过密码（`proofPayload.password`），消费时按当时的因素再算一次策略（`proofStillEnough`），没验密码而现在要密码时不放行（原来可以先在还有通行密钥时只用 2FA 取关 2FA 的 proof，再删掉通行密钥，然后用这个 proof 关 2FA）。滚动发布期间旧节点签发的 proof 不带该字段，在新节点上消费 `superadmin.transfer`、`self.password.change` 时会被拒一次，重新验证即可。mock 的二次验证按同一口径（超管关 2FA、清自己的安全设置要密码）。
 - 偏离说明：待决定 5 原文只列了 `user.security.reset` 与 `self.2fa.disable`；删唯一的通行密钥（且无 2FA）同样会清掉超管的全部强因素，一并纳入同一判断，否则是同一缺口的第三个入口。
 - 控制台：StepUpDialog 取方式时带上 `context`（即 403 的 `details.context`），超管清自己的因素时弹窗同时要密码。
-- 测试：iam `TestSuperAdminLastFactorTakesThePassword`（超管只有 2FA 时关 2FA、清自己安全设置要密码，清他人不要；只给验证码被拒、加密码签发；有 2FA 与通行密钥时关 2FA、删通行密钥不要，清自己仍要；只剩一个通行密钥时删它要；不带操作时按旧口径；普通用户都不要）、`TestVerifyMethodsTakeTheOperation`（HTTP：methods 带 context 与 403 的 `details.password_required`）；web `StepUpDialog.spec`。
+- 测试：iam `TestSuperAdminLastFactorTakesThePassword`（非规范写法的本人 id 同样要密码；有通行密钥时签发的不带密码的关 2FA proof，在通行密钥删除后消费被拒；超管只有 2FA 时关 2FA、清自己安全设置要密码，清他人不要；只给验证码被拒、加密码签发；有 2FA 与通行密钥时关 2FA、删通行密钥不要，清自己仍要；只剩一个通行密钥时删它要；不带操作时按旧口径；普通用户都不要）、`TestVerifyMethodsTakeTheOperation`（HTTP：methods 带 context 与 403 的 `details.password_required`）；web `StepUpDialog.spec`。
 - 影响对象：超管本人。脚本化调用这几类操作取 proof 时要同时给密码。旧控制台不带 `context` 取方式时不显示密码栏，提交后得到密码字段错误（发布约束 2：与 S5 同版本发布）。
 - 回滚：revert 该提交（前后端同一提交）。无迁移。
 

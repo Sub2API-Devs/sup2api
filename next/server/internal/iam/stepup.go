@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -159,7 +158,7 @@ func (s *Service) lastSuperFactor(ctx context.Context, userID int64, scope, oper
 	var last bool
 	switch scope {
 	case core.StepUpUserSecurityReset:
-		last = operation == fmt.Sprintf("%s %s/users/%d/security", http.MethodDelete, httpapi.APIPrefix, userID)
+		last = resetTarget(operation) == userID
 	case core.StepUpSelf2FADisable:
 		last = totp && passkeys == 0
 	case core.StepUpSelfPasskeyDelete:
@@ -169,6 +168,19 @@ func (s *Service) lastSuperFactor(ctx context.Context, userID int64, scope, oper
 		return false, nil
 	}
 	return s.authz.IsSuperuser(ctx, s.db.Pool, userID)
+}
+
+// resetTarget is the user a DELETE /users/:id/security operation acts on,
+// its id read as the route reads it (httpapi.PathID: "01" and "+1" are 1),
+// 0 for any other operation.
+func resetTarget(operation string) int64 {
+	rest, ok := strings.CutPrefix(operation, http.MethodDelete+" "+httpapi.APIPrefix+"/users/")
+	id, found := strings.CutSuffix(rest, "/security")
+	if !ok || !found {
+		return 0
+	}
+	n, _ := strconv.ParseInt(id, 10, 64)
+	return n
 }
 
 // stepUpSubject is the session or access key a proof is bound to.
@@ -185,6 +197,8 @@ type proofPayload struct {
 	Operation string `json:"operation"`
 	Subject   string `json:"subject"`
 	Method    string `json:"method"`
+	// Password: the password was checked with the method.
+	Password bool `json:"password,omitempty"`
 }
 
 // VerifyInput is the body of POST /me/verify. Context is the operation the
@@ -239,7 +253,8 @@ func (s *Service) VerifyStepUp(ctx context.Context, r *http.Request, userID int6
 	if err != nil {
 		return nil, err
 	}
-	payload := proofPayload{Scope: in.Scope, Operation: in.Context, Subject: stepUpSubject(ctx), Method: in.Method}
+	payload := proofPayload{Scope: in.Scope, Operation: in.Context, Subject: stepUpSubject(ctx), Method: in.Method,
+		Password: methods.PasswordRequired || in.Method == methodPassword}
 	token, err := s.createFlow(ctx, flowStepUpProof, userID, payload)
 	if err != nil {
 		return nil, err
@@ -368,11 +383,33 @@ func (s *Service) ConsumeStepUp(ctx context.Context, scope string) error {
 			return err
 		}
 		if err == nil && p.Scope == scope && p.Operation == operation && p.Subject == stepUpSubject(ctx) {
-			core.MarkStepUpSpent(ctx, scope)
-			return nil
+			enough, err := s.proofStillEnough(ctx, uid, p)
+			if err != nil {
+				return err
+			}
+			if enough {
+				core.MarkStepUpSpent(ctx, scope)
+				return nil
+			}
 		}
 	}
 	return s.verificationRequired(ctx, uid, scope, operation)
+}
+
+// proofStillEnough applies the policy again when the proof is spent: the
+// factors may have changed since it was issued (a proof for disabling
+// two-factor, issued while a passkey was left, spent after that passkey was
+// deleted), and a proof given without the password the operation now asks
+// for (lastSuperFactor) is not enough.
+func (s *Service) proofStillEnough(ctx context.Context, userID int64, p proofPayload) (bool, error) {
+	if p.Password {
+		return true, nil
+	}
+	methods, err := s.StepUpMethods(ctx, userID, p.Scope, p.Operation)
+	if err != nil {
+		return false, err
+	}
+	return !methods.PasswordRequired, nil
 }
 
 // verificationRequired is the 403 that tells the console what to verify:
