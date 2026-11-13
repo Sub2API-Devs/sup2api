@@ -1093,6 +1093,35 @@
 - 测试：authz `TestCatalogDescriptionsAndRequires`、`TestSyncCoreWritesDescriptions`；web `PermissionTree.spec` 的悬浮说明用例。
 - 回滚：revert（纯代码）。回滚后 `description` 列保留已写入的说明，旧代码只读不写，无害。
 
+## 期 4 T68：路由表 RouteSpec、启动自检 CheckRoutes、菜单引用主接口
+
+- 改动：
+  - `httpapi.Router` 的每个注册方法（`Public`、`Handle`、`AuthedRead`、`Perm`、`PermAny`、`PermScoped`、`Self`，以及 `SessionOnly`、`StepUp` 视图）都记录并返回 `*RouteSpec{Method, Path, Mode, Keys, Extra, PluginKeys, StepUp, NoAccessKey}`。原来忽略返回值的调用点不用改。
+  - `Router.Routes()` 列出全部路由。handler 内部额外检查的 key 用 `.Uses(...)` 登记，目前登记了：
+    - `POST /accounts`、`PATCH /accounts/:id`：`group:manage`、`account:group:bind`、`account:relay`、`account:settings:custom`。
+    - `POST /users`：`role:assign`、`segment:manage`。
+    - `PATCH /users/:id`：`user:password:reset`。
+    - `GET /segments/:id/members`：`user:read`。
+    - `POST /pricing/quote`：`group:read`、`user:read`、`segment:read`。
+    - 插件同意页 `POST /plugins/:key/versions/:version/consent`：`plugin:grant:*`、`role:define`。
+    - 插件设置的 GET 与 PUT：`plugin:read` / `plugin:manage`，并用 `.UsesPluginKeys()` 标记还检查插件声明的动态 key。
+  - `httpapi.CheckRoutes`（`httpapi/check.go`）在启动时检查，失败就拒绝启动（`app/routecheck.go`，在 `registerRoutes` 之后执行）：
+    - `Keys` 与 `Extra` 都是核心目录或 `self` 里的 key（`authz.KnownKey`，旧 own 别名不算）。
+    - `StepUp` scope 是已知 scope（`iam.KnownStepUpScope`）。
+    - 不需要权限的路由与白名单 `permissionlessRoutes` 完全一致，多了或少了都报错。
+  - 菜单：`coreMenuItem.anyOf` 改为 `apis`，即页面主接口的 `RouteSpec.ID`。启动时 `authz.BindMenuRoutes(httpapi.RouteKeys(specs))` 取这些路由的 `Keys` 作为 anyOf，主接口不存在就拒绝启动；没有绑定之前，带 `apis` 的菜单项不显示（fail-closed）。现在每个菜单绑定的 key 与之前手写的完全一样，可见性不变。
+- 与 plan.json 原 spec 的出入：
+  - 记录 Extra 的方法叫 `Uses`，因为 Go 里字段和方法不能同名 `Extra`。
+  - 菜单不再保留手写 anyOf 再去比对，而是直接从路由表取。
+  - 白名单在 app 层。
+  - 插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不进路由表。
+- 影响对象：启动流程（路由表或菜单不一致时拒绝启动）。新增不需要权限的接口时，必须同时加进 `permissionlessRoutes`。
+- 测试：
+  - httpapi：`TestRoutesRecordSpecs`、`TestCheckRoutes`（未知 key、未知 Extra、未知 scope、不在白名单、白名单过期）。
+  - authz：`TestBindMenuRoutes`（主接口换 key 时菜单跟着变；缺接口报错；未绑定时隐藏）。
+  - app：`TestManagedRuntime*` 走真实 `app.Run`，真实路由表自检通过。故意往白名单加一条不存在的路由，核心以 `route check: …` 失败。
+- 回滚：revert（纯代码）。
+
 ## 期 4 资源范围（R0–R7）发布说明
 
 - 两步走，滚动发布：

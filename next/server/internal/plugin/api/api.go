@@ -12,6 +12,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
@@ -72,7 +73,10 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/plugins/:key/uninstall", PermRead, a.uninstallState)
 	r.Perm(http.MethodPost, "/plugins/:key/uninstall/confirm-stopped", PermUninstall, a.confirmStopped)
 	r.Perm(http.MethodGet, "/plugins/:key/versions/:version/review", PermRead, a.review)
-	grant.Perm(http.MethodPost, "/plugins/:key/versions/:version/consent", PermInstall, a.consent)
+	// The grants and role grants chosen are checked against the caller
+	// (install.checkGrantRights, checkRoleGrantRights).
+	grant.Perm(http.MethodPost, "/plugins/:key/versions/:version/consent", PermInstall, a.consent).
+		Uses(perm.PluginGrantHigh, perm.PluginGrantCritical, perm.PluginGrantDBSchemaUnconfined, perm.RoleDefine)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/reject", PermInstall, a.reject)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/role-grants/confirm", PermInstall, a.reviewRoleGrants(true))
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/role-grants/reject", PermInstall, a.reviewRoleGrants(false))
@@ -85,8 +89,8 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	// checked with CanAny in the handler: that key comes from the manifest,
 	// a dynamic key no static route can name. The route's own key is the
 	// plugin pages' self permission, which an access key must carry too.
-	r.Self(http.MethodGet, "/plugins/:key/settings", PermSelfUI, a.getSettings)
-	r.Self(http.MethodPut, "/plugins/:key/settings", PermSelfUI, a.putSettings)
+	r.Self(http.MethodGet, "/plugins/:key/settings", PermSelfUI, a.getSettings).Uses(PermRead).UsesPluginKeys()
+	r.Self(http.MethodPut, "/plugins/:key/settings", PermSelfUI, a.putSettings).Uses(PermManage).UsesPluginKeys()
 	r.Perm(http.MethodGet, "/plugins/:key/grants", PermRead, a.listGrants)
 	r.Perm(http.MethodDelete, "/plugins/:key/grants/:permission", PermManage, a.revokeGrant)
 	r.Perm(http.MethodPut, "/plugins/:key/resources", PermManage, a.putResources)

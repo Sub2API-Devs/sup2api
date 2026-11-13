@@ -40,6 +40,8 @@ type Service struct {
 	catalog    *catalogSnapshot
 	listeners  []func()
 	stepUp     core.StepUpVerifier
+	// menuKeys are the permissions of each core menu item (BindMenuRoutes).
+	menuKeys map[string][]string
 }
 
 type permMeta struct {

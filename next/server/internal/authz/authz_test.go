@@ -90,6 +90,9 @@ func newService(t *testing.T, db *store.DB, bus core.Bus, reg core.PluginRegistr
 	if err := s.Start(ctx); err != nil {
 		t.Fatalf("start: %v", err)
 	}
+	if err := s.BindMenuRoutes(testMenuRoutes); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }
 
@@ -1267,10 +1270,10 @@ func TestOwnershipCatalog(t *testing.T) {
 	menuKeys := map[string]string{}
 	for _, sec := range coreMenus {
 		for _, it := range sec.items {
-			menuKeys[it.id] = join(it.anyOf)
+			menuKeys[it.id] = join(it.apis)
 		}
 	}
-	if menuKeys["accounts"] != "account:read" || menuKeys["proxies"] != "proxy:read" {
+	if menuKeys["accounts"] != "GET /accounts" || menuKeys["proxies"] != "GET /proxies" {
 		t.Fatalf("menus: %v", menuKeys)
 	}
 	set := core.PermissionSetOf("proxy:own:read")

@@ -11,6 +11,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 )
 
@@ -27,12 +28,12 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Self(http.MethodPut, "/me/password", selfSecurity, s.handleChangePassword)
 
 	r.Perm(http.MethodGet, "/users", "user:read", s.handleListUsers)
-	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser)
+	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser).Uses(perm.RoleAssign, perm.SegmentManage)
 	r.Perm(http.MethodGet, "/users/:id", "user:read", s.handleGetUser)
-	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser)
+	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser).Uses(perm.UserPasswordReset)
 	r.StepUp(core.StepUpUserDelete).Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
 	r.Perm(http.MethodPut, "/users/:id/roles", "role:assign", s.handleSetUserRoles)
-	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
+	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers).Uses(perm.UserRead)
 	// The super admin's own standing: under self:security for an access key.
 	r.StepUp(core.StepUpSuperAdminTransfer).Self(http.MethodPost, "/system/super-admin/transfer", selfSecurity, s.handleTransferSuperAdmin)
 	s.registerSecurityRoutes(r)

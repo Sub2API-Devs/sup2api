@@ -416,6 +416,13 @@ func (p corePerm) requiredKeys() []string {
 	return perm.Strings(p.requires)
 }
 
+// KnownKey reports whether key is a listed core permission (catalog or self
+// module, the former own-level aliases aside), for the start-up route check.
+func KnownKey(key string) bool {
+	p, ok := corePermByKey(key)
+	return ok && !p.deprecated
+}
+
 // corePermByKey finds a permission of the core catalog or the self module.
 func corePermByKey(key string) (corePerm, bool) {
 	for _, mods := range [][]coreModule{coreModules, {selfModule}} {
