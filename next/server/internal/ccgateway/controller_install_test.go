@@ -17,7 +17,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
+	"github.com/gin-gonic/gin"
 )
 
 // panelInstall is a controller installation over a fake Docker host; the
@@ -840,6 +843,51 @@ func TestControllerUploads(t *testing.T) {
 	f.writeConfig(sshConfig)
 	if code, out = f.request(admin, "POST", base, `{"size":1}`); code != 400 || reason(out) != "controller_not_configured" {
 		t.Fatalf("ssh mode: %d %v", code, out)
+	}
+}
+
+// sessionAuth opens the step-up sessions asked for and continues only those.
+type sessionAuth struct {
+	*keyAuth
+	opened map[string]bool
+}
+
+func (a sessionAuth) OpenStepUpSession(_ context.Context, scope, session string) error {
+	a.opened[scope+" "+session] = true
+	return nil
+}
+
+func (a sessionAuth) ContinueStepUpSession(_ context.Context, scope, session string) error {
+	if !a.opened[scope+" "+session] {
+		return core.ErrVerificationExpired
+	}
+	return nil
+}
+
+// The proof spent creating an upload covers that upload's other requests,
+// and no other upload (CONTRACTS §80.2 host.install).
+func TestControllerUploadSession(t *testing.T) {
+	f, _ := newPanelFixture(t)
+	auth := sessionAuth{keyAuth: f.auth, opened: map[string]bool{}}
+	f.engine = gin.New()
+	f.s.RegisterRoutes(httpapi.NewRouter(f.engine, auth, auth))
+	admin := f.user("admin@x")
+	base := "/system/ccgateway/runtime/uploads"
+	errCode := func(out map[string]any) any {
+		e, _ := out["error"].(map[string]any)
+		return e["code"]
+	}
+	if code, out := f.request(admin, "GET", base+"/"+testUploadID, ""); code != 403 || errCode(out) != "verification_expired" {
+		t.Fatalf("an upload not created here: %d %v", code, out)
+	}
+	if code, out := f.request(admin, "POST", base, `{"size":10}`); code != 200 || !auth.opened["host.install ccgateway.upload/"+testUploadID] {
+		t.Fatalf("create: %d %v, opened %v", code, out, auth.opened)
+	}
+	if code, out := f.request(admin, "GET", base+"/"+testUploadID, ""); code != 200 {
+		t.Fatalf("the created upload: %d %v", code, out)
+	}
+	if code, out := f.request(admin, "POST", base+"/"+strings.Repeat("z", 22)+"/load", `{"role":"app"}`); code != 403 || errCode(out) != "verification_expired" {
+		t.Fatalf("loading another upload: %d %v", code, out)
 	}
 }
 

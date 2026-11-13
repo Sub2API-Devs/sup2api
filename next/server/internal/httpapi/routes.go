@@ -36,8 +36,12 @@ type RouteSpec struct {
 	// PluginKeys: the handler also checks permissions a plugin declares
 	// (UsesPluginKeys), which no start-up check can list.
 	PluginKeys bool
-	// StepUp is the step-up scope of a StepUp view's route, "" for none.
+	// StepUp is the step-up scope of a StepUp or StepUpSession view's
+	// route, "" for none.
 	StepUp string
+	// StepUpSession: the route continues a step-up session instead of
+	// spending a proof (StepUpSession view).
+	StepUpSession bool
 	// NoAccessKey: registered on a SessionOnly view.
 	NoAccessKey bool
 }
@@ -88,7 +92,7 @@ func (s *RouteSpec) UsesPluginKeys() *RouteSpec {
 
 // record adds a route of r to the shared table.
 func (r *Router) record(method, path string, mode Mode, keys []perm.Key) *RouteSpec {
-	s := &RouteSpec{Method: method, Path: path, Mode: mode, Keys: slices.Clone(keys), StepUp: r.scope, NoAccessKey: r.noKeys}
+	s := &RouteSpec{Method: method, Path: path, Mode: mode, Keys: slices.Clone(keys), StepUp: r.scope, StepUpSession: r.session != nil, NoAccessKey: r.noKeys}
 	*r.routes = append(*r.routes, s)
 	return s
 }

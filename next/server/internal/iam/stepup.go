@@ -44,6 +44,7 @@ const (
 const (
 	flowStepUpProof   = "step_up_proof"
 	flowStepUpPasskey = "step_up_passkey"
+	flowStepUpSession = "step_up_session"
 )
 
 // stepUpScopes are the scopes a proof can be issued for; true marks the
@@ -394,6 +395,49 @@ func (s *Service) ConsumeStepUp(ctx context.Context, scope string) error {
 		}
 	}
 	return s.verificationRequired(ctx, uid, scope, operation)
+}
+
+// stepUpSessionToken names the auth_flows row of a step-up session: one per
+// scope, session, user and login session or access key, so the request of
+// anyone else names a row that does not exist.
+func stepUpSessionToken(ctx context.Context, userID int64, scope, session string) string {
+	return strings.Join([]string{flowStepUpSession, scope, session, strconv.FormatInt(userID, 10), stepUpSubject(ctx)}, "\n")
+}
+
+// OpenStepUpSession implements core.StepUpSessions: the request must have
+// spent its proof on scope. Opening it again keeps it open longer.
+func (s *Service) OpenStepUpSession(ctx context.Context, scope, session string) error {
+	uid, _ := core.UserID(ctx)
+	if uid == 0 || session == "" || core.StepUpSpent(ctx) != scope {
+		return core.ErrVerificationRequired.WithDetails(map[string]any{"scope": scope})
+	}
+	payload, err := json.Marshal(map[string]string{"scope": scope, "session": session, "subject": stepUpSubject(ctx)})
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Pool.Exec(ctx, `INSERT INTO auth_flows (token_hash, purpose, user_id, payload, expires_at) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (token_hash) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
+		hashToken(stepUpSessionToken(ctx, uid, scope, session)), flowStepUpSession, uid, payload, time.Now().Add(core.StepUpSessionIdle))
+	return err
+}
+
+// ContinueStepUpSession implements core.StepUpSessions.
+func (s *Service) ContinueStepUpSession(ctx context.Context, scope, session string) error {
+	uid, _ := core.UserID(ctx)
+	continued := false
+	if uid != 0 && session != "" {
+		tag, err := s.db.Pool.Exec(ctx, `UPDATE auth_flows SET expires_at = $3 WHERE token_hash = $1 AND purpose = $2 AND expires_at > now()`,
+			hashToken(stepUpSessionToken(ctx, uid, scope, session)), flowStepUpSession, time.Now().Add(core.StepUpSessionIdle))
+		if err != nil {
+			return err
+		}
+		continued = tag.RowsAffected() == 1
+	}
+	if !continued {
+		return core.ErrVerificationExpired.WithMessage(t(ctx, "this verified operation has expired or belongs to another session; start it again",
+			"这次操作的二次验证已过期或属于其他会话，请重新开始")).WithDetails(map[string]any{"scope": scope})
+	}
+	return nil
 }
 
 // proofStillEnough applies the policy again when the proof is spent: the

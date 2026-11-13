@@ -85,45 +85,53 @@ type stepUpRouteAuth struct {
 }
 
 // Installing or reaching code on a host takes a step-up proof (CONTRACTS
-// §80.2 host.install); reads, upload chunks and cleanup do not.
+// §80.2 host.install); creating an image upload takes one too, and the
+// upload's other requests continue its step-up session; reads and cleanup
+// need neither.
 func TestHostInstallRoutesStepUp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(gin.Recovery()) // unconfigured handlers may panic; only the step-up answer matters
 	auth := stepUpRouteAuth{ccgRouteAuth: ccgRouteAuth{allowed: true}}
 	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
+	const proof, session = "verification_required", "verification_expired"
 	for _, tc := range []struct {
-		route  string
-		stepUp bool
+		route string
+		want  string // the step-up refusal, "" for none
 	}{
-		{"PUT remote-config", true},
-		{"POST remote-fingerprint", true},
-		{"POST remote-test", true},
-		{"POST controller/install", true},
-		{"POST runtime/install", true},
-		{"POST runtime/uploads/u1/load", true},
-		{"POST runtime/bundled", true},
-		{"POST runtime/workers", true},
-		{"POST runtimes/k1/worker", true},
-		{"POST runtime/uploads", false},
-		{"PUT runtime/uploads/u1", false},
-		{"GET runtime/uploads/u1", false},
-		{"POST runtime/cleanup", false},
-		{"GET remote-config", false},
-		{"GET runtime", false},
-		{"DELETE runtime/uploads/u1", false},
-		{"POST runtimes/k1/purge", false},
-		{"POST cli/1", false},
-		{"PUT cli/1", false},
+		{"PUT remote-config", proof},
+		{"POST remote-fingerprint", proof},
+		{"POST remote-test", proof},
+		{"POST controller/install", proof},
+		{"POST runtime/install", proof},
+		{"POST runtime/uploads", proof},
+		{"POST runtime/bundled", proof},
+		{"POST runtime/workers", proof},
+		{"POST runtimes/k1/worker", proof},
+		{"PUT runtime/uploads/u1", session},
+		{"GET runtime/uploads/u1", session},
+		{"DELETE runtime/uploads/u1", session},
+		{"POST runtime/uploads/u1/load", session},
+		{"POST runtime/cleanup", ""},
+		{"GET remote-config", ""},
+		{"GET runtime", ""},
+		{"POST runtimes/k1/purge", ""},
+		{"POST cli/1", ""},
+		{"PUT cli/1", ""},
 	} {
 		method, path, _ := strings.Cut(tc.route, " ")
 		req := httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
 		req.Header.Set("Authorization", "Bearer test")
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
-		got := w.Code == 403 && strings.Contains(w.Body.String(), `"scope":"host.install"`)
-		if got != tc.stepUp {
-			t.Errorf("%s: %d %s, step-up wanted %v", tc.route, w.Code, w.Body, tc.stepUp)
+		got := ""
+		for _, code := range []string{proof, session} {
+			if w.Code == 403 && strings.Contains(w.Body.String(), `"code":"`+code+`"`) && strings.Contains(w.Body.String(), `"scope":"host.install"`) {
+				got = code
+			}
+		}
+		if got != tc.want {
+			t.Errorf("%s: %d %s, step-up refusal wanted %q", tc.route, w.Code, w.Body, tc.want)
 		}
 	}
 }

@@ -227,6 +227,14 @@ describe('upload transport', () => {
     expect(init.headers).toMatchObject({ 'X-CCG-Offset': '0', 'Content-Type': 'application/octet-stream', Authorization: 'Bearer tok-1' })
   })
 
+  it('reports a chunk of a lapsed upload session as an ApiError, not worth retrying', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: { code: 'verification_expired', message: 'start again', details: { scope: 'host.install' } } }), { status: 403 }))
+    const e = await createUploadTransport(fetchImpl as unknown as typeof fetch).put(ID, 0, blob(4)).catch(x => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e.code).toBe('verification_expired')
+    expect(retryable(e)).toBe(false)
+  })
+
   it('turns a 409 into an ApiError carrying the controller offset', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: { code: 'conflict', message: 'offset mismatch', details: { reason: 'offset_mismatch', offset: 16 } } }), { status: 409 }))
     const e = await createUploadTransport(fetchImpl as unknown as typeof fetch).put(ID, 0, blob(4)).catch(x => x)
@@ -249,8 +257,10 @@ describe('upload transport', () => {
     mocks.post.mockResolvedValue({})
     mocks.del.mockResolvedValue(null)
     const t = createUploadTransport(vi.fn() as unknown as typeof fetch)
-    await t.create(123)
-    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/uploads', { size: 123 }, expect.anything())
+    // Creating may wait for the step-up verification: only the caller's signal ends it.
+    const cancel = new AbortController()
+    await t.create(123, cancel.signal)
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/uploads', { size: 123 }, { signal: cancel.signal })
     await t.load(ID, 'controller', false)
     expect(mocks.post).toHaveBeenLastCalledWith(`/system/ccgateway/runtime/uploads/${ID}/load`, { role: 'controller', apply: true }, expect.anything())
     await t.load(ID, 'app', true)

@@ -300,6 +300,84 @@ func TestStepUp(t *testing.T) {
 	}
 }
 
+// sessionTokens keeps the step-up sessions opened, by scope and session.
+type sessionTokens struct {
+	stepUpTokens
+	opened map[string]bool
+}
+
+func (s sessionTokens) OpenStepUpSession(_ context.Context, scope, session string) error {
+	s.opened[scope+" "+session] = true
+	return nil
+}
+
+func (s sessionTokens) ContinueStepUpSession(_ context.Context, scope, session string) error {
+	if !s.opened[scope+" "+session] {
+		return core.ErrVerificationExpired
+	}
+	return nil
+}
+
+// A StepUp route's handler opens a step-up session; StepUpSession routes
+// continue it after their permission check, without a proof. Opening it
+// outside a StepUp route, or without a sessions keeper, fails.
+func TestStepUpSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var spent []string
+	tokens := sessionTokens{stepUpTokens: stepUpTokens{spent: &spent}, opened: map[string]bool{}}
+	engine := gin.New()
+	r := NewRouter(engine, tokens, fakeAuthz{keys: map[int64][]string{1: {"x:manage"}}})
+	open := func(c *gin.Context) {
+		if err := OpenStepUpSession(c, "up/"+c.Query("id")); err != nil {
+			Fail(c, err)
+			return
+		}
+		OK(c, nil)
+	}
+	ok := func(c *gin.Context) { OK(c, nil) }
+	r.StepUp("x.install").Perm("POST", "/uploads", "x:manage", open)
+	r.Perm("POST", "/plain", "x:manage", open)
+	r.StepUpSession("x.install", func(c *gin.Context) string { return "up/" + c.Param("id") }).Perm("PUT", "/uploads/:id", "x:manage", ok)
+	call := func(method, path, bearer, proof string) int {
+		req := httptest.NewRequest(method, "/api/v1"+path, nil)
+		req.Header.Set("Authorization", "Bearer "+bearer)
+		if proof != "" {
+			req.Header.Set(core.HeaderVerifyProof, proof)
+		}
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		return w.Code
+	}
+	for _, tc := range []struct {
+		name, method, path, bearer, proof string
+		want                              int
+	}{
+		{"before the session", "PUT", "/uploads/1", "u1", "", 403},
+		{"opened outside a StepUp route", "POST", "/plain?id=1", "u1", "", 500},
+		{"opened with a proof", "POST", "/uploads?id=1", "u1", "ok:x.install", 200},
+		{"continued", "PUT", "/uploads/1", "u1", "", 200},
+		{"another session", "PUT", "/uploads/2", "u1", "", 403},
+		{"continued without the permission", "PUT", "/uploads/1", "u2", "", 403},
+	} {
+		if got := call(tc.method, tc.path, tc.bearer, tc.proof); got != tc.want {
+			t.Errorf("%s = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+	if !tokens.opened["x.install up/1"] || len(tokens.opened) != 1 {
+		t.Errorf("opened %v", tokens.opened)
+	}
+	if specs := r.Routes(); !specs[2].StepUpSession || specs[2].StepUp != "x.install" || specs[0].StepUpSession {
+		t.Errorf("recorded %+v", specs)
+	}
+
+	plain := gin.New()
+	NewRouter(plain, keyTokens{}, fakeAuthz{keys: map[int64][]string{1: {"x:manage"}}}).
+		StepUpSession("x.install", func(c *gin.Context) string { return c.Param("id") }).Perm("PUT", "/uploads/:id", "x:manage", ok)
+	if code := serve(plain, "PUT", "/uploads/1", "u1"); code != http.StatusInternalServerError {
+		t.Errorf("no sessions keeper = %d, want 500", code)
+	}
+}
+
 // Self is Perm under a self permission; any other key is a programming error.
 func TestSelf(t *testing.T) {
 	gin.SetMode(gin.TestMode)

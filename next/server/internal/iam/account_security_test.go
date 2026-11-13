@@ -1396,6 +1396,58 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	}
 }
 
+// One proof covers an operation of several requests (CONTRACTS §80.2, the
+// ccgateway image upload): the request that spent it opens a step-up
+// session, and only the same user through the same access key or login
+// session continues it, until it has been idle for an hour.
+func TestStepUpSessions(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	keyA := k.createKey(t, login.User.ID, "settings:manage")
+	keyB := k.createKey(t, login.User.ID, "settings:manage")
+	// Stand-ins for the upload routes, guarded the same way.
+	k.r.StepUp(core.StepUpHostInstall).Perm(http.MethodPost, "/x/uploads", "settings:manage", func(c *gin.Context) {
+		if err := httpapi.OpenStepUpSession(c, "x/1"); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
+	k.r.StepUpSession(core.StepUpHostInstall, func(c *gin.Context) string { return "x/" + c.Param("id") }).
+		Perm(http.MethodPut, "/x/uploads/:id", "settings:manage", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	refused := func(token, path, want string) {
+		t.Helper()
+		if code, out := k.call(token, "PUT", path, nil); code != 403 || errCode(out) != want {
+			t.Fatalf("PUT %s: %d %v, want %s", path, code, out, want)
+		}
+	}
+	if code, out := k.call(keyA.Key, "POST", "/x/uploads", nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("open without a proof: %d %v", code, out)
+	}
+	refused(keyA.Key, "/x/uploads/1", "verification_expired")
+	proof := k.proof(t, keyA.Key, core.StepUpHostInstall, "POST", "/x/uploads", map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(keyA.Key, proof, "POST", "/x/uploads", nil); code != 204 {
+		t.Fatalf("open with a proof: %d %v", code, out)
+	}
+	for range 2 {
+		if code, out := k.call(keyA.Key, "PUT", "/x/uploads/1", nil); code != 204 {
+			t.Fatalf("continued: %d %v", code, out)
+		}
+	}
+	refused(keyA.Key, "/x/uploads/2", "verification_expired")
+	refused(keyB.Key, "/x/uploads/1", "verification_expired")
+	refused(login.AccessToken, "/x/uploads/1", "verification_expired")
+	var idle bool
+	if err := k.s.db.Pool.QueryRow(ctx, `SELECT expires_at > now() + interval '59 minutes' FROM auth_flows WHERE purpose = 'step_up_session'`).Scan(&idle); err != nil || !idle {
+		t.Fatalf("the session is not kept open an hour from its last request: %v %v", idle, err)
+	}
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE auth_flows SET expires_at = now() - interval '1 second' WHERE purpose = 'step_up_session'`); err != nil {
+		t.Fatal(err)
+	}
+	refused(keyA.Key, "/x/uploads/1", "verification_expired")
+}
+
 // An access key's scopes are within its user's (CONTRACTS §21.0, R6): a key
 // wider than the user is refused at creation (the former own-level spelling
 // names no permission), its keys are stored and listed canonical, and a key

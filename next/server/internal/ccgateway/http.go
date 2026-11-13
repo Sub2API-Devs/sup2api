@@ -68,13 +68,15 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// the control panel (§53.6).
 	r.Perm("GET", "/system/ccgateway/runtime", "settings:read", s.runtimeGet)
 	host.Perm("POST", "/system/ccgateway/runtime/install", "settings:manage", s.runtimeInstall)
-	// Sending image bytes runs nothing (and goes in many chunks); loading
-	// the image is what takes the proof.
-	r.Perm("POST", "/system/ccgateway/runtime/uploads", "settings:manage", s.uploadCreate)
-	r.Perm("PUT", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadPut)
-	r.Perm("GET", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
-	r.Perm("DELETE", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
-	host.Perm("POST", "/system/ccgateway/runtime/uploads/:id/load", "settings:manage", s.uploadLoad)
+	// An image upload takes one proof, when it is created: its chunks,
+	// reads, cancel and load continue that upload's step-up session (the
+	// same user through the same login session or access key) without one.
+	host.Perm("POST", "/system/ccgateway/runtime/uploads", "settings:manage", s.uploadCreate)
+	upload := r.StepUpSession(core.StepUpHostInstall, func(c *gin.Context) string { return uploadSession(c.Param("id")) })
+	upload.Perm("PUT", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadPut)
+	upload.Perm("GET", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
+	upload.Perm("DELETE", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
+	upload.Perm("POST", "/system/ccgateway/runtime/uploads/:id/load", "settings:manage", s.uploadLoad)
 	// The runtime images bundled in the plugin package (§53.10).
 	host.Perm("POST", "/system/ccgateway/runtime/bundled", "settings:manage", s.runtimeBundled)
 	// Worker update in place, never recreating account containers (§53.7).
