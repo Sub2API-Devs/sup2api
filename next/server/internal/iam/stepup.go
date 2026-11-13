@@ -433,6 +433,8 @@ func (s *Service) keepLastFactor(ctx context.Context, tx pgx.Tx, userID int64, s
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, userID); err != nil {
 		return err
 	}
+	// A statement of its own after the lock: under READ COMMITTED (store.DB.Tx)
+	// it sees a removal the lock waited for.
 	var totp bool
 	var passkeys int
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1),
