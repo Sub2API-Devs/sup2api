@@ -371,7 +371,8 @@
 - 影响对象：models fetch 失败时的 503 文案变化（传输错误前缀由 `Get "<完整 URL>"` 变为 `Get <不含查询串的地址>`）；其余无变化。混跑时旧节点没有 `GET /me/assignable-roles`（404），控制台不调用该接口，无界面影响。
 - 回滚：revert 对应提交即可，无迁移、无数据变化。
 
-> 以下为期 3（T50 起）。第 a 组：内置角色与目录主线（T50–T57）。
+> 以下为期 3（T50 起），各节按任务编号排列：T50–T65，然后 FU1–FU6，最后是合并后的期 3 审查。三组分别开发：a 组 T50–T57（迁移 0099、0101），b 组 T61–T65 与 FU1、FU2、FU3、FU5、FU6（迁移 0100），c 组 T58–T60 与 FU4。
+
 
 ## T50 K、决策 D5：内置角色 key 被自定义角色占用时停止启动，新建角色不能用保留 key
 
@@ -391,30 +392,6 @@
   - 不经 `editableRole` 的写入不变：安装插件时把新插件权限授给内置角色（consent，`SyncPlugin`）仍按原规则（`role:define` + 持有该权限），由 T59 收紧。
   - 控制台角色页对非超管仍显示内置角色的编辑入口，保存时收到 403（前端按钮收敛不在本任务范围）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T56 决策 D17：同级保护，作用于用户时目标的非默认角色须在操作者的可分配清单内（产品性收紧）
-
-> FU6 在此基础上合并为“可管理目标”：本人也按同一规则判断，操作者一侧按其角色而不被访问密钥收窄（下文“访问密钥没有可分配角色”一条不再成立），见 FU6。
-
-- 改动：`authz.CanActOnUsers` 在“目标角色授予的权限在操作者之内”之后追加：操作者不是超管时，目标们持有的每个角色（默认角色 `user` 除外）都必须 `grantSet(actor).CanAssign(role)`，否则 403 `you cannot modify a user holding a role you cannot assign`，`details.role` 为第一个不可分配的角色（按 key 排序）。`usersRoles` 一条查询同时给出目标的角色 key 与授予集合（不增加查询）。分配角色（`SetUserRoles` 的 `checkAssignment`）对目标的判断改为调用同一个 `targetsWithin`（`canActOnUsers` 的判断部分，复用已读出的操作者授予集合；原先内联只比较权限），所以 PUT `/users/:id/roles` 同样生效。系统（actor 0）、作用于自己（登录会话）、超管不受影响。CONTRACTS §43.6 同步。无迁移。
-- 影响对象（所有作用于用户的入口：PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles`、余额调整、用户组成员变更）：
-  - admin 不能再修改、禁用、删除其他 admin，不能重置其密码与两步验证，不能调整其余额、用户组、角色（默认清单里 admin 不可分配 admin），由成功变为 403；需要时由超管操作。admin 对 operator、supplier（T52 建出并加入 admin 的清单后）、自定义角色持有者、普通用户不变。
-  - operator 不能再作用于其他 operator 以及任何自定义角色的持有者（决策 5 的清单为 supplier、user）；生产库 operator 的存量清单是 {operator, user} + 全部自定义角色（迁移 0097），在 T55 的迁移 0101 纠正之前，生产上 operator 之间仍可互相操作。
-  - 没有可分配清单的自定义角色（如只有 `user:read`、`user:update` 的客服角色）只能作用于只有 `user` 角色或没有角色的用户；原先只要权限覆盖目标就可以（例如作用于另一个同角色的客服）。需要管理某类角色的持有者时，由超管把该角色加入其可分配清单。
-  - 访问密钥没有可分配角色：只能作用于只有 `user` 角色或没有角色的用户（原先权限覆盖即可）；密钥主人也一样，主人持有任何非默认角色时其密钥不能再经 `/users/:id` 改主人。
-  - 批量接口（用户组成员）里只要有一个目标不满足，整批 403。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T57 决策 D4：只认会话的权限扩展（代码执行、信任根、明文凭证）（产品性收紧）
-
-- 改动：目录把 `plugin:install`、`plugin:uninstall`、`plugin:grant:high`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`、`account:credential:view`、`account:own:credential:view` 标为 sessionOnly（它们都已是 sensitive）。只改数据，经已有的 `authz.KeyAllowed` 生效，规则与 T10 相同。CONTRACTS §4、§80 同步。无迁移。
-- 影响对象：
-  - 访问密钥的可选权限列表不再显示这 10 项（超管也一样）；创建、修改密钥时选它们 403（`details.session_only`）；存量密钥里的这些权限在校验时丢弃，`GET /me/access-keys` 的 `lost` 列出，其余权限照常。
-  - 用访问密钥调用下列接口由成功变为 403，需改用登录会话：POST `/plugins/upload`、`/plugins/install-from-market`、`/plugins/:key/versions/:version/consent`、`/reject`；DELETE `/plugins/:key`、`/plugins/retired-keys/:key/release`、`/plugins/:key/uninstall/confirm-stopped`；发布者与公钥的写接口（`publisher:manage`）；POST `/system/upgrades`、`/system/releases/import`（`system:update:execute`）与 `/system/upgrades/:id/*`、`/system/nodes/:id/*` 的恢复动作（`system:update:recover`）。用访问密钥做自动升级或自动装插件的外部脚本受影响；仓库内的部署脚本（`deploy/gateway/ovh/upgrade_observe.py`）用登录会话，网关（`gateway/internal/control`）不用访问密钥，均不受影响。
-  - `POST /accounts/:id/credentials/reveal` 自 T11 起就只认会话，不变。访问密钥在 `PATCH /accounts/:id` 与 `POST /accounts/:id/models/fetch` 上一律按“不能查看凭证”处理：保留掩码密钥的同时改上游地址，由成功变为 400 `reenter_required`（T28），重新输入密钥即可。
-  - 访问密钥管理页把这些权限显示在“已失效”里，现有文案是“你已经没有这些权限”（T10 起如此）；对只认会话的权限并不准确（用户仍持有，只是密钥不能带），文案未改。
-  - 滚动升级：判断在各节点进程内，新旧节点混跑时旧节点仍接受带这些权限的密钥、仍允许选择它们，全部节点升级后才完全生效。
-- 回滚：revert 这个提交即可，无迁移。回滚后存量密钥里保存的这些权限立即恢复生效；升级期间在访问密钥页保存过的密钥除外（保存时已失效的权限被去掉），需要重新勾选。
 
 ## T52 J1、决策 5、7：内置角色声明化，新增内置 supplier 角色
 
@@ -466,114 +443,29 @@
   - 滚动升级：新旧节点混跑时最后启动的节点决定目录，旧节点启动会把 `audit:read` 的模块改回 `node`（仅展示分组），到某个新节点重启为止。
 - 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0101_operator_assignable.sql';`（托管部署必须删：托管核心启动时核对迁移清单，库里有本版本不认识的迁移就拒绝启动；非托管部署不删也可。删掉后再次升级会重新执行该迁移，把超管期间经 PUT 设回的清单再次收窄）。可分配清单不会自动恢复：需要时由超管经 PUT `/roles/<operator id>/assignable` 设回（审计行的 `removed`、`removed_assign_custom` 记录了原值）。回滚后的 `SyncCore` 把 `audit:read` 的模块改回 `node`；期间被重置过的 operator 权限按旧代码再点一次“恢复默认”即回到旧默认集合。
 
-## T61 W4-P8、W4-P9：新插件权限的状态跟随插件运行状态
+## T56 决策 D17：同级保护，作用于用户时目标的非默认角色须在操作者的可分配清单内（产品性收紧）
 
-- 改动：`authz.SyncPlugin` 新登记的插件权限不再一律 `active`：插件此刻在运行（`plugins.status` 为 `enabled` 或 `upgrading`，与 `plugin/install` 的常量一致，`TestSyncPluginNewPermissionFollowsPluginStatus` 逐个状态验证，防漂移）时为 `active`，否则为 `disabled`；已存在的行不动。禁用时的 `SetPluginActive(false)` 不变；`rollout` 的 `commit` 现在每次激活都调用 `SetPluginActive(true)`（此前只在启用时），见下面的偏离说明。W4-P9 不改行为：`rollout.finishFailed` 的升级分支加注释说明“同意新版本时登记的新 key 保留到激活另一个版本”，`TestPermissionCatalogFollowsRollouts` 用真实的目录与 `DefaultsApplier` 锁定整个生命周期。无迁移。CONTRACTS §4 同步。
-- 偏离任务说明（审查发现）：启用的 rollout 提交之后、完成之前，节点已经在服务，但 `plugins.status` 仍是 `enabling`；这段时间同意新版本（内置插件在滚动部署时会自动发生）登记的新 key 是 `disabled`，而升级提交原来不调用 `SetPluginActive`，这些 key 会一直停在 `disabled`，直到手工禁用再启用。因此升级提交也置 `active`（`plugin/rollout/coordinator.go`，超出任务列出的文件范围）。
-- 影响对象：首次安装（尚未启用）和禁用期间同意新版本时登记的权限，此前立即 `active`（持有它的角色在插件没运行时就“有”这个权限，`/me` 的权限列表与 `Can` 会把它算进去），现在到启用那一刻才生效；角色授予照常写入，启用后无需重新勾选。授予视角（角色的权限清单、能否授予与分配的判断）本来就包含 `disabled` 的插件权限，不变。运行中升级登记的新权限仍立即 `active`。存量行不追溯：已经是 `active` 的未运行插件的权限保持原状，直到该插件下一次禁用或启用。升级失败后残留的新 key 没有任何路由检查，激活另一个版本时按那个版本的 manifest 清理；只是禁用再启用同一版本不会清理。
-- 回滚：revert 这两个提交即可，无迁移；回滚后已登记为 `disabled` 的权限在插件下次启用时变为 `active`。
+> FU6 在此基础上合并为“可管理目标”：本人也按同一规则判断，操作者一侧按其角色而不被访问密钥收窄（下文“访问密钥没有可分配角色”一条不再成立），见 FU6。
 
-## T62 W4-A4：插件任务手动运行统一要求 task:run（产品性收紧）
-
-- 改动：`POST /plugins/:key/jobs/:job_id/run` 的权限由 `plugin:manage` 改为 `task:run`（`plugin/api/api.go`，用 `task.PermRun`），与 `POST /system/tasks/:name/run` 同口径：同一个任务不再有两个权限不同的手动运行入口。审计动作仍是 `plugin.job.run`。插件详情“任务”页的“立即运行”按钮改按 `task:run` 显示（`JobsTab.vue`）。无迁移。CONTRACTS §5.7 路由表同步。
-- 影响对象：只有 `plugin:manage`、没有 `task:run` 的角色：调用由 204 变为 403 `details.permission = task:run`，按钮不再显示；内置 `admin` 两个权限都有，不受影响。反过来，只有 `task:run` 的人（内置 `operator` 默认有 `task:run`、没有 `plugin:*`）现在可以从这个接口运行插件任务，他此前已经能在定时任务页运行同一个任务（看插件的任务列表仍需 `plugin:read`，所以 `operator` 看不到这个页面）。访问密钥无变化：`task:run` 与 `plugin:manage` 一样不是只认会话的权限，密钥带上它即可调用。
+- 改动：`authz.CanActOnUsers` 在“目标角色授予的权限在操作者之内”之后追加：操作者不是超管时，目标们持有的每个角色（默认角色 `user` 除外）都必须 `grantSet(actor).CanAssign(role)`，否则 403 `you cannot modify a user holding a role you cannot assign`，`details.role` 为第一个不可分配的角色（按 key 排序）。`usersRoles` 一条查询同时给出目标的角色 key 与授予集合（不增加查询）。分配角色（`SetUserRoles` 的 `checkAssignment`）对目标的判断改为调用同一个 `targetsWithin`（`canActOnUsers` 的判断部分，复用已读出的操作者授予集合；原先内联只比较权限），所以 PUT `/users/:id/roles` 同样生效。系统（actor 0）、作用于自己（登录会话）、超管不受影响。CONTRACTS §43.6 同步。无迁移。
+- 影响对象（所有作用于用户的入口：PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles`、余额调整、用户组成员变更）：
+  - admin 不能再修改、禁用、删除其他 admin，不能重置其密码与两步验证，不能调整其余额、用户组、角色（默认清单里 admin 不可分配 admin），由成功变为 403；需要时由超管操作。admin 对 operator、supplier（T52 建出并加入 admin 的清单后）、自定义角色持有者、普通用户不变。
+  - operator 不能再作用于其他 operator 以及任何自定义角色的持有者（决策 5 的清单为 supplier、user）；生产库 operator 的存量清单是 {operator, user} + 全部自定义角色（迁移 0097），在 T55 的迁移 0101 纠正之前，生产上 operator 之间仍可互相操作。
+  - 没有可分配清单的自定义角色（如只有 `user:read`、`user:update` 的客服角色）只能作用于只有 `user` 角色或没有角色的用户；原先只要权限覆盖目标就可以（例如作用于另一个同角色的客服）。需要管理某类角色的持有者时，由超管把该角色加入其可分配清单。
+  - 访问密钥没有可分配角色：只能作用于只有 `user` 角色或没有角色的用户（原先权限覆盖即可）；密钥主人也一样，主人持有任何非默认角色时其密钥不能再经 `/users/:id` 改主人。
+  - 批量接口（用户组成员）里只要有一个目标不满足，整批 403。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
-## T65 W4-A3、W4-P5：插件 UI 可见性过滤收敛为 manifest.FilterUI，插件权限排序修正
+## T57 决策 D4：只认会话的权限扩展（代码执行、信任根、明文凭证）（产品性收紧）
 
-- 改动：
-  - W4-A3（纯重构）：新增 `next/sdk/manifest/visible_ui.go`：`FilterUI(ui, allowed, allowedCore) VisibleUI`（`Menus`、`Pages`、`Slots`、`AccountActions`），逻辑原样搬自 `plugin/api/ui.go` 的 `visibleMenusAndPages`、`visibleNav` 与槽位、账号动作两段循环（含页面侧边导航 `nav` 的 `permission`/`corePermission` 规则）。`GET /ui/plugins`（`uiPlugins`）取全部，侧栏 `GET /me/menus`（`authz.pluginMenus`）只取 `.Menus`；两处的 `allowed` 都写成 `p == "" || set.Has(manifest.PermissionKey(key, p))`，核心权限用 `set.Has`。未声明权限的元素不询问回调直接可见。原 `plugin/api` 的四个用例搬到 `sdk/manifest/visible_ui_test.go`，`TestMenus` 断言侧栏的插件菜单与 `FilterUI` 结果一致。
-  - W4-P5：`install.PermissionDefs` 的 `Sort` 由 `i` 改为 `(i+1)*10`，`authz.SyncPlugin` 删除 `sort == 0` 时按位置补 `(i+1)*10` 的兜底，直接写入给定值。此前第一个权限的 0 被当成“未设置”补成 10，其余是 1、2、3…，于是 manifest 里排第一的权限在角色页排到后面（不超过 10 个权限的插件里排到最后）。
-- 影响对象：W4-A3 无行为变化。W4-P5 只影响角色页里插件权限的显示顺序：每个插件下一次同步权限目录（同意新版本，或激活另一个版本）时，`ON CONFLICT` 把存量行的 `sort` 改成 10、20、30…，顺序变为 manifest 声明的顺序；在那之前保持旧顺序，只是禁用再启用同一版本不会同步，一直不升级的插件保持旧顺序（不做一次性重排）。同意新版本到它激活之间，目录里是新旧两份 manifest 的并集，各自从 10 编号，同号的按 key 排。无迁移，权限判断不受影响。
-- 回滚：revert 这个提交即可；回滚后下一次同步把 `sort` 写回旧编号。
-
-## T63 W1-F10：管理员禁用锁 accounts.admin_locked（迁移 0100，产品性收紧）
-
-- 改动：
-  - 迁移 `0100_account_admin_locked.sql`：`accounts.admin_locked boolean NOT NULL DEFAULT false`（常量默认值，不重写表；`lock_timeout` 10 秒；存量为 false，不追溯）。
-  - `PATCH /accounts/:id`（`account/handlers.go`）：全量范围（`account:update`）把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 `admin_locked = true`，`status_reason` 仍是 `disabled by administrator`；own 范围（`account:own:update`）禁用写 `disabled by owner`，不动锁；全量范围设为 `active` 时清锁（`adminLockAfter`、`disabledReason`）。账号已被属主禁用时管理员再发一次 `disabled` 也上锁并把原因改成管理员的（按请求的状态判断，不要求状态发生变化）。
-  - `checkAdminLock` 是 `checkOwnChange` 的最后一步：own 范围、账号已上锁且请求把 `status` 改为 `active` → 403 `account_locked_by_admin`；`POST /accounts/:id/reset-status` 在 own 范围遇到上锁账号返回同一错误，全量范围的重置清锁。
-  - 账号视图增加 `admin_locked`。控制台账号页：只有 own 级更新权限的人在上锁账号上“启用”按钮禁用并提示“已被管理员禁用，只有管理员可以重新启用”，“重置状态”入口与批量启用跳过这些账号（`AccountsView.vue` 的 `lockedByAdmin`）。CONTRACTS §15.9 账号字段表、§21.3.1、§43.5 与 reset-status 一节同步；控制台 mock（`web/mock/accounts.ts`）同样处理。
+- 改动：目录把 `plugin:install`、`plugin:uninstall`、`plugin:grant:high`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`、`account:credential:view`、`account:own:credential:view` 标为 sessionOnly（它们都已是 sensitive）。只改数据，经已有的 `authz.KeyAllowed` 生效，规则与 T10 相同。CONTRACTS §4、§80 同步。无迁移。
 - 影响对象：
-  - 只有 own 级权限的账号创建人（供应商）：账号被管理员禁用后不能再自行启用或重置状态，需要管理员启用；此前可以立刻自己改回 `active`。修改其它字段（名称、凭证、用量上限等）不受影响，供应商调高用量上限仍然允许（已评估，不修）。自己禁用的账号照旧可以自己恢复。
-  - `status_reason` 文案：own 范围手动禁用由 `disabled by administrator` 变为 `disabled by owner`（依赖这个字符串的外部脚本需要注意；仓库内没有按它判断的代码）。
-  - 持有 `account:update` 的人（admin、operator）之间不互锁：任何全量范围的调用者都能启用。全量范围禁用自己创建的账号不上锁。
-  - 存量：迁移前已被管理员禁用的账号不上锁，需要锁住的由管理员重新禁用一次（对已禁用的账号再发一次 `status: disabled` 即可，控制台的按钮不会对已禁用账号发请求，需直接调接口或先启用再禁用）。
-  - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
-- 回滚：revert 这个提交即可；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截；旧节点启用过的上锁账号会留下一个“运行中但带锁”的残留，属主下次自己禁用时清掉（不会因此被锁住），全量范围的任何启用、重置也会清掉。
-- 已知边界（未处理，需要时另行决定）：锁只管启用与重置状态。有 `account:own:delete` 与 `account:own:create` 的属主可以删除被锁的账号再用同一凭证新建一个；审计里 `account.update` / `account.reset_status` 不单独记录上锁、解锁（可由操作者范围与状态变化推出）。
-
-## T64 W1-F13：草稿与预备容器的单用户数量上限
-
-- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。首次准备就失败的预备容器（控制器未配置、代理被拒、插件不可用等）不占名额：它的 key 从未返回给调用方，没人能取消，所以核心随即撤销并删行（`abandonPreparation`；撤销失败时留在 `cancelling`，不计数，由清理任务重试）。控制台为 `too_many_drafts` 增加中英文提示，且不再为它探测运行环境配置。无迁移。CONTRACTS §3.1 错误码、§49.9 路由表同步。
-- 影响对象：
-  - 控制台新建 Claude Code 账号走的是预备容器接口，所以实际受限的是 own 级用户（`account:own:create`）：同时未完成的不能超过 3 个；全量 `account:create`（admin、operator）在这条路径上不受限。草稿接口（旧路径）上，没有 `settings:manage` 的人（含只有 `account:create` 的）同样限 3 个。
-  - 两个上限各算各的，不合并：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），会占草稿名额；草稿不占预备容器名额。own 级用户先建 3 个草稿再建 3 个预备容器，最多可以占 6 个运行环境容器；此前不限。
-  - 正常使用一次只有一个：关闭编辑器（组件卸载）时控制台会删除。刷新页面、直接关标签页、请求超时或多个标签页会留下没删的，闲置 15 分钟（或创建满 2 小时）后由清理任务回收；15 分钟内这样攒到 3 个后，第 4 次会看到上面的提示。控制器不可达时删不掉的草稿在清理成功之前一直占名额（此时任何草稿都用不了）。
-  - 并发请求下可能多出 1 个（已接受）。
-- 回滚：revert 这两个提交即可，无迁移、无数据变化。
-
-## FU1 T30 跟进：管理员只改端口、协议时不再置 allow_private
-
-- 改动：`PATCH /proxies/:id`（`proxy/proxy.go` `update`）在地址变化时照旧经 `checkPrivate` 判断（own 范围改到私网地址或改管理员放在私网地址上的代理的端口、协议仍 403），但写入 `allow_private` 的条件收窄为“host 变化（不分大小写与现值比较），或调用者只有 own 范围”。持 `proxy:manage` 只改 `port` / `protocol` 时保留原值。`private_test.go` `TestUpdateHostPrivate` 改断言：管理员对 `allow_private = false` 的 own 代理改端口、改协议后仍为 `false`；改 host 置 `true`，此后改端口保持 `true`；own 改端口照旧置回 `false`。CONTRACTS §43.3 同步。无迁移。
-- 影响对象：持 `proxy:manage` 的人（admin）编辑他人或自己的代理只动端口、协议时，`allow_private` 不再变成 `true`。此前这样编辑后，own 属主能把域名指向内网、经该代理连到私网地址。T30 升级说明里“改端口再改回以保留私网可达”的做法不再生效，需改动 host 再改回。own 级用户的行为不变。
-- 回滚：revert 这个提交即可，无迁移；期间写下的 `allow_private` 保留。
-
-## FU5 超管自作用豁免（T33 收紧的放宽，单独提交）
-
-> 已由 FU6 取代：`ActOnSelf`、`ErrSelfTarget`、`core.ActOnOthers` 删除；超管作用于自己由可管理目标规则直接放行，审计改为 `detail.self = true`。
-
-- 改动：`core.UserGuard` 增加 `ActOnSelf(ctx, actorID) error`；`core.ActOnOthers` 在目标含调用者本人时把本人从目标中去掉，其余目标先照常 `CanActOnUsers`，通过后再问 `ActOnSelf`（所以豁免审计只写给通过了其余检查的请求；非超管本人与不能操作的用户同在时由 409 变为 403）。调余额把 `Idempotency-Key` 长度校验移到守卫之前，校验失败的请求不留豁免审计。`authz.Service.ActOnSelf` 用 `usersRoleSet`（用户角色的授予集，不经访问密钥收窄）判断是否超管：不是 → `core.ErrSelfTarget`（409）；是 → 写一条审计 `user.act_on_self`（`detail = {reason: "self_by_superuser", via: "session" | "access_key", access_key_id?, request_id}`）后放行。审计只在这一处写，billing、segment 不做特判；`core.GuardOrDeny` 的未注入守卫对 `ActOnSelf` 同样回 500。路由的权限检查不变：访问密钥按“用户权限 ∩ 密钥权限”，超管的密钥只有显式带 `balance:adjust` / `segment:manage` 才能走到 `ActOnOthers`。
-- 测试：`core` `TestActOnOthers`（超管自作用放行且只把其余目标交给守卫、不改调用方切片；守卫拒绝仍生效）；`billing` `TestAdjustBalanceActsOnOthers` 超管自调改为 200，新增 `TestAdjustBalanceSuperuserSelf`（超管会话 200、超管带 `balance:adjust` 的密钥 200、超管不带该权限的密钥 403、非超管会话与密钥 409，两条审计分别为 session 与 `access_key_id`）；`segment` 新增 `TestSuperuserChoosesOwnSegment`（超管把自己移入用户组、设/取消自己的个人专属均成功，各有审计）。CONTRACTS 调余额一行、§97.6“目标用户检查”同步。无迁移。
-- 影响对象：超管（会话，或带相应权限的访问密钥）给自己调余额、把自己移入用户组、给自己设/取消个人专属由 409 变为成功，每次多一条 `user.act_on_self` 审计。非超管不变（仍 409，会话与密钥一样）。超管的访问密钥此前作用于本人时还会被 `CanActOnUsers` 以 `you cannot modify a superuser` 拒绝（决策 1），现在带了该接口权限即可作用于本人；作用于其他超管的规则不变（全局只有一个超管）。
-- 回滚：revert 这个提交即可，无迁移；已写的审计行保留。
-
-## FU2 segment:manage 不能改自己所在用户组的定价与授权（产品性收紧，单独提交）
-
-> FU6 改写了判断方式：`GuardOwnSegments` 不再经 `core.ActOnOthers`，改为问 `UserGuard` 调用者能否管理自己，被拒时 409 `you cannot change the terms of a user group you are in`（原为 `you cannot do this to yourself`），见 FU6。
-
-- 改动：新增 `segment.GuardOwnSegments(ctx, q, users, segmentIDs)`：调用者是其中任一用户组（默认用户组除外）的成员时经 `core.ActOnOthers(ctx, users, actor, actor)` 判断，非超管 409 `you cannot do this to yourself`，超管放行并由 `authz.ActOnSelf` 记 `user.act_on_self` 审计（FU5）。所有改变用户组定价或授权的入口只调这一个函数：`PATCH /segments/:id` 带 `discount` 时（只改名称、描述不检查）、`DELETE /segments/:id`（事务里，加锁之后）、`savePairs`（`PUT /segments/:id/groups` 与 `PUT /groups/:id/segments` 共用，事务里 `lockPairs` 之后，按 `items` 涉及的全部用户组）、billing `saveGroupPrices`（`PUT /groups/:id/model-prices`，事务里按 `segment_id` 非空的项，`segmentsOf`）。个人专属的设置走的就是这几个接口，设/取消个人专属已由 T33 检查。访问密钥照常先过路由权限（`segment:manage` / `group:manage`）。CONTRACTS §97.6 原“作用于用户组本身的写入不做目标用户检查（wontfix）”一段改写。无迁移。
-- 默认用户组豁免（主节点决定）：所有用户默认都在默认用户组，改它等同于改全平台定价，与 `price:manage`、`group:manage` 改全局价格同一性质，不算给自己定价；FU2 堵的是命名组与个人专属组里的自我定价。如需收紧，只要去掉 `GuardOwnSegments` SQL 里的 `NOT s.is_default`。
-- 测试：`segment` `TestSettingsOfOwnSegment`（自己所在命名组的折扣、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、删除均 409 且不写；改名与读取不受影响；不含自己的组与默认组成功；自己的个人专属同样 409；超管改自己所在组成功并有审计）；`billing` `TestGroupModelPricesOfOwnSegment`（自己所在命名组、个人专属的专属价 409，他人的组、分组自身价格、默认组 200）。
-- 影响对象：持 `segment:manage` / `group:manage` 的非超管（admin、operator 等）不能再修改自己所在命名用户组或自己个人专属的折扣、授权、专属倍率、专属价，也不能删除自己所在的命名组：由成功变为 409，需由超管或不在该组的人修改。默认用户组、只改名称或描述、他人所在的组不受影响。超管不受影响（每次多一条审计）。批量写入里只要有一个用户组含调用者，整批拒绝。分组自身的倍率与分组价格（`segment_id` 为 `null`）仍可由 `group:manage` 修改，和默认组一样按平台级处理。
-- 已知：超管的豁免审计经连接池写，先于写事务提交；写事务随后回滚（如专属价的外键冲突转 409）时审计行留下（只涉及超管、罕见，改为随事务写需要让 `ActOnSelf` 接收事务）。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## FU3 D22 补齐：ccgateway 请求日志详情的 events、upstream_request 与请求、响应头按白名单投影
-
-- 改动：`ccgateway/request_log_viewer.go` 把 T43 的 `projectMetadata` 推广为一个泛型投影 `keepSummary(m, keep fieldSet)`（只留白名单里、值为标量或字符串数组的字段，名字按小写比较，默认拒绝），详情经 `requestLogDetail.project(content)` 一处处理：未命中 `settings:manage` 时 `metadata`（`requestLogSummaryKeys`，不变）、`events`（每条 `time`/`event` + `detail` 按 `requestLogEventDetailKeys`）、`upstream_request`（`requestLogUpstreamKeys`，`url` 换成 `host`，`headers` 按 `requestLogSummaryHeaders`）、请求/响应头（`requestLogSummaryHeaders`）都经它投影；随后两种调用者都照旧遮蔽密钥头。事件白名单按 Worker（`plugins/ccgateway/companions/engine` 的 `trace`/`traceNow` 调用）实际写出的 detail 字段逐个确定，只收状态、码、计数、耗时、摘要值、布尔等非敏感字段。不改 Worker。控制台 `upstreamFacts` 在没有 `url` 时显示 `host`。CONTRACTS §64.2 同步。审查补充：响应头白名单加 `x-ccgateway-error-source` / `x-ccgateway-error-reason`（只带码）；控制台事件页与上游请求页对没有 `settings:manage` 的读者改为提示“只显示摘要字段”（`eventsBounded`、`upstream.hintSummary`）。无迁移。
-- 测试：`TestRequestLogDetailProjectsEventsWithoutContent`（`account:read` 读不到 `principal_id`、错误原文、路径与查询、上传文件名、`url`、`User-Agent`、未知字段、非对象事件；保留的事件、`upstream_request`、头与期望逐项相等；`settings:manage` 原样、密钥头遮蔽）；`TestRequestLogDetailContentFollowsPermission` 改为：只读者的密钥头直接不出现，管理者仍为 `[REDACTED]`。web：`requestLogViewer.spec.ts` 增加 host 回退用例；`npm run typecheck`、ccgateway 视图测试、`npm run lint`（0 error）。
-- 影响对象：只有 `account:read` 或 `settings:read` 的请求日志查看者，详情“事件”里只剩事件名、时间与摘要字段（错误文本、路径、文件名、身份字段不再出现；资源身份事件的 detail 变为空对象）；“上游请求”的 URL 只显示 host，头只剩白名单头（`user-agent`、`x-app`、`x-stainless-*` 等不再显示）；请求、响应头同理。`settings:manage` 不受影响。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## FU6 可管理目标：作用于用户统一为“能不能做 + 能对谁做”（产品性收紧，改写 T33、FU5）
-
-- 合并：先合并 `worker/authz-p3a`（T50–T57，提交 `authz(FU6): merge worker/authz-p3a`），FU6 依赖其中的 T52（supplier）、T55（operator 白名单与清单）、T56（同级保护）。
-- 改动：
-  - `core.UserGuard` 只剩一个方法 `CanActOnUsers(ctx, actorID, action core.UserAction, targetIDs...)`；删除 `core.ActOnOthers`、`core.ErrSelfTarget` 与 FU5 的 `ActOnSelf`。`UserAction` 分 `ActOnData`（余额、用户组）与 `ActOnIdentity`（资料、邮箱、密码、两步验证与通行密钥、状态、删除、角色）。
-  - `authz.CanActOnUsers`（`canActOnUsers`，唯一一处）：去掉“作用于自己直接放行”，本人与其他目标同一规则——操作者的可分配清单即可管理的角色，目标的每个非默认角色都要在清单里（T56），目标角色授予的权限、可分配角色、超管标志都在操作者之内（SEC-H2），超管管理所有人。操作者一侧改为 `usersRoleSet`（操作者这个用户的角色），不再经访问密钥收窄：密钥只决定“能不能做”（路由权限，用户权限 ∩ 密钥权限）。保留决策 1：`ActOnIdentity` 且目标是超管时，访问密钥 403 `session_only`（期 3 过渡；期 4 计划改为“密钥勾了权限可操作但须当场二次验证”，`UserAction` 参数正为此保留，届时在同一处接入二次验证）。作用于自己且通过时，在这里记一条 `user.act_on_self`（`detail.self = true`、`via`、`access_key_id`、`request_id`）；在事务里调用时（分配角色）随事务写，其余经连接池。拒绝的 `details` 增加 `reason: "not_manageable"`（`session_only` 用于上面的保留）。
-  - 入口：iam 的 PATCH/DELETE `/users/:id`、启用/禁用、DELETE `/users/:id/security` 传 `ActOnIdentity`；`checkAssignment`（PUT `/users/:id/roles`、POST `/users` 带角色）改为调用同一个 `canActOnUsers(..., ActOnIdentity, userID)`（不再排除本人）；billing 调余额、segment 成员变更与个人专属传 `ActOnData`，直接调用 `UserGuard`。
-  - FU2（用户组定价）保持原样（默认组豁免、409），`GuardOwnSegments` 不再用 `ActOnOthers`：自己判断“调用者是否该组成员”，是成员时问 `UserGuard` 能否管理自己（按默认清单只有超管能，会话或带权限的密钥均可，审计在 `UserGuard` 一处），被拒时转成 409 `you cannot change the terms of a user group you are in`。
-  - 安全约束不并入、保持原样：不能禁用或删除自己（`errSelfDisable`，含超管），超管角色不能撤销只能移交。CONTRACTS §43.6 写明这两条是安全约束而不是权限规则。
-- 测试：
-  - billing `TestAdjustBalanceManagedUsers` 取代 T33/FU5 的两个用例：超管给自己与 admin、operator 调 200（会话与带 `balance:adjust` 的密钥），超管不带该权限的密钥 403 `details.permission`；admin 给 user、supplier、operator 调 200，给另一个 admin、超管、自己调 403 `not_manageable`（会话与密钥一样）；admin 不带权限的密钥 403；operator 默认没有 `balance:adjust` 403，加一个只含 `balance:adjust` 的自定义角色后只能给 supplier、user 调，给其他 operator、admin、自己 403；普通用户 403；两条 `user.act_on_self` 审计（会话、密钥 11）。
-  - authz `TestCanActOnUsers` 密钥用例按新口径改写（超管密钥对更宽的用户、owner 的数据放行；对 owner 与其他超管的身份类操作 `session_only`；收窄的密钥作用于主人放行），`TestRoleGrantEscalation` 的 operator 给自己分配 readers 改为 403（role=operator）。
-  - T56 的 `TestCanActOnUsersPeerProtection` 按主节点确认改写三处：签名加 `UserAction`；`itself`（admin 对自己）改为 403 role=admin，并补超管对自己与 admin 放行；admin 密钥对 viewer 持有者改为放行，补 admin 密钥对另一个 admin 403、超管密钥对自己数据类放行、对自己身份类 `session_only`、对 admin 身份类放行。其余断言不动；iam `TestPeersCannotActOnEachOther` 原样通过。
-  - iam 新增 `TestManagedUsersIncludeOneself`：admin、operator 经 `/users/:id` 改自己的名字和密码、重置自己的安全设置、给自己分配角色均 403；operator 可改 supplier；超管可改自己；超管也不能禁用、删除自己（`errSelfDisable`）。
-  - segment `TestMembershipActsOnOthers` 把自己移入用户组与设/取消自己的个人专属由 409 改为 403，补 operator 对其他 operator 403、对 supplier 放行；`TestSuperuserChoosesOwnSegment` 审计条件改为 `detail.self`。
-- 影响对象：
-  - admin、operator 等（按默认清单不在自己清单里的角色）经管理接口作用于自己：调余额、把自己移入用户组、设/取消自己的个人专属由 409 变为 403；经 PATCH `/users/:id` 改自己的资料、密码、邮箱，经 DELETE `/users/:id/security` 重置自己的两步验证，经 PUT `/users/:id/roles` 改自己的角色，由成功变为 403——改自己的资料、密码、两步验证请走 `/me/*`（期 1 SEC-H3 的 `PATCH /users/:id` 自改 + 二次验证路径对非超管不再可用，超管仍可用）。控制台用户列表里对本人的这些按钮仍显示，点击后得到 403 提示。
-  - 访问密钥：“能对谁做”不再被密钥收窄。admin 带 `user:update` / `balance:adjust` 的密钥现在能作用于 supplier、operator 与自定义角色的持有者（此前只能动只有 `user` 角色的人）；超管带 `balance:adjust` / `segment:manage` 的密钥能作用于任何人（含自己）的数据。超管账号本身的身份类修改仍只接受超管本人的会话。
-  - 审计：作用于自己的成功检查记 `user.act_on_self`（`detail.self = true`，取代 FU5 的 `reason: self_by_superuser`）。
-  - 已知：检查先于操作写审计，操作随后失败时审计行留下（同 FU5）。
-- 审查补充：`session_only` 的判断移到可管理检查之后，所以只有真能管理超管的操作者（超管本人）会看到它，admin 的密钥对超管仍是 `not_manageable`；FU2 的 409 文案本地化；注释更新。
-- 已定（期 3 审查 R1 改）：`assign_custom` 不含操作者自己持有的角色，带它的自定义角色不再管理自己与同角色的持有者，见“期 3 审查 R1”。
-- 回滚：revert FU6 的提交（与 review fixes）即可，回到 FU5 的行为；无迁移、无数据变化。合并提交无需回滚。
-
-- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。无迁移。CONTRACTS §49.9 路由表同步。
-- 偏离任务说明：草稿的计数条件多了 `for_account IS NULL`，重新授权的草稿（每个账号至多一个、只能对自己能改的账号发起）不占新建账号的名额，否则同时给 3 个账号重新授权的人建不了新账号。ccgateway 类型的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），它同时计入草稿数。
-- 影响对象：没有 `settings:manage` 的人（含只有 `account:create` 的运营）同时打开的新建草稿不能超过 3 个，own 级用户（`account:own:create`）同时进行的预备容器不能超过 3 个；此前不限，每个草稿占一个运行环境容器直到被采用、删除或被清理任务回收（草稿超时、预备容器 2 小时过期）。控制台一次只开一个草稿，关闭编辑器会删除，正常使用不会碰到；碰到时删掉一个或等回收后即可再建。并发请求下可能多出 1 个（已接受）。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
+  - 访问密钥的可选权限列表不再显示这 10 项（超管也一样）；创建、修改密钥时选它们 403（`details.session_only`）；存量密钥里的这些权限在校验时丢弃，`GET /me/access-keys` 的 `lost` 列出，其余权限照常。
+  - 用访问密钥调用下列接口由成功变为 403，需改用登录会话：POST `/plugins/upload`、`/plugins/install-from-market`、`/plugins/:key/versions/:version/consent`、`/reject`；DELETE `/plugins/:key`、`/plugins/retired-keys/:key/release`、`/plugins/:key/uninstall/confirm-stopped`；发布者与公钥的写接口（`publisher:manage`）；POST `/system/upgrades`、`/system/releases/import`（`system:update:execute`）与 `/system/upgrades/:id/*`、`/system/nodes/:id/*` 的恢复动作（`system:update:recover`）。用访问密钥做自动升级或自动装插件的外部脚本受影响；仓库内的部署脚本（`deploy/gateway/ovh/upgrade_observe.py`）用登录会话，网关（`gateway/internal/control`）不用访问密钥，均不受影响。
+  - `POST /accounts/:id/credentials/reveal` 自 T11 起就只认会话，不变。访问密钥在 `PATCH /accounts/:id` 与 `POST /accounts/:id/models/fetch` 上一律按“不能查看凭证”处理：保留掩码密钥的同时改上游地址，由成功变为 400 `reenter_required`（T28），重新输入密钥即可。
+  - 访问密钥管理页把这些权限显示在“已失效”里，现有文案是“你已经没有这些权限”（T10 起如此）；对只认会话的权限并不准确（用户仍持有，只是密钥不能带），文案未改。
+  - 滚动升级：判断在各节点进程内，新旧节点混跑时旧节点仍接受带这些权限的密钥、仍允许选择它们，全部节点升级后才完全生效。
+- 回滚：revert 这个提交即可，无迁移。回滚后存量密钥里保存的这些权限立即恢复生效；升级期间在访问密钥页保存过的密钥除外（保存时已失效的权限被去掉），需要重新勾选。
 
 ## T58 P3：插件权限的默认角色与继承（manifest defaultRoles / inheritFrom）
 
@@ -637,6 +529,77 @@
 - 影响对象：升级 growth 时 `growth:use` 只给原 `growth:read` 的持有者（不再让所有用户突然能签到领奖）；`moderation:exempt` 在任何情况下都只靠继承。其他插件此后改名权限时同样只继承。显式写 `"defaultRoles": []` 的插件在旧核心上会被当成省略（给 admin）。
 - 回滚：revert 这个提交即可；回滚后升级同意时改名的新 key 又会叠加 `defaultRoles`，`[]` 回到等同省略。
 
+## T61 W4-P8、W4-P9：新插件权限的状态跟随插件运行状态
+
+- 改动：`authz.SyncPlugin` 新登记的插件权限不再一律 `active`：插件此刻在运行（`plugins.status` 为 `enabled` 或 `upgrading`，与 `plugin/install` 的常量一致，`TestSyncPluginNewPermissionFollowsPluginStatus` 逐个状态验证，防漂移）时为 `active`，否则为 `disabled`；已存在的行不动。禁用时的 `SetPluginActive(false)` 不变；`rollout` 的 `commit` 现在每次激活都调用 `SetPluginActive(true)`（此前只在启用时），见下面的偏离说明。W4-P9 不改行为：`rollout.finishFailed` 的升级分支加注释说明“同意新版本时登记的新 key 保留到激活另一个版本”，`TestPermissionCatalogFollowsRollouts` 用真实的目录与 `DefaultsApplier` 锁定整个生命周期。无迁移。CONTRACTS §4 同步。
+- 偏离任务说明（审查发现）：启用的 rollout 提交之后、完成之前，节点已经在服务，但 `plugins.status` 仍是 `enabling`；这段时间同意新版本（内置插件在滚动部署时会自动发生）登记的新 key 是 `disabled`，而升级提交原来不调用 `SetPluginActive`，这些 key 会一直停在 `disabled`，直到手工禁用再启用。因此升级提交也置 `active`（`plugin/rollout/coordinator.go`，超出任务列出的文件范围）。
+- 影响对象：首次安装（尚未启用）和禁用期间同意新版本时登记的权限，此前立即 `active`（持有它的角色在插件没运行时就“有”这个权限，`/me` 的权限列表与 `Can` 会把它算进去），现在到启用那一刻才生效；角色授予照常写入，启用后无需重新勾选。授予视角（角色的权限清单、能否授予与分配的判断）本来就包含 `disabled` 的插件权限，不变。运行中升级登记的新权限仍立即 `active`。存量行不追溯：已经是 `active` 的未运行插件的权限保持原状，直到该插件下一次禁用或启用。升级失败后残留的新 key 没有任何路由检查，激活另一个版本时按那个版本的 manifest 清理；只是禁用再启用同一版本不会清理。
+- 回滚：revert 这两个提交即可，无迁移；回滚后已登记为 `disabled` 的权限在插件下次启用时变为 `active`。
+
+## T62 W4-A4：插件任务手动运行统一要求 task:run（产品性收紧）
+
+- 改动：`POST /plugins/:key/jobs/:job_id/run` 的权限由 `plugin:manage` 改为 `task:run`（`plugin/api/api.go`，用 `task.PermRun`），与 `POST /system/tasks/:name/run` 同口径：同一个任务不再有两个权限不同的手动运行入口。审计动作仍是 `plugin.job.run`。插件详情“任务”页的“立即运行”按钮改按 `task:run` 显示（`JobsTab.vue`）。无迁移。CONTRACTS §5.7 路由表同步。
+- 影响对象：只有 `plugin:manage`、没有 `task:run` 的角色：调用由 204 变为 403 `details.permission = task:run`，按钮不再显示；内置 `admin` 两个权限都有，不受影响。反过来，只有 `task:run` 的人（内置 `operator` 默认有 `task:run`、没有 `plugin:*`）现在可以从这个接口运行插件任务，他此前已经能在定时任务页运行同一个任务（看插件的任务列表仍需 `plugin:read`，所以 `operator` 看不到这个页面）。访问密钥无变化：`task:run` 与 `plugin:manage` 一样不是只认会话的权限，密钥带上它即可调用。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T63 W1-F10：管理员禁用锁 accounts.admin_locked（迁移 0100，产品性收紧）
+
+- 改动：
+  - 迁移 `0100_account_admin_locked.sql`：`accounts.admin_locked boolean NOT NULL DEFAULT false`（常量默认值，不重写表；`lock_timeout` 10 秒；存量为 false，不追溯）。
+  - `PATCH /accounts/:id`（`account/handlers.go`）：全量范围（`account:update`）把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 `admin_locked = true`，`status_reason` 仍是 `disabled by administrator`；own 范围（`account:own:update`）禁用写 `disabled by owner`，不动锁；全量范围设为 `active` 时清锁（`adminLockAfter`、`disabledReason`）。账号已被属主禁用时管理员再发一次 `disabled` 也上锁并把原因改成管理员的（按请求的状态判断，不要求状态发生变化）。
+  - `checkAdminLock` 是 `checkOwnChange` 的最后一步：own 范围、账号已上锁且请求把 `status` 改为 `active` → 403 `account_locked_by_admin`；`POST /accounts/:id/reset-status` 在 own 范围遇到上锁账号返回同一错误，全量范围的重置清锁。
+  - 账号视图增加 `admin_locked`。控制台账号页：只有 own 级更新权限的人在上锁账号上“启用”按钮禁用并提示“已被管理员禁用，只有管理员可以重新启用”，“重置状态”入口与批量启用跳过这些账号（`AccountsView.vue` 的 `lockedByAdmin`）。CONTRACTS §15.9 账号字段表、§21.3.1、§43.5 与 reset-status 一节同步；控制台 mock（`web/mock/accounts.ts`）同样处理。
+- 影响对象：
+  - 只有 own 级权限的账号创建人（供应商）：账号被管理员禁用后不能再自行启用或重置状态，需要管理员启用；此前可以立刻自己改回 `active`。修改其它字段（名称、凭证、用量上限等）不受影响，供应商调高用量上限仍然允许（已评估，不修）。自己禁用的账号照旧可以自己恢复。
+  - `status_reason` 文案：own 范围手动禁用由 `disabled by administrator` 变为 `disabled by owner`（依赖这个字符串的外部脚本需要注意；仓库内没有按它判断的代码）。
+  - 持有 `account:update` 的人（admin、operator）之间不互锁：任何全量范围的调用者都能启用。全量范围禁用自己创建的账号不上锁。
+  - 存量：迁移前已被管理员禁用的账号不上锁，需要锁住的由管理员重新禁用一次（对已禁用的账号再发一次 `status: disabled` 即可，控制台的按钮不会对已禁用账号发请求，需直接调接口或先启用再禁用）。
+  - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
+- 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0100_account_admin_locked.sql';`（托管部署必须删：托管核心启动时核对迁移清单，库里有本版本不认识的迁移就拒绝启动；非托管部署不删也可，同 0099、0101）；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`（删列后必须同时删掉上面的 `schema_migrations` 行，否则再次升级不会重建该列）。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截；旧节点启用过的上锁账号会留下一个“运行中但带锁”的残留，属主下次自己禁用时清掉（不会因此被锁住），全量范围的任何启用、重置也会清掉。
+- 已知边界（未处理，需要时另行决定）：锁只管启用与重置状态。有 `account:own:delete` 与 `account:own:create` 的属主可以删除被锁的账号再用同一凭证新建一个；审计里 `account.update` / `account.reset_status` 不单独记录上锁、解锁（可由操作者范围与状态变化推出）。
+
+## T64 W1-F13：草稿与预备容器的单用户数量上限
+
+- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。首次准备就失败的预备容器（控制器未配置、代理被拒、插件不可用等）不占名额：它的 key 从未返回给调用方，没人能取消，所以核心随即撤销并删行（`abandonPreparation`；撤销失败时留在 `cancelling`，不计数，由清理任务重试）。控制台为 `too_many_drafts` 增加中英文提示，且不再为它探测运行环境配置。无迁移。CONTRACTS §3.1 错误码、§49.9 路由表同步。
+- 影响对象：
+  - 控制台新建 Claude Code 账号走的是预备容器接口，所以实际受限的是 own 级用户（`account:own:create`）：同时未完成的不能超过 3 个；全量 `account:create`（admin、operator）在这条路径上不受限。草稿接口（旧路径）上，没有 `settings:manage` 的人（含只有 `account:create` 的）同样限 3 个。
+  - 两个上限各算各的，不合并：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），会占草稿名额；草稿不占预备容器名额。own 级用户先建 3 个草稿再建 3 个预备容器，最多可以占 6 个运行环境容器；此前不限。
+  - 正常使用一次只有一个：关闭编辑器（组件卸载）时控制台会删除。刷新页面、直接关标签页、请求超时或多个标签页会留下没删的，闲置 15 分钟（或创建满 2 小时）后由清理任务回收；15 分钟内这样攒到 3 个后，第 4 次会看到上面的提示。控制器不可达时删不掉的草稿在清理成功之前一直占名额（此时任何草稿都用不了）。
+  - 并发请求下可能多出 1 个（已接受）。
+- 回滚：revert 这两个提交即可，无迁移、无数据变化。
+
+## T65 W4-A3、W4-P5：插件 UI 可见性过滤收敛为 manifest.FilterUI，插件权限排序修正
+
+- 改动：
+  - W4-A3（纯重构）：新增 `next/sdk/manifest/visible_ui.go`：`FilterUI(ui, allowed, allowedCore) VisibleUI`（`Menus`、`Pages`、`Slots`、`AccountActions`），逻辑原样搬自 `plugin/api/ui.go` 的 `visibleMenusAndPages`、`visibleNav` 与槽位、账号动作两段循环（含页面侧边导航 `nav` 的 `permission`/`corePermission` 规则）。`GET /ui/plugins`（`uiPlugins`）取全部，侧栏 `GET /me/menus`（`authz.pluginMenus`）只取 `.Menus`；两处的 `allowed` 都写成 `p == "" || set.Has(manifest.PermissionKey(key, p))`，核心权限用 `set.Has`。未声明权限的元素不询问回调直接可见。原 `plugin/api` 的四个用例搬到 `sdk/manifest/visible_ui_test.go`，`TestMenus` 断言侧栏的插件菜单与 `FilterUI` 结果一致。
+  - W4-P5：`install.PermissionDefs` 的 `Sort` 由 `i` 改为 `(i+1)*10`，`authz.SyncPlugin` 删除 `sort == 0` 时按位置补 `(i+1)*10` 的兜底，直接写入给定值。此前第一个权限的 0 被当成“未设置”补成 10，其余是 1、2、3…，于是 manifest 里排第一的权限在角色页排到后面（不超过 10 个权限的插件里排到最后）。
+- 影响对象：W4-A3 无行为变化。W4-P5 只影响角色页里插件权限的显示顺序：每个插件下一次同步权限目录（同意新版本，或激活另一个版本）时，`ON CONFLICT` 把存量行的 `sort` 改成 10、20、30…，顺序变为 manifest 声明的顺序；在那之前保持旧顺序，只是禁用再启用同一版本不会同步，一直不升级的插件保持旧顺序（不做一次性重排）。同意新版本到它激活之间，目录里是新旧两份 manifest 的并集，各自从 10 编号，同号的按 key 排。无迁移，权限判断不受影响。
+- 回滚：revert 这个提交即可；回滚后下一次同步把 `sort` 写回旧编号。
+
+## FU1 T30 跟进：管理员只改端口、协议时不再置 allow_private
+
+- 改动：`PATCH /proxies/:id`（`proxy/proxy.go` `update`）在地址变化时照旧经 `checkPrivate` 判断（own 范围改到私网地址或改管理员放在私网地址上的代理的端口、协议仍 403），但写入 `allow_private` 的条件收窄为“host 变化（不分大小写与现值比较），或调用者只有 own 范围”。持 `proxy:manage` 只改 `port` / `protocol` 时保留原值。`private_test.go` `TestUpdateHostPrivate` 改断言：管理员对 `allow_private = false` 的 own 代理改端口、改协议后仍为 `false`；改 host 置 `true`，此后改端口保持 `true`；own 改端口照旧置回 `false`。CONTRACTS §43.3 同步。无迁移。
+- 影响对象：持 `proxy:manage` 的人（admin）编辑他人或自己的代理只动端口、协议时，`allow_private` 不再变成 `true`。此前这样编辑后，own 属主能把域名指向内网、经该代理连到私网地址。T30 升级说明里“改端口再改回以保留私网可达”的做法不再生效，需改动 host 再改回。own 级用户的行为不变。
+- 回滚：revert 这个提交即可，无迁移；期间写下的 `allow_private` 保留。
+
+## FU2 segment:manage 不能改自己所在用户组的定价与授权（产品性收紧，单独提交）
+
+> FU6 改写了判断方式：`GuardOwnSegments` 不再经 `core.ActOnOthers`，改为问 `UserGuard` 调用者能否管理自己，被拒时 409 `you cannot change the terms of a user group you are in`（原为 `you cannot do this to yourself`），见 FU6。
+
+- 改动：新增 `segment.GuardOwnSegments(ctx, q, users, segmentIDs)`：调用者是其中任一用户组（默认用户组除外）的成员时经 `core.ActOnOthers(ctx, users, actor, actor)` 判断，非超管 409 `you cannot do this to yourself`，超管放行并由 `authz.ActOnSelf` 记 `user.act_on_self` 审计（FU5）。所有改变用户组定价或授权的入口只调这一个函数：`PATCH /segments/:id` 带 `discount` 时（只改名称、描述不检查）、`DELETE /segments/:id`（事务里，加锁之后）、`savePairs`（`PUT /segments/:id/groups` 与 `PUT /groups/:id/segments` 共用，事务里 `lockPairs` 之后，按 `items` 涉及的全部用户组）、billing `saveGroupPrices`（`PUT /groups/:id/model-prices`，事务里按 `segment_id` 非空的项，`segmentsOf`）。个人专属的设置走的就是这几个接口，设/取消个人专属已由 T33 检查。访问密钥照常先过路由权限（`segment:manage` / `group:manage`）。CONTRACTS §97.6 原“作用于用户组本身的写入不做目标用户检查（wontfix）”一段改写。无迁移。
+- 默认用户组豁免（主节点决定）：所有用户默认都在默认用户组，改它等同于改全平台定价，与 `price:manage`、`group:manage` 改全局价格同一性质，不算给自己定价；FU2 堵的是命名组与个人专属组里的自我定价。如需收紧，只要去掉 `GuardOwnSegments` SQL 里的 `NOT s.is_default`。
+- 测试：`segment` `TestSettingsOfOwnSegment`（自己所在命名组的折扣、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、删除均 409 且不写；改名与读取不受影响；不含自己的组与默认组成功；自己的个人专属同样 409；超管改自己所在组成功并有审计）；`billing` `TestGroupModelPricesOfOwnSegment`（自己所在命名组、个人专属的专属价 409，他人的组、分组自身价格、默认组 200）。
+- 影响对象：持 `segment:manage` / `group:manage` 的非超管（admin、operator 等）不能再修改自己所在命名用户组或自己个人专属的折扣、授权、专属倍率、专属价，也不能删除自己所在的命名组：由成功变为 409，需由超管或不在该组的人修改。默认用户组、只改名称或描述、他人所在的组不受影响。超管不受影响（每次多一条审计）。批量写入里只要有一个用户组含调用者，整批拒绝。分组自身的倍率与分组价格（`segment_id` 为 `null`）仍可由 `group:manage` 修改，和默认组一样按平台级处理。
+- 已知：超管的豁免审计经连接池写，先于写事务提交；写事务随后回滚（如专属价的外键冲突转 409）时审计行留下（只涉及超管、罕见，改为随事务写需要让 `ActOnSelf` 接收事务）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## FU3 D22 补齐：ccgateway 请求日志详情的 events、upstream_request 与请求、响应头按白名单投影
+
+- 改动：`ccgateway/request_log_viewer.go` 把 T43 的 `projectMetadata` 推广为一个泛型投影 `keepSummary(m, keep fieldSet)`（只留白名单里、值为标量或字符串数组的字段，名字按小写比较，默认拒绝），详情经 `requestLogDetail.project(content)` 一处处理：未命中 `settings:manage` 时 `metadata`（`requestLogSummaryKeys`，不变）、`events`（每条 `time`/`event` + `detail` 按 `requestLogEventDetailKeys`）、`upstream_request`（`requestLogUpstreamKeys`，`url` 换成 `host`，`headers` 按 `requestLogSummaryHeaders`）、请求/响应头（`requestLogSummaryHeaders`）都经它投影；随后两种调用者都照旧遮蔽密钥头。事件白名单按 Worker（`plugins/ccgateway/companions/engine` 的 `trace`/`traceNow` 调用）实际写出的 detail 字段逐个确定，只收状态、码、计数、耗时、摘要值、布尔等非敏感字段。不改 Worker。控制台 `upstreamFacts` 在没有 `url` 时显示 `host`。CONTRACTS §64.2 同步。审查补充：响应头白名单加 `x-ccgateway-error-source` / `x-ccgateway-error-reason`（只带码）；控制台事件页与上游请求页对没有 `settings:manage` 的读者改为提示“只显示摘要字段”（`eventsBounded`、`upstream.hintSummary`）。无迁移。
+- 测试：`TestRequestLogDetailProjectsEventsWithoutContent`（`account:read` 读不到 `principal_id`、错误原文、路径与查询、上传文件名、`url`、`User-Agent`、未知字段、非对象事件；保留的事件、`upstream_request`、头与期望逐项相等；`settings:manage` 原样、密钥头遮蔽）；`TestRequestLogDetailContentFollowsPermission` 改为：只读者的密钥头直接不出现，管理者仍为 `[REDACTED]`。web：`requestLogViewer.spec.ts` 增加 host 回退用例；`npm run typecheck`、ccgateway 视图测试、`npm run lint`（0 error）。
+- 影响对象：只有 `account:read` 或 `settings:read` 的请求日志查看者，详情“事件”里只剩事件名、时间与摘要字段（错误文本、路径、文件名、身份字段不再出现；资源身份事件的 detail 变为空对象）；“上游请求”的 URL 只显示 host，头只剩白名单头（`user-agent`、`x-app`、`x-stainless-*` 等不再显示）；请求、响应头同理。`settings:manage` 不受影响。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
 ## FU4：带密钥的插件设置 schema 支持本地 $ref（替代 T41 的一律拒绝）
 
 - 改动：`manifest.SettingsSecrets`（打包校验与核心掩码共用的同一个函数）跟随同文档的本地引用 `"#/$defs/<name>"`、`"#/definitions/<name>"`：名字须是一个 RFC 6901 记号（`~0` `~1` 解码，`~` 后必须是 0/1，含 `/` 或 `%` 的不认），目标须是根上 `$defs`/`definitions` 里的对象。目标按“写在引用处”处理：沿 `$ref` 链（最多 32 步，成环即止）看到的标记使引用处的属性成为字段，目标的 `properties` 接在引用处的值路径下继续走（深度 8 的限制不变）。根上的 `$defs`/`definitions` 不再直接扫描，只经引用读取。展开有界：同一值路径同一目标只展开一次；正在展开的目标再次被引用（环）、嵌套超过 `MaxSecretRefDepth = 32`、所有展开累计访问超过 `MaxSecretRefNodes = 10000` 个节点时，该引用记为不可达。不含任何标记的定义（直接或经引用都到不了标记，`markingDefs` 从“自身有标记或含不跟随的引用”的定义沿反向引用图一次求出）不展开，也不报错。从值路径到不了的位置（`items` 等）引用带标记的定义、`$dynamicRef`、`$recursiveRef`、外部引用、锚点、其他指针、嵌套 `$id`（改变基准 URI）之下的引用，在含标记的 schema 里仍是不可达。经引用发现的不可达标记写在引用下（`/properties/a/$ref/items`），`UnmaskableFields` 据此把整个顶层设置按凭据掩码；它不再特殊处理 `$defs` 开头的位置（根上的定义不再单独报告）。同一字段直接声明又经引用得到时只算一个，任一处是凭据即为凭据。打包校验的错误说明同步。
@@ -645,6 +608,39 @@
 - 影响对象：此前因为用了 `$ref` 被打包拒绝的设置 schema，现在只要引用的是根上的本地定义、位置可达即可通过；已安装的旧包里这类 schema 此前整块按凭据掩码（顶层设置或全部），升级核心后改为逐字段掩码（被引用对象里未标记的字段，如 `label`，回显原值）。行为只会在“能精确定位到的字段”上放开，其余情况仍按不可达处理。
 - 审查修复：去重键由拼接字符串改为（值路径，目标）二元组。拼接时属性名与定义名里的 `\u0000` 可以构造出两个不同引用撞键，第二个被跳过，其中的密钥字段既不列出也不报告（有反例，已加为测试）。遍历改按键名排序：节点预算用尽后哪些引用不可达不再随 map 顺序变化，已安装包的 GET 与随后的 PUT 掩码一致。
 - 回滚：revert 这个提交即可；回滚后带本地引用的设置 schema 重新被打包拒绝，已安装的包回到整块掩码。
+
+## FU5 超管自作用豁免（T33 收紧的放宽，单独提交）
+
+> 已由 FU6 取代：`ActOnSelf`、`ErrSelfTarget`、`core.ActOnOthers` 删除；超管作用于自己由可管理目标规则直接放行，审计改为 `detail.self = true`。
+
+- 改动：`core.UserGuard` 增加 `ActOnSelf(ctx, actorID) error`；`core.ActOnOthers` 在目标含调用者本人时把本人从目标中去掉，其余目标先照常 `CanActOnUsers`，通过后再问 `ActOnSelf`（所以豁免审计只写给通过了其余检查的请求；非超管本人与不能操作的用户同在时由 409 变为 403）。调余额把 `Idempotency-Key` 长度校验移到守卫之前，校验失败的请求不留豁免审计。`authz.Service.ActOnSelf` 用 `usersRoleSet`（用户角色的授予集，不经访问密钥收窄）判断是否超管：不是 → `core.ErrSelfTarget`（409）；是 → 写一条审计 `user.act_on_self`（`detail = {reason: "self_by_superuser", via: "session" | "access_key", access_key_id?, request_id}`）后放行。审计只在这一处写，billing、segment 不做特判；`core.GuardOrDeny` 的未注入守卫对 `ActOnSelf` 同样回 500。路由的权限检查不变：访问密钥按“用户权限 ∩ 密钥权限”，超管的密钥只有显式带 `balance:adjust` / `segment:manage` 才能走到 `ActOnOthers`。
+- 测试：`core` `TestActOnOthers`（超管自作用放行且只把其余目标交给守卫、不改调用方切片；守卫拒绝仍生效）；`billing` `TestAdjustBalanceActsOnOthers` 超管自调改为 200，新增 `TestAdjustBalanceSuperuserSelf`（超管会话 200、超管带 `balance:adjust` 的密钥 200、超管不带该权限的密钥 403、非超管会话与密钥 409，两条审计分别为 session 与 `access_key_id`）；`segment` 新增 `TestSuperuserChoosesOwnSegment`（超管把自己移入用户组、设/取消自己的个人专属均成功，各有审计）。CONTRACTS 调余额一行、§97.6“目标用户检查”同步。无迁移。
+- 影响对象：超管（会话，或带相应权限的访问密钥）给自己调余额、把自己移入用户组、给自己设/取消个人专属由 409 变为成功，每次多一条 `user.act_on_self` 审计。非超管不变（仍 409，会话与密钥一样）。超管的访问密钥此前作用于本人时还会被 `CanActOnUsers` 以 `you cannot modify a superuser` 拒绝（决策 1），现在带了该接口权限即可作用于本人；作用于其他超管的规则不变（全局只有一个超管）。
+- 回滚：revert 这个提交即可，无迁移；已写的审计行保留。
+
+## FU6 可管理目标：作用于用户统一为“能不能做 + 能对谁做”（产品性收紧，改写 T33、FU5）
+
+- 合并：先合并 `worker/authz-p3a`（T50–T57，提交 `authz(FU6): merge worker/authz-p3a`），FU6 依赖其中的 T52（supplier）、T55（operator 白名单与清单）、T56（同级保护）。
+- 改动：
+  - `core.UserGuard` 只剩一个方法 `CanActOnUsers(ctx, actorID, action core.UserAction, targetIDs...)`；删除 `core.ActOnOthers`、`core.ErrSelfTarget` 与 FU5 的 `ActOnSelf`。`UserAction` 分 `ActOnData`（余额、用户组）与 `ActOnIdentity`（资料、邮箱、密码、两步验证与通行密钥、状态、删除、角色）。
+  - `authz.CanActOnUsers`（`canActOnUsers`，唯一一处）：去掉“作用于自己直接放行”，本人与其他目标同一规则——操作者的可分配清单即可管理的角色，目标的每个非默认角色都要在清单里（T56），目标角色授予的权限、可分配角色、超管标志都在操作者之内（SEC-H2），超管管理所有人。操作者一侧改为 `usersRoleSet`（操作者这个用户的角色），不再经访问密钥收窄：密钥只决定“能不能做”（路由权限，用户权限 ∩ 密钥权限）。保留决策 1：`ActOnIdentity` 且目标是超管时，访问密钥 403 `session_only`（期 3 过渡；期 4 计划改为“密钥勾了权限可操作但须当场二次验证”，`UserAction` 参数正为此保留，届时在同一处接入二次验证）。作用于自己且通过时，在这里记一条 `user.act_on_self`（`detail.self = true`、`via`、`access_key_id`、`request_id`）；在事务里调用时（分配角色）随事务写，其余经连接池。拒绝的 `details` 增加 `reason: "not_manageable"`（`session_only` 用于上面的保留）。
+  - 入口：iam 的 PATCH/DELETE `/users/:id`、启用/禁用、DELETE `/users/:id/security` 传 `ActOnIdentity`；`checkAssignment`（PUT `/users/:id/roles`、POST `/users` 带角色）改为调用同一个 `canActOnUsers(..., ActOnIdentity, userID)`（不再排除本人）；billing 调余额、segment 成员变更与个人专属传 `ActOnData`，直接调用 `UserGuard`。
+  - FU2（用户组定价）保持原样（默认组豁免、409），`GuardOwnSegments` 不再用 `ActOnOthers`：自己判断“调用者是否该组成员”，是成员时问 `UserGuard` 能否管理自己（按默认清单只有超管能，会话或带权限的密钥均可，审计在 `UserGuard` 一处），被拒时转成 409 `you cannot change the terms of a user group you are in`。
+  - 安全约束不并入、保持原样：不能禁用或删除自己（`errSelfDisable`，含超管），超管角色不能撤销只能移交。CONTRACTS §43.6 写明这两条是安全约束而不是权限规则。
+- 测试：
+  - billing `TestAdjustBalanceManagedUsers` 取代 T33/FU5 的两个用例：超管给自己与 admin、operator 调 200（会话与带 `balance:adjust` 的密钥），超管不带该权限的密钥 403 `details.permission`；admin 给 user、supplier、operator 调 200，给另一个 admin、超管、自己调 403 `not_manageable`（会话与密钥一样）；admin 不带权限的密钥 403；operator 默认没有 `balance:adjust` 403，加一个只含 `balance:adjust` 的自定义角色后只能给 supplier、user 调，给其他 operator、admin、自己 403；普通用户 403；两条 `user.act_on_self` 审计（会话、密钥 11）。
+  - authz `TestCanActOnUsers` 密钥用例按新口径改写（超管密钥对更宽的用户、owner 的数据放行；对 owner 与其他超管的身份类操作 `session_only`；收窄的密钥作用于主人放行），`TestRoleGrantEscalation` 的 operator 给自己分配 readers 改为 403（role=operator）。
+  - T56 的 `TestCanActOnUsersPeerProtection` 按主节点确认改写三处：签名加 `UserAction`；`itself`（admin 对自己）改为 403 role=admin，并补超管对自己与 admin 放行；admin 密钥对 viewer 持有者改为放行，补 admin 密钥对另一个 admin 403、超管密钥对自己数据类放行、对自己身份类 `session_only`、对 admin 身份类放行。其余断言不动；iam `TestPeersCannotActOnEachOther` 原样通过。
+  - iam 新增 `TestManagedUsersIncludeOneself`：admin、operator 经 `/users/:id` 改自己的名字和密码、重置自己的安全设置、给自己分配角色均 403；operator 可改 supplier；超管可改自己；超管也不能禁用、删除自己（`errSelfDisable`）。
+  - segment `TestMembershipActsOnOthers` 把自己移入用户组与设/取消自己的个人专属由 409 改为 403，补 operator 对其他 operator 403、对 supplier 放行；`TestSuperuserChoosesOwnSegment` 审计条件改为 `detail.self`。
+- 影响对象：
+  - admin、operator 等（按默认清单不在自己清单里的角色）经管理接口作用于自己：调余额、把自己移入用户组、设/取消自己的个人专属由 409 变为 403；经 PATCH `/users/:id` 改自己的资料、密码、邮箱，经 DELETE `/users/:id/security` 重置自己的两步验证，经 PUT `/users/:id/roles` 改自己的角色，由成功变为 403——改自己的资料、密码、两步验证请走 `/me/*`（期 1 SEC-H3 的 `PATCH /users/:id` 自改 + 二次验证路径对非超管不再可用，超管仍可用）。控制台用户列表里对本人的这些按钮仍显示，点击后得到 403 提示。
+  - 访问密钥：“能对谁做”不再被密钥收窄。admin 带 `user:update` / `balance:adjust` 的密钥现在能作用于 supplier、operator 与自定义角色的持有者（此前只能动只有 `user` 角色的人）；超管带 `balance:adjust` / `segment:manage` 的密钥能作用于任何人（含自己）的数据。超管账号本身的身份类修改仍只接受超管本人的会话。
+  - 审计：作用于自己的成功检查记 `user.act_on_self`（`detail.self = true`，取代 FU5 的 `reason: self_by_superuser`）。
+  - 已知：检查先于操作写审计，操作随后失败时审计行留下（同 FU5）。
+- 审查补充：`session_only` 的判断移到可管理检查之后，所以只有真能管理超管的操作者（超管本人）会看到它，admin 的密钥对超管仍是 `not_manageable`；FU2 的 409 文案本地化；注释更新。
+- 已定（期 3 审查 R1 改）：`assign_custom` 不含操作者自己持有的角色，带它的自定义角色不再管理自己与同角色的持有者，见“期 3 审查 R1”。
+- 回滚：revert FU6 的提交（与 review fixes）即可，回到 FU5 的行为；无迁移、无数据变化。合并提交无需回滚。
 
 ## 期 3 审查 R1：`assign_custom` 不含操作者自己持有的角色（产品性收紧，改 FU6 的待确认项）
 
