@@ -70,7 +70,7 @@ const refused = computed(() => (result.value ? imagesRefusedNote(result.value) :
         <SAlert v-if="result.error" tone="danger" dense>{{ result.error }}</SAlert>
         <SAlert v-if="refused" tone="warning" dense>{{ t(refused.key, refused.params) }}</SAlert>
         <CategoryChips v-if="result.hits?.length" :categories="result.hits" wrap />
-        <div v-if="result.reason" class="mod-sub">{{ result.reason }}</div>
+        <div v-if="result.reason" class="mod-sub mod-prewrap">{{ result.reason }}</div>
         <div v-if="result.sent_images || result.skipped_images" class="mod-sub">{{ t('trace.images', { sent: result.sent_images || 0, skipped: result.skipped_images || 0 }) }}</div>
         <ul v-if="scores.length" class="mod-scores">
           <li v-for="[c, s] in scores" :key="c"><span>{{ categoryLabel(c) }}</span><span class="mod-num">{{ score(s) }}</span></li>

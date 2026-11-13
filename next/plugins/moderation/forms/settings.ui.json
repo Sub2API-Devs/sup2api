@@ -10,14 +10,12 @@
     "input_max_chunks",
     "input_overflow",
     "input_max_images",
-    "allowlist_user_ids",
-    "blocklist_user_ids",
     "auto_watch",
     "watch_days",
     "escalate_violations",
     "escalate_window_seconds",
     "ban_threshold",
-    "ban_window_hours",
+    "ban_window_seconds",
     "ban_duration_hours",
     "jev_default_set",
     "block_status",
@@ -40,33 +38,7 @@
     "error_rate_alert_percent",
     "notify_webhook_url",
     "notify_webhook_secret",
-    "analysis_every_violations",
-    "analysis_channel_id",
-    "analysis_guidelines",
-    "analysis_timeout_ms",
-    "analysis_concurrency",
-    "analysis_context_kb",
-    "analysis_keep_per_user",
-    "analysis_allow_upgrade",
-    "analysis_allow_downgrade",
-    "analysis_allow_remove",
-    "base_url",
-    "api_key",
-    "model",
-    "system_prompt",
-    "categories",
-    "tool_choice",
-    "max_turns",
-    "temperature",
-    "max_tokens",
-    "timeout_ms",
-    "on_error",
-    "sample_rate",
-    "group_ids",
-    "model_patterns",
-    "retention_days",
-    "exempt_user_ids",
-    "cache_ttl_seconds"
+    "api_key"
   ],
   "mode": {
     "ui:widget": "segmented",
@@ -123,28 +95,6 @@
     "ui:help": {
       "en": "Covers auditor errors, the total timeout and overload (too much in progress). Background moderation always lets requests through.",
       "zh": "覆盖审核器出错、总超时和繁忙（处理中的请求超限）。后台审核总是放行。"
-    }
-  },
-  "allowlist_user_ids": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Background-only users (never refused)",
-      "zh": "只后台审核的用户（从不拦截）"
-    },
-    "ui:help": {
-      "en": "Only moderated after their requests were sent on, never refused, never banned and never escalated. They show in the watch list as locked observe entries. Someone also on the always-check-first list is checked first. Edited by locking or unlocking users on the watch list.",
-      "zh": "只在请求放行后审核：从不拦截、不会被封禁、也不会被自动升级。在观察名单里显示为锁定的观察级条目。同时在“总是先审”名单里的用户按先审处理。在观察名单里锁定或解锁用户来修改。"
-    }
-  },
-  "blocklist_user_ids": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Always check first",
-      "zh": "总是先审的用户"
-    },
-    "ui:help": {
-      "en": "Every request is checked before it is sent on and refused on a hit. They show in the watch list as locked enforce entries. This is not a ban: bans are under Banned users. Edited by locking or unlocking users on the watch list.",
-      "zh": "每个请求都先审后发，命中即拒绝。在观察名单里显示为锁定的拦截级条目。这不是封禁：封禁在“封禁用户”。在观察名单里锁定或解锁用户来修改。"
     }
   },
   "block_status": {
@@ -208,20 +158,6 @@
       }
     }
   },
-  "analysis_every_violations": {
-    "ui:title": {
-      "en": "Analyse every (retired)",
-      "zh": "每多少次违规自动分析一次（已停用）"
-    },
-    "ui:widget": "hidden",
-    "ui:section": {
-      "title": {
-        "en": "Retired settings (not shown)",
-        "zh": "已停用的配置（不显示）"
-      },
-      "collapsed": true
-    }
-  },
   "escalate_violations": {
     "ui:title": {
       "en": "Escalate to enforce",
@@ -252,16 +188,14 @@
       "zh": "窗口内达到该次数的可疑请求即自动封禁用户（不含误报）。0 表示不自动封禁。"
     }
   },
-  "ban_window_hours": {
+  "ban_window_seconds": {
     "ui:title": {
       "en": "Ban window",
       "zh": "计数窗口"
     },
+    "ui:widget": "duration",
     "ui:options": {
-      "unit": {
-        "en": "hours",
-        "zh": "小时"
-      }
+      "stacked": false
     }
   },
   "ban_duration_hours": {
@@ -279,13 +213,6 @@
         "zh": "小时"
       }
     }
-  },
-  "analysis_channel_id": {
-    "ui:title": {
-      "en": "AI analysis channel (retired)",
-      "zh": "AI 分析渠道（已停用）"
-    },
-    "ui:widget": "hidden"
   },
   "record_pass": {
     "ui:widget": "switch",
@@ -645,25 +572,6 @@
       }
     }
   },
-  "base_url": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Base URL",
-      "zh": "接口地址"
-    },
-    "ui:placeholder": "https://api.openai.com",
-    "ui:help": {
-      "en": "OpenAI-compatible endpoint.",
-      "zh": "OpenAI 兼容接口地址。"
-    },
-    "ui:details": {
-      "en": "Ending in /v1, /chat/completions is appended; otherwise /v1/chat/completions.",
-      "zh": "以 /v1 结尾时拼接 /chat/completions，否则拼接 /v1/chat/completions。"
-    },
-    "ui:options": {
-      "mono": true
-    }
-  },
   "api_key": {
     "ui:widget": "hidden",
     "ui:title": {
@@ -671,271 +579,9 @@
       "zh": "API Key"
     },
     "ui:help": {
-      "en": "The 0.1 key, only used by the one-time conversion on the first 0.2 start (it is now the channel's key). Clear it: while it is stored, users who only hold moderation:manage must re-enter it to change any setting.",
-      "zh": "0.1 的密钥，只在 0.2 首次启动的一次性转换中使用（已成为渠道的密钥）。请清空：仍保存着它时，只持有 moderation:manage 的用户修改任何设置都必须重填它。"
+      "en": "A key of the 0.1 single-model setup that is still stored. Nothing reads it any more; it is declared only so that it stays masked. Saving the settings drops it.",
+      "zh": "0.1 单模型设置里仍保存着的密钥。已不再读取，声明它只是为了继续遮蔽显示。保存一次设置即会删除它。"
     }
-  },
-  "model": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Model",
-      "zh": "模型"
-    },
-    "ui:placeholder": "gpt-4o-mini",
-    "ui:help": {
-      "en": "Must support tool calling (function calling).",
-      "zh": "需要支持工具调用（function calling）。"
-    },
-    "ui:options": {
-      "mono": true
-    }
-  },
-  "system_prompt": {
-    "ui:widget": "hidden",
-    "ui:options": {
-      "rows": 8
-    },
-    "ui:title": {
-      "en": "System prompt",
-      "zh": "系统提示词"
-    },
-    "ui:help": {
-      "en": "Leave empty to use the built-in prompt.",
-      "zh": "留空使用内置提示词。"
-    },
-    "ui:details": {
-      "en": "{{categories}} in the prompt is replaced by the category list, one \"- id: description\" per line.",
-      "zh": "提示词中的 {{categories}} 会替换为分类列表（每行一个“- id：说明”）。"
-    }
-  },
-  "categories": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Categories",
-      "zh": "审核分类"
-    },
-    "ui:help": {
-      "en": "Leave empty to use the 12 built-in categories. The model can only choose from these ids.",
-      "zh": "留空使用内置的 12 个分类。模型只能从这些分类 id 中选择。"
-    },
-    "ui:options": {
-      "itemTitle": {
-        "en": "Category {n}",
-        "zh": "分类 {n}"
-      }
-    },
-    "items": {
-      "ui:order": [
-        "id",
-        "description"
-      ],
-      "id": {
-        "ui:title": {
-          "en": "Category ID",
-          "zh": "分类 ID"
-        },
-        "ui:placeholder": "illegal",
-        "ui:help": {
-          "en": "Lowercase letters, digits and _ (at most 32).",
-          "zh": "小写字母、数字和下划线，最多 32 个字符。"
-        },
-        "ui:options": {
-          "mono": true
-        }
-      },
-      "description": {
-        "ui:title": {
-          "en": "Description",
-          "zh": "说明"
-        },
-        "ui:placeholder": {
-          "en": "Illegal activity: drugs, weapons, fraud…",
-          "zh": "违法犯罪：毒品、武器、诈骗等"
-        }
-      }
-    }
-  },
-  "tool_choice": {
-    "ui:widget": "hidden",
-    "ui:enumNames": [
-      {
-        "en": "required (must call the tool)",
-        "zh": "required（必须调用工具）"
-      },
-      {
-        "en": "function (name the tool)",
-        "zh": "function（指定工具）"
-      },
-      {
-        "en": "auto (model decides)",
-        "zh": "auto（由模型决定）"
-      }
-    ],
-    "ui:title": {
-      "en": "Tool choice",
-      "zh": "工具调用方式"
-    }
-  },
-  "max_turns": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Max turns",
-      "zh": "最大轮数"
-    }
-  },
-  "temperature": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Temperature",
-      "zh": "温度"
-    }
-  },
-  "max_tokens": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Max output tokens",
-      "zh": "最大输出 Token"
-    }
-  },
-  "timeout_ms": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Timeout",
-      "zh": "超时"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "ms",
-        "zh": "毫秒"
-      }
-    }
-  },
-  "on_error": {
-    "ui:widget": "hidden",
-    "ui:enumNames": [
-      {
-        "en": "Allow",
-        "zh": "放行"
-      },
-      {
-        "en": "Refuse",
-        "zh": "拒绝"
-      }
-    ],
-    "ui:title": {
-      "en": "On error",
-      "zh": "审核失败时"
-    },
-    "ui:help": {
-      "en": "Not read since 0.10.0: a stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes.",
-      "zh": "0.10.0 起不再读取：某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。"
-    }
-  },
-  "sample_rate": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Sample rate",
-      "zh": "抽样比例"
-    },
-    "ui:help": {
-      "en": "Share of requests moderated, chosen deterministically by text.",
-      "zh": "按文本确定性抽样的审核比例。"
-    },
-    "ui:options": {
-      "unit": "%"
-    }
-  },
-  "group_ids": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Groups",
-      "zh": "分组"
-    },
-    "ui:help": {
-      "en": "Only moderate requests of these groups; empty means all groups.",
-      "zh": "只审核这些分组的请求，留空表示全部分组。"
-    }
-  },
-  "model_patterns": {
-    "ui:widget": "hidden",
-    "ui:placeholder": "claude-*",
-    "ui:title": {
-      "en": "Model patterns",
-      "zh": "模型匹配"
-    },
-    "ui:help": {
-      "en": "Only moderate requests for matching client models (* and ? wildcards); empty means all.",
-      "zh": "只审核匹配的客户端模型（支持 * 和 ? 通配），留空表示全部。"
-    }
-  },
-  "retention_days": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Retention",
-      "zh": "记录保留"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "days",
-        "zh": "天"
-      }
-    }
-  },
-  "analysis_allow_upgrade": {
-    "ui:title": {
-      "en": "Let the AI upgrade to enforce (retired)",
-      "zh": "允许 AI 升为拦截级（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_allow_downgrade": {
-    "ui:title": {
-      "en": "Let the AI downgrade to observe (retired)",
-      "zh": "允许 AI 降为观察级（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_allow_remove": {
-    "ui:title": {
-      "en": "Let the AI remove users (retired)",
-      "zh": "允许 AI 移出名单（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_timeout_ms": {
-    "ui:title": {
-      "en": "Analysis timeout (retired)",
-      "zh": "单次分析超时（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_concurrency": {
-    "ui:title": {
-      "en": "Concurrent analyses per node (retired)",
-      "zh": "每个节点同时分析数（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_context_kb": {
-    "ui:title": {
-      "en": "Context budget (retired)",
-      "zh": "上下文预算（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_keep_per_user": {
-    "ui:title": {
-      "en": "Analyses kept per user (retired)",
-      "zh": "每个用户保留的分析数（已停用）"
-    },
-    "ui:widget": "hidden"
-  },
-  "analysis_guidelines": {
-    "ui:title": {
-      "en": "Analysis guidelines (retired)",
-      "zh": "分析准则（已停用）"
-    },
-    "ui:widget": "hidden"
   },
   "error_rate_alert_percent": {
     "ui:title": {
@@ -983,34 +629,6 @@
     "ui:help": {
       "en": "Hourly statistics, per-user daily counts and moderation costs older than this are deleted by the daily cleanup.",
       "zh": "每日清理时删除超过该天数的小时统计、用户每日计数和审核费用。"
-    }
-  },
-  "exempt_user_ids": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Exempt user IDs (retired)",
-      "zh": "免审用户 ID（已停用）"
-    },
-    "ui:help": {
-      "en": "Retired in 0.8.0: read as the allowlist until Allowlist is saved. These users are no longer left unmoderated.",
-      "zh": "0.8.0 起停用：在保存“白名单”之前按白名单读取。这些用户不再是完全不审核。"
-    }
-  },
-  "cache_ttl_seconds": {
-    "ui:widget": "hidden",
-    "ui:title": {
-      "en": "Pass cache (retired)",
-      "zh": "通过缓存时长（已停用）"
-    },
-    "ui:help": {
-      "en": "Retired in 0.8.0: only read until Verdict cache is saved (0 keeps the cache off, anything else is rounded up to whole days).",
-      "zh": "0.8.0 起停用：在保存“判定缓存天数”之前读取（0 表示不缓存，其余向上取整为天）。"
-    },
-    "ui:options": {
-      "unit": {
-        "en": "s",
-        "zh": "秒"
-      }
     }
   }
 }

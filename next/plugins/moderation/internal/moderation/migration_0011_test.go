@@ -51,7 +51,7 @@ const (
 
 // Migration 0011 during a rolling upgrade: 0.9.3 nodes write and read flows
 // and records with their own statements before and after it, and a 0.10.0
-// node reads what they wrote - a flow without a scope runs with all and shows
+// node reads what they wrote - a flow without a scope runs with input (0.11.1) and shows
 // null, a record without a flow source shows none.
 func TestMigration0011Rolling(t *testing.T) {
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
@@ -116,9 +116,12 @@ func TestMigration0011Rolling(t *testing.T) {
 	}
 	before := write("before")
 	read()
-	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
+	// 0.9.3 ran beside 0.10.0, on the migrations up to 0012 (0013 drops the
+	// ai_* columns 0.9.3 reads; 0.11.0 needs 0.10.0 before it).
+	pluginsdktest.ApplyMigrations(t, dsn, schema, migrationDir(t, func(n string) bool { return n < "0013" }))
 	after := write("after")
 	read()
+	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
 
 	fh := pluginsdktest.NewFakeHost()
 	fh.SetDSN(dsn, schema)
@@ -126,7 +129,7 @@ func TestMigration0011Rolling(t *testing.T) {
 	p, h := startNode(t, fh, map[string]any{"mode": ModeEnforce})
 	waitFor(t, "the flows of 0.9.3 in the snapshot", func() bool { return len(p.snap.Load().flows) == 2 })
 	for _, id := range []int64{before, after} {
-		if f := p.snap.Load().flows[id]; f.scope != ScopeAll {
+		if f := p.snap.Load().flows[id]; f.scope != ScopeNew {
 			t.Fatalf("flow %d runs with scope %q", id, f.scope)
 		}
 	}

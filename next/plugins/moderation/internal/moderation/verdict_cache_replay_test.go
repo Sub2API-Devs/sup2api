@@ -28,7 +28,7 @@ func conversation(turns ...string) string {
 // rest. Under whole the replay decides the whole request (0.9.3).
 func TestHitReplayNewContent(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "record_pass": true})
 	openAIFlow(t, h, mod.srv.URL)
 	const old = "MOD-HIT-violence first"
 	if r := mustHook(t, h, rawReq(3, "c1", protoAnthropic, conversation(old))); r.GetNote() != queuedNote {
@@ -111,7 +111,7 @@ func splitReplay(t *testing.T, evs []EventListItem) (replay, rest EventListItem)
 // already flagged.
 func TestHitReplayPreMessage(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	openAIFlow(t, h, mod.srv.URL)
 	const old = "MOD-HIT-violence first"
 	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, conversation(old))); !denied(r) || r.GetDenyMessage() != DefaultBlockMessage {

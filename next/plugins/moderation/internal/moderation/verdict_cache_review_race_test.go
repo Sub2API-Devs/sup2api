@@ -54,7 +54,7 @@ func TestReviewIsNotUndoneByLateWrites(t *testing.T) {
 	// The clocks stand still: whether a tombstone still stands does not
 	// depend on how long the test takes.
 	var clock1, clock2 atomic.Int64
-	p, h, fh := startDB(t, nil, cfg, withKV(kv1), withClock(&clock1))
+	p, h, fh := startDB(t, cfg, withKV(kv1), withClock(&clock1))
 	flow := openAIFlow(t, h, mod.srv.URL)
 	p2, h2 := secondNode(t, fh, cfg, withKV(kv2), withClock(&clock2))
 	scope := flowScope(p, flow)
@@ -175,7 +175,7 @@ func TestReviewTombstonesBeforeItWrites(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
 	var clock atomic.Int64 // stands still: the tombstones are measured on it
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 	scope := flowScope(p, openAIFlow(t, h, mod.srv.URL))
 	rec, hit, held := recordedHit(t, p, h, scope, "order", "MOD-HIT-sexual reviewed while a run stores it")
 	hitKey, segKey := hit.hitKey, hit.segKeys[0]
@@ -222,7 +222,7 @@ func TestReviewEndsWithItsRequest(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
 	var clock atomic.Int64 // stands still: the tombstones are measured on it
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 	scope := flowScope(p, openAIFlow(t, h, mod.srv.URL))
 	rec, hit, _ := recordedHit(t, p, h, scope, "caller", "MOD-HIT-sexual reviewed by a caller that leaves")
 	hitKey := hit.hitKey
@@ -269,7 +269,7 @@ func TestReviewIsNotUndoneByWritesThatOutlastItsTombstones(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 	scope := flowScope(p, openAIFlow(t, h, mod.srv.URL))
 	ctx := context.Background()
 	ttl := p.cfg.Load().cacheTTL
@@ -372,7 +372,7 @@ func TestRunAcrossAReviewDoesNotUndoIt(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 	scope := flowScope(p, openAIFlow(t, h, mod.srv.URL))
 	const text = "MOD-HIT-sexual judged across a review"
 	// The first request is refused; its hit is on its way to the KV.
@@ -438,7 +438,7 @@ func TestStoredHitIsKnownOnItsNode(t *testing.T) {
 	} {
 		kv := &kvFake{}
 		var clock atomic.Int64
-		p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+		p, _, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
 		const scope = "e0:1:fp"
 		ctx := context.Background()
 		cfg := p.cfg.Load()
@@ -493,7 +493,7 @@ func TestStoredHitIsKnownOnItsNode(t *testing.T) {
 // content here; TestQueuedJobAfterClearSeesAReview is the case where it does.)
 func TestQueuedJobAfterClear(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeObserve})
 	flow := openAIFlow(t, h, mod.srv.URL)
 	const text = "MOD-HIT-violence epoch"
 	mustHook(t, h, hookReqAs(3, "e0", text))
@@ -534,7 +534,7 @@ func TestQueuedJobAfterClear(t *testing.T) {
 func TestQueuedJobAfterClearSeesAReview(t *testing.T) {
 	mod := newFakeMod(t)
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve}, withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeObserve}, withClock(&clock))
 	flow := openAIFlow(t, h, mod.srv.URL)
 	const text = "MOD-HIT-violence queued across a clear and a review"
 	m := queuedJob(t, p, flow, hookReqAs(6, "queued", text))
@@ -573,7 +573,7 @@ func TestQueuedJobAfterClearSeesAReview(t *testing.T) {
 func TestQueuedJobStoresByItsLastLookup(t *testing.T) {
 	mod := newFakeMod(t)
 	var clock atomic.Int64
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve}, withClock(&clock))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeObserve}, withClock(&clock))
 	flow := openAIFlow(t, h, mod.srv.URL)
 	m := queuedJob(t, p, flow, hookReqAs(6, "queued", "a clean text that waits in the queue"))
 	// While it waits: the broadcast of a review of something else, and more

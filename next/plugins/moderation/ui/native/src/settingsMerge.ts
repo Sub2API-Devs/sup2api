@@ -2,7 +2,9 @@
 // core settings API has no version, and PUT replaces every value, so a save
 // re-reads the stored values and writes back only the keys this page changed
 // since it loaded: a key left alone keeps whatever is stored now, also when
-// another admin changed it meanwhile.
+// another admin changed it meanwhile. loaded and latest are the stored values
+// brought to the current schema (settingsForm.ts currentSettings), so only
+// declared keys go back, retired values folded into their new keys.
 
 /** A key's value as this page would send it; undefined = removed (its schema default applies). */
 export type PageValues = Record<string, unknown>

@@ -141,7 +141,7 @@ func (p *Plugin) testResult(ctx context.Context, m *moderation) TestResult {
 			for j := range run.Stages[i].Outcomes {
 				o := &run.Stages[i].Outcomes[j]
 				if o.Err != nil && o.ErrType == "" {
-					o.ErrType = ErrType(o.Err)
+					o.describeErr()
 				}
 				out.Cost = sumCost(out.Cost, o.Cost)
 			}

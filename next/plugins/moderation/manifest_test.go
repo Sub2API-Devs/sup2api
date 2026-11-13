@@ -65,13 +65,15 @@ func TestManifest(t *testing.T) {
 	if fields, ok := check.Fields(check.Validate(&m, files, check.ValidateOptions{Tooling: true})); ok {
 		t.Fatalf("manifest check: %+v", fields)
 	}
-	// hostCompat: the settings form uses UI 3.12 (the entity-select schema
-	// widget for the allowlist and the blocklist), first shipped with core
-	// 0.1.280; UI 3.11 (host.components.EntityPicker in the filter bars and
+	// hostCompat: the blocked users table opens a row from its reason cell
+	// (STable expandToggle false + toggleExpand, UI 3.13, 0.11.1), first
+	// shipped with core 0.1.281; the settings form uses UI 3.12 (the
+	// entity-select schema widget for the allowlist and the blocklist), first
+	// shipped with core 0.1.280; UI 3.11 (host.components.EntityPicker in the filter bars and
 	// the forms) came with 0.1.279, UI 3.10 (SFilterBar more filters,
 	// SFilterChips, SChipList, TableColumn.grow) with 0.1.277, the verdict
 	// cache's batch KV calls with 0.1.273.
-	if m.Key != "moderation" || m.Version != "0.10.0" || m.HostCompat != ">=0.1.280 <0.2.0" || m.HostUICompat != "^3.12" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.11.2" || m.HostCompat != ">=0.1.281 <0.2.0" || m.HostUICompat != "^3.13" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -101,7 +103,8 @@ func TestManifest(t *testing.T) {
 	}
 	for route, perm := range map[string]string{
 		"GET /events": "moderation:read", "GET /events/:id/input": "moderation:read",
-		"POST /events/review": "moderation:manage", "PATCH /watchlist/:user_id": "moderation:manage", "POST /channels/:id/test": "moderation:manage",
+		"POST /events/review": "moderation:manage", "PATCH /watchlist/:user_id": "moderation:manage",
+		"PUT /watchlist/:user_id/lock": "moderation:manage", "DELETE /watchlist/:user_id/lock": "moderation:manage", "POST /channels/:id/test": "moderation:manage",
 		"POST /auditors/:id/try": "moderation:manage", "POST /flows/:id/publish": "moderation:manage", "POST /import": "moderation:manage",
 		"POST /test": "moderation:manage", "GET /jev/default-questions": "moderation:read", "DELETE /blocks/:user_id": "moderation:manage",
 		"GET /costs": "moderation:read", "POST /flows/:id/rollback": "moderation:manage", "POST /flows/:id/simulate": "moderation:manage",
@@ -121,7 +124,7 @@ func TestManifest(t *testing.T) {
 			t.Errorf("route %s is still declared", gone)
 		}
 	}
-	if len(routes) != 54 {
+	if len(routes) != 56 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -267,16 +270,16 @@ func TestSettingsForms(t *testing.T) {
 			t.Errorf("%s must be writeOnly", k)
 		}
 	}
-	// The 0.1 fields stay in the schema (api_key above all: without it the
-	// core would no longer mask it) but the settings page does not show
-	// them (§72.15); the keys retired in 0.8.0 (exempt_user_ids, read as the
-	// allowlist, and cache_ttl_seconds, read as verdict_cache_days) are
-	// hidden like them, as are the analysis_* keys of the removed AI analysis
-	// (kept so stored values still validate), and the two user lists, edited
-	// by locking users on the watch list (0.10.0, D5); every other field is shown.
-	legacy := []string{"allowlist_user_ids", "blocklist_user_ids", "exempt_user_ids", "cache_ttl_seconds", "analysis_every_violations", "analysis_channel_id", "analysis_guidelines",
-		"analysis_timeout_ms", "analysis_concurrency", "analysis_context_kb", "analysis_keep_per_user", "analysis_allow_upgrade", "analysis_allow_downgrade", "analysis_allow_remove", "base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
-		"max_tokens", "timeout_ms", "on_error", "sample_rate", "group_ids", "model_patterns", "retention_days"}
+	// Of the keys retired in 0.11.0 only api_key stays in the schema (without
+	// it the core would no longer mask a stored 0.1 key), and the settings
+	// page does not show it; every other field is shown.
+	for _, gone := range []string{"allowlist_user_ids", "blocklist_user_ids", "exempt_user_ids", "cache_ttl_seconds", "ban_window_hours",
+		"analysis_channel_id", "on_error", "base_url", "model", "retention_days"} {
+		if _, ok := schema.Properties[gone]; ok {
+			t.Errorf("retired key %s is still declared", gone)
+		}
+	}
+	legacy := []string{"api_key"}
 	for _, k := range order {
 		var fu struct {
 			Widget string `json:"ui:widget"`

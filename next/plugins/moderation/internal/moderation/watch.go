@@ -32,10 +32,9 @@ type Watch struct {
 	HitsSinceSeen int       `json:"hits_since_seen"`
 	Note          string    `json:"note"`
 	UpdatedAt     time.Time `json:"updated_at"`
-	// Locked: the entry mirrors a user list of the settings (locks.go) and
-	// is changed through the list only; Lock names that list (allowlist |
-	// blocklist), absent while a user who left the lists still has the
-	// entry (the next reconcile removes it).
+	// Locked: the entry puts the user on a list (locks.go) and is changed
+	// through the lock routes only; Lock names the list (allowlist |
+	// blocklist), which is the entry's level.
 	Locked bool   `json:"locked"`
 	Lock   string `json:"lock,omitempty"`
 }
@@ -47,6 +46,7 @@ func scanWatch(r pgx.Row) (Watch, error) {
 	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.HitsSinceSeen, &w.Note, &w.UpdatedAt, &w.Locked)
 	w.SinceAt, w.UpdatedAt = w.SinceAt.UTC(), w.UpdatedAt.UTC()
 	w.ExpiresAt, w.LastHitAt = utcPtr(w.ExpiresAt), utcPtr(w.LastHitAt)
+	w.Lock = lockOf(w.Locked, w.Level)
 	return w, err
 }
 
@@ -206,8 +206,8 @@ func (p *Plugin) staffUser(ctx context.Context, uid int64) pluginsdk.FieldErrors
 
 // unbannableUser refuses a ban by hand: moderators, and allowlisted users,
 // who are never refused (a ban is heavier than a refusal).
-func (p *Plugin) unbannableUser(ctx context.Context, c *config, uid int64) pluginsdk.FieldErrors {
-	if c.allowlisted(uid) {
+func (p *Plugin) unbannableUser(ctx context.Context, uid int64) pluginsdk.FieldErrors {
+	if p.userLock(uid) == LockAllowlist {
 		return pluginsdk.FieldErrors{}.Add("user_id", "allowlisted", "allowlisted users cannot be banned / 白名单用户不能封禁")
 	}
 	return p.staffUser(ctx, uid)
@@ -359,14 +359,33 @@ func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 }
 
 var (
-	errConflict = errors.New("conflict")
-	errLocked   = errors.New("locked")
+	errConflict  = errors.New("conflict")
+	errLocked    = errors.New("locked")
+	errNotLocked = errors.New("not locked")
+	// errUnchanged ends a change that wrote nothing: the entry is answered
+	// without a bump or broadcast.
+	errUnchanged = errors.New("unchanged")
 )
 
-// writeWatch runs one manual watch change under the user's lock, then
-// reloads and broadcasts. A user of the lists, and a locked entry, is
-// changed through the lists only (locks.go): the change is refused.
-func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid int64, fn func(pgx.Tx, Watch, bool, time.Time) (Watch, error)) (*pluginv1.HTTPResponse, error) {
+// watchChangeFn changes uid's live entry w (found = there is one) at now.
+type watchChangeFn func(tx pgx.Tx, w Watch, found bool, now time.Time) (Watch, error)
+
+// writeWatch runs one manual change of an entry that is not locked (a
+// locked entry is changed through the lock routes only, locks.go: the
+// change is refused).
+func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid int64, fn watchChangeFn) (*pluginv1.HTTPResponse, error) {
+	return p.changeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, now time.Time) (Watch, error) {
+		if found && w.Locked {
+			return w, errLocked
+		}
+		return fn(tx, w, found, now)
+	})
+}
+
+// changeWatch runs one manual watch change under the user's lock (an
+// expired entry is removed first), then reloads and broadcasts; a change
+// that wrote nothing (errUnchanged) answers the entry as it is.
+func (p *Plugin) changeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid int64, fn watchChangeFn) (*pluginv1.HTTPResponse, error) {
 	db, err := p.db(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
@@ -377,18 +396,9 @@ func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid 
 		if err := lockBlockSubject(ctx, tx, uid); err != nil {
 			return err
 		}
-		w, found, err := loadWatch(ctx, tx, uid)
+		w, found, _, err := liveWatchEntry(ctx, tx, uid, now)
 		if err != nil {
 			return err
-		}
-		if p.cfg.Load().lockKind(uid) != "" || (found && w.Locked) {
-			return errLocked
-		}
-		if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
-			if err := expireEntry(ctx, tx, w); err != nil {
-				return err
-			}
-			found = false
 		}
 		if out, err = fn(tx, w, found, now); err != nil {
 			return err
@@ -396,13 +406,17 @@ func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid 
 		return bumpWatch(ctx, tx)
 	})
 	switch {
+	case errors.Is(err, errUnchanged):
+		return pluginsdk.DataResponse(out), nil
 	case errors.Is(err, errNotFound):
 		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "user is not on the watch list / 该用户不在观察名单中"), nil
 	case errors.Is(err, errConflict):
 		return pluginsdk.ErrorResponse(http.StatusConflict, "already_watched", "user is already on the watch list / 该用户已在观察名单中"), nil
+	case errors.Is(err, errNotLocked):
+		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_locked", "user is on neither list / 该用户不在“只后台审核”或“总是先审”名单中"), nil
 	case errors.Is(err, errLocked):
 		return pluginsdk.ErrorResponse(http.StatusConflict, "locked",
-			"the entry follows the background-only / always-check-first list of the settings: change the list / 该条目来自“只后台审核”或“总是先审”名单，请修改名单"), nil
+			"the entry puts the user on the background-only / always-check-first list: unlock it first / 该条目属于“只后台审核”或“总是先审”名单，请先解锁"), nil
 	case err != nil:
 		return nil, err
 	}

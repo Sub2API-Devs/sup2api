@@ -330,6 +330,10 @@ type Status struct {
 	// StaleBindings counts the bindings that do not apply (Binding.Inactive,
 	// 0.10.0): the overview points to the bindings page.
 	StaleBindings int `json:"stale_bindings"`
+	// ListsImported: the one-time import of the user lists of the settings
+	// (upgradeOnce, 0.11.0) is done. Until then the console does not save
+	// the settings: a save drops the lists before they are imported.
+	ListsImported bool `json:"lists_imported"`
 }
 
 func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -371,6 +375,9 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 		if b.Inactive {
 			out.StaleBindings++
 		}
+	}
+	if err := db.QueryRow(ctx, `SELECT lists_imported FROM config_state WHERE id = 1`).Scan(&out.ListsImported); err != nil {
+		return nil, err
 	}
 	out.Watch, err = p.watchCounts(ctx, db)
 	return out, err

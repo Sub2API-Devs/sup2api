@@ -239,7 +239,7 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 	}))
 	defer jev.Close()
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	setupFlow(t, h, jev.URL, []int64{9}, CombineAny, []string{AuditorTypeSafe})
 	setupFlow(t, h, mod.srv.URL, []int64{10}, CombineAny, []string{AuditorOpenAI})
 	// The Jev channel has 2 s: its redraws get one of them.
@@ -337,7 +337,7 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 // the image Jev never saw must not be answered "pass (cached)" afterwards.
 func TestImagePassNeedsAPassingAuditor(t *testing.T) {
 	base, jevImages, _ := imageMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flows := imageFlows(t, h, base)
 	for _, tc := range imageFlowCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -389,7 +389,7 @@ func TestImagePassNeedsAPassingAuditor(t *testing.T) {
 // judged as a whole each time.
 func TestImageOnlyAHittingAuditorSawGetsTheSameVerdict(t *testing.T) {
 	base, jevImages, calls := imageMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flows := imageFlows(t, h, base)
 	// Both redraw slots stay busy: Jev always sends the text alone.
 	busySlots(t)
@@ -450,7 +450,7 @@ func TestImageOnlyAHittingAuditorSawGetsTheSameVerdict(t *testing.T) {
 // the text: TestLLMReviewerSeesTheImage.)
 func TestImageVerdictDoesNotDependOnCachedText(t *testing.T) {
 	base, jevImages, calls, sent, order := imageModSent(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flows := imageFlows(t, h, base)
 	jevWithoutImages(t, h)
 	// Jev answers after the moderation API, as it did while it waited for a

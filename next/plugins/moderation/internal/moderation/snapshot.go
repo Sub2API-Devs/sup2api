@@ -317,8 +317,11 @@ func (s *snapshot) isSelf(text string) bool {
 type watchEntry struct {
 	Level   string
 	Expires time.Time // zero = no expiry
-	Locked  bool      // mirrors a user list (locks.go)
+	Locked  bool      // puts the user on a list (locks.go)
 }
+
+// lock names the list of a locked entry ("" = not locked).
+func (e watchEntry) lock() string { return lockOf(e.Locked, e.Level) }
 
 func secretContext(id int64, what string) string {
 	return "channel:" + strconv.FormatInt(id, 10) + ":" + what
@@ -505,8 +508,10 @@ type storedAuditor struct {
 //   - the prompt template of llm_questions and how its answers are read;
 //   - what an auditor without review_images does with images
 //     (AuditorConfig.reviewsImages), and which images an auditor sends;
-//   - the built-in Jev question set (the default set when the settings
-//     carry none) and how questions are sent and scored;
+//   - how questions are sent and scored (the built-in Jev question set
+//     itself needs no bump: the auditors that use the default set hash its
+//     content, so a new built-in set changes their fingerprints alone, as
+//     in 0.11.2);
 //   - how content is cut into segments and rendered for the auditors, when
 //     the same segment hash would then stand for other text.
 //
@@ -520,8 +525,9 @@ const judgingVersion = 2
 // stored config), the channel's type, protocol, base URL and model, the
 // default question set of the auditors that use it, judgingVersion for the
 // defaults in the code, and the audit scope unless it is all (0.10.0: a
-// verdict is of the content the scope keeps; all and NULL hash as the 0.9.3
-// fingerprint did, so the flows of before keep their cache). It is part of the flow's cache keys, so changing
+// verdict is of the content the scope keeps; all hashes as the 0.9.3
+// fingerprint did. The scope hashed is auditScope's, so since 0.11.1 NULL
+// hashes as input). It is part of the flow's cache keys, so changing
 // any of these makes the cached verdicts of the flow unreachable, while the
 // flow's name, model filter, sample rate and timeout and a channel's name,
 // key, proxy, timeout and billing model leave them in place.
@@ -607,6 +613,13 @@ func (p *Plugin) reloadWatch(ctx context.Context) error {
 	p.watch.Store(&m)
 	p.watchVersion.Store(version)
 	return nil
+}
+
+// userLock names the list that uid's live entry in memory puts the user on
+// ("" = none).
+func (p *Plugin) userLock(uid int64) string {
+	e, _ := p.liveWatch(uid)
+	return e.lock()
 }
 
 // liveWatch returns the user's live watch entry (ok = watched).

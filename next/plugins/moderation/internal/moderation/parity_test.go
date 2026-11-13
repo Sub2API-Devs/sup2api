@@ -66,7 +66,7 @@ func TestParityConversionOnce(t *testing.T) {
 		(26, 'enforce', 'auto', now() + interval '5 days', 6)`
 
 	t.Run("mode enforce, two nodes", func(t *testing.T) {
-		p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, noRefreshTicks)
+		p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, noRefreshTicks)
 		fh2 := pluginsdktest.NewFakeHost()
 		fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
 		p2, _ := startNode(t, fh2, map[string]any{"mode": ModeEnforce}, noRefreshTicks)
@@ -157,7 +157,7 @@ func TestParityConversionOnce(t *testing.T) {
 	})
 
 	t.Run("mode observe", func(t *testing.T) {
-		p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve}, noRefreshTicks)
+		p, h, _ := startDB(t, map[string]any{"mode": ModeObserve}, noRefreshTicks)
 		prepare(t, p, rows)
 		p.parityDone.Store(false)
 		p.convertParityOnce(ctx)
@@ -193,7 +193,7 @@ func TestParityConversionWindow(t *testing.T) {
 	ctx := context.Background()
 	var offset atomic.Int64
 	clock := func() time.Time { return time.Now().Add(time.Duration(offset.Load())) }
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce}, func(n *node) { n.now = clock }, noRefreshTicks)
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce}, func(n *node) { n.now = clock }, noRefreshTicks)
 	waitFor(t, "conversion at start", p.parityDone.Load)
 	db, _ := p.db(ctx)
 	var at *time.Time
@@ -283,7 +283,7 @@ func TestParityConversionWindow(t *testing.T) {
 // entry it wants is waited for, not deadlocked with.
 func TestParityConversionLockOrder(t *testing.T) {
 	ctx := context.Background()
-	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce}, noRefreshTicks)
+	p, _, _ := startDB(t, map[string]any{"mode": ModeEnforce}, noRefreshTicks)
 	waitFor(t, "conversion at start", p.parityDone.Load)
 	db, _ := p.db(ctx)
 	if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at) VALUES (41, 'observe', 'auto', now() + interval '5 days')`); err != nil {

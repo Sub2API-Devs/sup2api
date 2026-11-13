@@ -23,26 +23,6 @@
       ],
       "default": "open"
     },
-    "allowlist_user_ids": {
-      "type": "array",
-      "title": "Allowlist user IDs",
-      "default": [],
-      "maxItems": 1000,
-      "items": {
-        "type": "string",
-        "pattern": "^[0-9]{1,18}$"
-      }
-    },
-    "blocklist_user_ids": {
-      "type": "array",
-      "title": "Blocklist user IDs",
-      "default": [],
-      "maxItems": 1000,
-      "items": {
-        "type": "string",
-        "pattern": "^[0-9]{1,18}$"
-      }
-    },
     "block_status": {
       "type": "integer",
       "title": "Block status",
@@ -68,13 +48,6 @@
       "maximum": 365,
       "default": 30
     },
-    "analysis_every_violations": {
-      "type": "integer",
-      "title": "Analysis every N violations",
-      "minimum": 0,
-      "maximum": 1000,
-      "default": 30
-    },
     "escalate_violations": {
       "type": "integer",
       "title": "Escalate threshold",
@@ -96,12 +69,12 @@
       "maximum": 1000,
       "default": 0
     },
-    "ban_window_hours": {
+    "ban_window_seconds": {
       "type": "integer",
-      "title": "Ban window (hours)",
+      "title": "Ban window (seconds)",
       "minimum": 1,
-      "maximum": 8760,
-      "default": 24
+      "maximum": 31536000,
+      "default": 86400
     },
     "ban_duration_hours": {
       "type": "integer",
@@ -131,62 +104,6 @@
       "maxLength": 200,
       "default": "",
       "writeOnly": true
-    },
-    "analysis_channel_id": {
-      "type": "integer",
-      "title": "Analysis channel",
-      "minimum": 0,
-      "maximum": 2147483647,
-      "default": 0
-    },
-    "analysis_guidelines": {
-      "type": "string",
-      "title": "Analysis guidelines",
-      "default": "",
-      "maxLength": 16384
-    },
-    "analysis_timeout_ms": {
-      "type": "integer",
-      "title": "Analysis timeout (ms)",
-      "minimum": 10000,
-      "maximum": 600000,
-      "default": 60000
-    },
-    "analysis_concurrency": {
-      "type": "integer",
-      "title": "Analysis concurrency",
-      "minimum": 1,
-      "maximum": 16,
-      "default": 2
-    },
-    "analysis_context_kb": {
-      "type": "integer",
-      "title": "Analysis context (KB)",
-      "minimum": 16,
-      "maximum": 1024,
-      "default": 64
-    },
-    "analysis_keep_per_user": {
-      "type": "integer",
-      "title": "Analyses kept per user",
-      "minimum": 1,
-      "maximum": 1000,
-      "default": 20
-    },
-    "analysis_allow_upgrade": {
-      "type": "boolean",
-      "title": "Allow AI upgrade",
-      "default": true
-    },
-    "analysis_allow_downgrade": {
-      "type": "boolean",
-      "title": "Allow AI downgrade",
-      "default": true
-    },
-    "analysis_allow_remove": {
-      "type": "boolean",
-      "title": "Allow AI removal",
-      "default": false
     },
     "record_pass": {
       "type": "boolean",
@@ -407,170 +324,12 @@
         }
       ]
     },
-    "base_url": {
-      "type": "string",
-      "title": "Base URL",
-      "default": "",
-      "maxLength": 500,
-      "pattern": "^(https?://\\S+)?$",
-      "readOnly": true
-    },
     "api_key": {
       "type": "string",
       "title": "API key",
       "default": "",
       "maxLength": 1000,
       "writeOnly": true
-    },
-    "model": {
-      "type": "string",
-      "title": "Model",
-      "default": "",
-      "maxLength": 200,
-      "readOnly": true
-    },
-    "system_prompt": {
-      "type": "string",
-      "title": "System prompt",
-      "default": "",
-      "maxLength": 20000,
-      "readOnly": true
-    },
-    "categories": {
-      "type": "array",
-      "title": "Categories",
-      "default": [],
-      "maxItems": 50,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "ID",
-            "pattern": "^[a-z0-9_]{1,32}$"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "default": "",
-            "maxLength": 500
-          }
-        }
-      },
-      "readOnly": true
-    },
-    "tool_choice": {
-      "type": "string",
-      "title": "Tool choice",
-      "enum": [
-        "required",
-        "function",
-        "auto"
-      ],
-      "default": "required",
-      "readOnly": true
-    },
-    "max_turns": {
-      "type": "integer",
-      "title": "Max turns",
-      "minimum": 1,
-      "maximum": 5,
-      "default": 3,
-      "readOnly": true
-    },
-    "temperature": {
-      "type": "number",
-      "title": "Temperature",
-      "minimum": 0,
-      "maximum": 2,
-      "default": 0,
-      "readOnly": true
-    },
-    "max_tokens": {
-      "type": "integer",
-      "title": "Max tokens",
-      "minimum": 64,
-      "maximum": 4096,
-      "default": 512,
-      "readOnly": true
-    },
-    "timeout_ms": {
-      "type": "integer",
-      "title": "Timeout (ms)",
-      "minimum": 1000,
-      "maximum": 25000,
-      "default": 10000,
-      "readOnly": true
-    },
-    "on_error": {
-      "type": "string",
-      "title": "On error",
-      "enum": [
-        "allow",
-        "block"
-      ],
-      "default": "allow",
-      "readOnly": true
-    },
-    "sample_rate": {
-      "type": "integer",
-      "title": "Sample rate (%)",
-      "minimum": 1,
-      "maximum": 100,
-      "default": 100,
-      "readOnly": true
-    },
-    "group_ids": {
-      "type": "array",
-      "title": "Groups",
-      "default": [],
-      "uniqueItems": true,
-      "items": {
-        "type": "integer",
-        "minimum": 1
-      },
-      "readOnly": true
-    },
-    "model_patterns": {
-      "type": "array",
-      "title": "Model patterns",
-      "default": [],
-      "maxItems": 100,
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 200
-      },
-      "readOnly": true
-    },
-    "retention_days": {
-      "type": "integer",
-      "title": "Retention (days)",
-      "minimum": 1,
-      "maximum": 3650,
-      "default": 30,
-      "readOnly": true
-    },
-    "exempt_user_ids": {
-      "type": "array",
-      "title": "Exempt user IDs (retired)",
-      "default": [],
-      "maxItems": 1000,
-      "items": {
-        "type": "string",
-        "pattern": "^[0-9]{1,18}$"
-      }
-    },
-    "cache_ttl_seconds": {
-      "type": "integer",
-      "title": "Cache TTL (s, retired)",
-      "minimum": 0,
-      "maximum": 604800,
-      "default": 86400
     }
   }
 }

@@ -10,7 +10,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 	"github.com/tidwall/gjson"
 )
 
@@ -25,11 +28,28 @@ const (
 	// llmqMaxTokens leaves room for reasoning models that think before answering.
 	llmqMaxTokens = 4096
 	llmqTool      = "submit_verdict"
-	// llmReasonRunes caps the verdict's reason, which is kept in every record trace.
-	llmReasonRunes = 500
+	// llmReasonRunes caps the reason of an LLM verdict (llm_questions and the
+	// agent auditors alike, clipReason), which is kept in every record trace
+	// and in a cached hit. Reasons are a sentence or two (the longest of three
+	// days of hits: 173 runes); the cap only guards against a runaway model.
+	// 2000 runes (0.11.1, was 500) make an outcome at worst about 6 KB (3
+	// bytes a CJK rune); a hit larger than maxHitBytes (60 KB) is only not
+	// cached, the moderation is the same.
+	llmReasonRunes = 2000
 )
 
 var errLLMNoVerdict = errors.New("llm auditor did not submit a verdict")
+
+// clipReason trims a verdict's reason and keeps it to llmReasonRunes runes,
+// the last one "…" when it was cut (after the cut's trailing space), so the
+// console shows that it was.
+func clipReason(s string) string {
+	s = strings.TrimSpace(s)
+	if utf8.RuneCountInString(s) <= llmReasonRunes {
+		return s
+	}
+	return strings.TrimRightFunc(textutil.TruncateRunes(s, llmReasonRunes-1), unicode.IsSpace) + "…"
+}
 
 // llmQuestionsAudit makes one streaming call offering only submit_verdict,
 // without a temperature. The user message starts with the self-request
@@ -158,7 +178,7 @@ func llmqToolDef(qs *JevQuestions) LLMTool {
 // call. A model that answers in text instead is read from the outermost JSON
 // object of the text. Each answer becomes a score of 1 (yes) or 0 (no); a
 // question without a yes / no answer is left out, so the judge reports an
-// incomplete result. The reason is trimmed and cut to llmReasonRunes; a
+// incomplete result. The reason is trimmed and clipped (clipReason); a
 // missing or non-string reason is empty.
 func llmqVerdict(t llmTurn, qs *JevQuestions) (scores map[string]float64, reason string, err error) {
 	var args json.RawMessage
@@ -192,7 +212,7 @@ func llmqVerdict(t llmTurn, qs *JevQuestions) (scores map[string]float64, reason
 		}
 	}
 	if v := obj.Get("reason"); v.Type == gjson.String {
-		reason = truncateRunes(strings.TrimSpace(v.Str), llmReasonRunes)
+		reason = clipReason(v.Str)
 	}
 	return scores, reason, nil
 }

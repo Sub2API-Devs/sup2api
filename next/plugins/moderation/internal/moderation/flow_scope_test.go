@@ -17,11 +17,11 @@ var prefill = conversation("a harmless question", "MOD-HIT-sexual prefill")
 
 // The audit scope of a flow (CONTRACTS §72.4, 0.10.0): a column of the flow,
 // input for a new flow, kept by an update without it, refused with
-// invalid_scope when unknown, null (all) for a flow of before 0.10.0, and in
+// invalid_scope when unknown, null (input since 0.11.1) for a flow of before 0.10.0, and in
 // effect at once, without a publish.
 func TestFlowScopeAPI(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	auditor := newAuditor(t, h, mod.srv.URL, AuditorOpenAI, map[string]int64{})
 	draft := map[string]any{"stages": []any{map[string]any{"auditors": []int64{auditor}}}}
 	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": draft}))
@@ -68,7 +68,7 @@ func TestFlowScopeAPI(t *testing.T) {
 		!strings.Contains(string(resp.GetBody()), "invalid_scope") {
 		t.Fatalf("unknown scope = %d %s", resp.GetStatus(), resp.GetBody())
 	}
-	// A flow of before 0.10.0: null, and it moderates everything.
+	// A flow of before 0.10.0: null, and it moderates the input only (0.11.1).
 	ctx := context.Background()
 	db, _ := p.db(ctx)
 	if _, err := db.Exec(ctx, `UPDATE flows SET scope = NULL WHERE id = $1`, f.ID); err != nil {
@@ -81,8 +81,11 @@ func TestFlowScopeAPI(t *testing.T) {
 	if v := gjson.GetBytes(body, "data.scope"); !v.Exists() || v.Type != gjson.Null {
 		t.Fatalf("legacy scope = %s", body)
 	}
-	if fl := p.snap.Load().flows[f.ID]; fl == nil || fl.scope != ScopeAll {
+	if fl := p.snap.Load().flows[f.ID]; fl == nil || fl.scope != ScopeNew {
 		t.Fatalf("legacy flow runs with %+v", fl)
+	}
+	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, prefill)); denied(r) {
+		t.Fatalf("legacy flow moderated the assistant turn: %+v", r)
 	}
 }
 
@@ -92,7 +95,7 @@ func TestFlowScopeAPI(t *testing.T) {
 // those there are.
 func TestRecordFlowSource(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	bound := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	def := setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	source := func(rid string, group int64) gjson.Result {
@@ -149,7 +152,7 @@ func TestRecordFlowSource(t *testing.T) {
 func TestFailPolicy(t *testing.T) {
 	mod := newFakeMod(t)
 	settings := map[string]any{"mode": ModeEnforce}
-	p, h, _ := startDB(t, nil, settings)
+	p, h, _ := startDB(t, settings)
 	openAIFlow(t, h, mod.srv.URL)
 	// On the plugin and not through the harness: the hook call itself ends
 	// with ctx.

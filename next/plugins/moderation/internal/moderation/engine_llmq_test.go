@@ -199,12 +199,32 @@ func TestLLMQuestionsSelfMarker(t *testing.T) {
 	}
 }
 
+// A reason is trimmed and kept whole up to llmReasonRunes runes; a longer one
+// is cut to that many, the last one "…".
+func TestClipReason(t *testing.T) {
+	atCap := strings.Repeat("a", llmReasonRunes)
+	for _, c := range []struct{ in, want string }{
+		{"  一句话理由\n第二行  ", "一句话理由\n第二行"},
+		{atCap, atCap},
+		{" " + atCap + " ", atCap},
+		{atCap + "b", strings.Repeat("a", llmReasonRunes-1) + "…"},
+		{strings.Repeat("长", llmReasonRunes*2), strings.Repeat("长", llmReasonRunes-1) + "…"},
+		// the cut ends in spaces: they go before the "…"
+		{strings.Repeat("a", llmReasonRunes-4) + " \n  tail", strings.Repeat("a", llmReasonRunes-4) + "…"},
+	} {
+		got := clipReason(c.in)
+		if got != c.want || utf8.RuneCountInString(got) > llmReasonRunes {
+			t.Fatalf("clipReason(%d runes) = %d runes %q..., want %d runes", utf8.RuneCountInString(c.in), utf8.RuneCountInString(got), string([]rune(got)[:min(20, utf8.RuneCountInString(got))]), utf8.RuneCountInString(c.want))
+		}
+	}
+}
+
 func TestLLMQuestionsVerdict(t *testing.T) {
 	qs := llmqQuestions()
 	call := func(args string) llmTurn {
 		return llmTurn{ToolCalls: []llmToolCall{{Name: llmqTool, Args: []byte(args)}}}
 	}
-	long := strings.Repeat("长", 600)
+	long := strings.Repeat("长", llmReasonRunes+100)
 	cases := []struct {
 		name    string
 		turn    llmTurn
@@ -230,7 +250,9 @@ func TestLLMQuestionsVerdict(t *testing.T) {
 		{name: "unreadable answer", turn: call(`{"q1":1,"q2":"maybe"}`), scores: map[string]float64{}, missing: true},
 		{name: "empty object", turn: call(`{}`), scores: map[string]float64{}, missing: true},
 		{name: "long reason", turn: call(`{"q1":false,"q2":false,"reason":"` + long + `"}`), scores: map[string]float64{"sexual": 0, "custom/jailbreak": 0},
-			reason: strings.Repeat("长", 500)},
+			reason: strings.Repeat("长", llmReasonRunes-1) + "…"},
+		{name: "reason at the cap", turn: call(`{"q1":false,"q2":false,"reason":"` + long[:llmReasonRunes*len("长")] + `"}`), scores: map[string]float64{"sexual": 0, "custom/jailbreak": 0},
+			reason: long[:llmReasonRunes*len("长")]},
 		{name: "reason not a string", turn: call(`{"q1":false,"q2":false,"reason":{"text":"x"}}`), scores: map[string]float64{"sexual": 0, "custom/jailbreak": 0}},
 		{name: "no verdict at all", turn: llmTurn{Text: "我无法判断。"}},
 		{name: "nothing", turn: llmTurn{}},
@@ -331,7 +353,7 @@ func TestLLMQuestionsInFlow(t *testing.T) {
 		}
 		return 200, verdictCall(`{"q1":false,"q2":false,"reason":"nothing wrong"}`)
 	})
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	oc := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelOpenAI, "name": "o", "base_url": mod.srv.URL, "api_key": "k1"}))
 	lc := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelLLM, "name": "l", "base_url": llm.srv.URL, "model": "m1", "api_key": "k2"}))
 	oa := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "o", "type": AuditorOpenAI, "channel_id": oc.ID}))

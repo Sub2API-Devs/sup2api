@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestSampled(t *testing.T) {
@@ -439,20 +440,29 @@ func TestSpecValidate(t *testing.T) {
 }
 
 func TestDecodeSettings(t *testing.T) {
-	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"exempt_user_ids":["7",8,"x"],"watch_days":0}`))
+	// retention_days (0.1, retired) keeps the hits at least as long while
+	// hit_retention_days is absent (retiredKeys).
+	for raw, want := range map[string]int{`{"retention_days":30}`: 180, `{"retention_days":9999}`: 3650, `{"retention_days":"x"}`: 180,
+		`{"retention_days":400,"hit_retention_days":20}`: 20} {
+		if s, _ := DecodeSettings([]byte(raw)); s.HitRetentionDays != want {
+			t.Errorf("%s: hit_retention_days = %d, want %d", raw, s.HitRetentionDays, want)
+		}
+	}
+	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"watch_days":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
-		strings.Join(s.AllowlistUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
+		s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch || s.setup01 {
 		t.Fatalf("settings = %+v", s)
 	}
-	// exempt_user_ids is the retired name of the allowlist; a missing
-	// record_pass_input_message is on.
+	// A missing record_pass_input_message is on.
 	c := compile(s)
-	if !c.enabled || !c.allowlisted(7) || !c.allowlisted(8) || c.allowlisted(9) || c.blocklisted(7) || c.defaultLevel != LevelObserve ||
-		c.retention[ResultPass] != 3*24*time.Hour || c.legacyReady || !s.RecordPassInputMessage {
+	if !c.enabled || c.defaultLevel != LevelObserve || c.retention[ResultPass] != 3*24*time.Hour || !s.RecordPassInputMessage {
 		t.Fatalf("config = %+v", c)
+	}
+	if s, _ := DecodeSettings([]byte(`{"base_url":"https://x","model":"m","api_key":"k"}`)); !s.setup01 {
+		t.Fatal("a 0.1 setup is not noticed")
 	}
 	if s, _ := DecodeSettings([]byte(`{"record_pass_input_message":false}`)); s.RecordPassInputMessage {
 		t.Fatal("record_pass_input_message false ignored")
@@ -484,8 +494,8 @@ func TestDecodeSettings(t *testing.T) {
 }
 
 // verdict_cache_days is the cache TTL, 0 = off (P11); settings saved before
-// 0.8.0 only have cache_ttl_seconds, which is read until the new key is
-// saved.
+// 0.8.0 only have cache_ttl_seconds, which is read (retiredKeys) until the
+// new key is saved.
 func TestVerdictCacheTTLSettings(t *testing.T) {
 	day := 24 * time.Hour
 	for _, tc := range []struct {
@@ -506,9 +516,11 @@ func TestVerdictCacheTTLSettings(t *testing.T) {
 		{`{"verdict_cache_days":5,"cache_ttl_seconds":0}`, 5},
 		{`{"verdict_cache_days":5,"cache_ttl_seconds":86400}`, 5},
 		{`{"verdict_cache_days":0,"cache_ttl_seconds":86400}`, 0},
-		// Values of the wrong type are ignored like everywhere else.
-		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 2},
+		// Values of the wrong type are ignored like everywhere else; the new
+		// key, once there, wins whatever it holds.
+		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 7},
 		{`{"cache_ttl_seconds":"x"}`, 7},
+		{`{"cache_ttl_seconds":9999999}`, 7},
 	} {
 		s, err := DecodeSettings([]byte(tc.raw))
 		if err != nil {
@@ -516,6 +528,38 @@ func TestVerdictCacheTTLSettings(t *testing.T) {
 		}
 		if c := compile(s); s.VerdictCacheDays != tc.days || c.cacheTTL != time.Duration(tc.days)*day {
 			t.Errorf("%s: days = %d, ttl = %s, want %d days", tc.raw, s.VerdictCacheDays, c.cacheTTL, tc.days)
+		}
+	}
+}
+
+// ban_window_seconds (0.11.0) replaces ban_window_hours, which is read
+// (retiredKeys) until the new key is saved; the ban reason names the window
+// in its largest whole unit.
+func TestBanWindowSettings(t *testing.T) {
+	for _, tc := range []struct {
+		raw string
+		sec int
+	}{
+		{`{}`, 86400},
+		{`{"ban_window_seconds":90}`, 90},
+		{`{"ban_window_seconds":0}`, 1},
+		{`{"ban_window_seconds":99999999}`, 31536000},
+		{`{"ban_window_hours":2}`, 7200},
+		{`{"ban_window_hours":"x"}`, 86400},
+		{`{"ban_window_hours":2,"ban_window_seconds":600}`, 600},
+	} {
+		s, err := DecodeSettings([]byte(tc.raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := compile(s); s.BanWindowSeconds != tc.sec || c.banWindow != time.Duration(tc.sec)*time.Second {
+			t.Errorf("%s: %d s, want %d", tc.raw, s.BanWindowSeconds, tc.sec)
+		}
+	}
+	for sec, want := range map[int]string{86400: "3 violations within 24h / 24 小时内违规 3 次", 600: "3 violations within 10m / 10 分钟内违规 3 次",
+		90: "3 violations within 90s / 90 秒内违规 3 次"} {
+		if got := violationsReason(3, sec); got != want {
+			t.Errorf("%d s: %q", sec, got)
 		}
 	}
 }
@@ -543,11 +587,20 @@ func TestAuditorJudge(t *testing.T) {
 		t.Fatal("threshold 0 accepted")
 	}
 	j, err := compileAuditor(2, "j", AuditorTypeSafe, 1, AuditorConfig{}, nil, &def)
-	if err != nil || len(j.order) != 10 || j.questions.RulesVersion != RulesVersionZH || !j.images {
+	if err != nil || len(j.order) != 9 || j.questions.RulesVersion != RulesVersionZH || !j.images {
 		t.Fatalf("jev default: %+v %v", j, err)
 	}
-	if j.labels["custom/jailbreak"] != "越狱与恶意预填充" || j.thresholds["sexual"] != 0.90 {
+	if j.labels["custom/jailbreak"] != "越狱与恶意预填充" || j.thresholds["sexual"] != 0.8 {
 		t.Fatal("jev rows")
+	}
+	// The built-in set is the production table of 2026-11-13 (0.11.2).
+	var rows []string
+	for _, c := range j.order {
+		rows = append(rows, fmt.Sprintf("%s %s %v", c, j.labels[c], j.thresholds[c]))
+	}
+	if got, want := strings.Join(rows, "; "), "illicit  0.75; illicit/violent  0.75; self-harm/instructions  0.75; violence/graphic  0.8; sexual/minors  0.75; sexual  0.8; "+
+		"custom/jailbreak 越狱与恶意预填充 0.85; custom/prompt-extraction 套取系统提示词 0.75; custom/distillation 批量蒸馏 0.75"; got != want {
+		t.Fatalf("built-in rows = %s", got)
 	}
 	custom := def
 	custom.Items = append(custom.Items[:1:1], JevQuestion{Category: "custom/x", Label: "X", Question: "q?", Threshold: 0.5})
@@ -559,7 +612,7 @@ func TestAuditorJudge(t *testing.T) {
 	// is a bad response, thresholds are refused. It sends images unless its
 	// image switch is off.
 	q, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, AuditorConfig{}, nil, &def)
-	if err != nil || len(q.order) != 10 || q.questions.RulesVersion != RulesVersionZH || !q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
+	if err != nil || len(q.order) != 9 || q.questions.RulesVersion != RulesVersionZH || !q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
 		t.Fatalf("llm_questions default: %+v %v", q, err)
 	}
 	answers := map[string]float64{}
@@ -1160,6 +1213,11 @@ func TestFingerprint(t *testing.T) {
 	if fingerprint(spec, ScopeInput, auditors, channels, def) == fingerprint(spec, ScopeTools, auditors, channels, def) {
 		t.Error("scopes input and tools share a fingerprint")
 	}
+	// A flow without a scope (NULL) runs and hashes as input since 0.11.1, not as all.
+	if unset := fingerprint(spec, auditScope(nil), auditors, channels, def); unset != fingerprint(spec, ScopeInput, auditors, channels, def) ||
+		unset == fingerprint(spec, ScopeAll, auditors, channels, def) {
+		t.Error("a flow without a scope does not hash as input")
+	}
 	// The default set only matters to the auditors that use it.
 	own := map[int64]storedAuditor{1: auditors[1], 2: {typ: AuditorTypeSafe, channel: 2, config: []byte(`{"questions": {}}`)}}
 	if fingerprint(spec, ScopeAll, own, channels, def) != fingerprint(spec, ScopeAll, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
@@ -1194,6 +1252,11 @@ func TestParseVerdict(t *testing.T) {
 	}
 	if _, err := parseVerdict(`{"verdict":"maybe"}`, known); err == nil {
 		t.Fatal("bad verdict accepted")
+	}
+	// The reason is clipped like the question-table auditor's (clipReason).
+	long := strings.Repeat("长", llmReasonRunes+100)
+	if v, err := parseVerdict(`{"verdict":"pass","reason":"`+long+`"}`, known); err != nil || v.Reason != strings.Repeat("长", llmReasonRunes-1)+"…" {
+		t.Fatalf("reason of %d runes, %v", utf8.RuneCountInString(v.Reason), err)
 	}
 }
 

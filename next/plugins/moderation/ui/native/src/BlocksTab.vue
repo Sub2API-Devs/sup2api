@@ -10,10 +10,12 @@ import {
   SFormModal,
   SHint,
   SInput,
+  SLink,
   SRowAction,
   STable,
   STableColumnSettings,
   useTableColumns,
+  useViewport,
   type TableColumn
 } from '@sub2api/ui'
 import UserRef from './UserRef.vue'
@@ -28,11 +30,13 @@ import { useAsync } from './useAsync'
 // is picked with the host's EntityPicker). Actions need the manage
 // permission. A moderator or an allowlisted user cannot be banned: the
 // backend's field error (user_id/staff, user_id/allowlisted) shows at the
-// user. Each table cell keeps to one line.
+// user. Each table cell keeps to one line; a reason opens its row (an
+// expanded row with the whole reason), a phone card shows all of it.
 const host = useModHost()
 const t = host.t
 const { EntityPicker } = host.components
 const manage = computed(() => canManage())
+const { compact } = useViewport()
 
 const { data, loading, error, reload } = useAsync(fetchBlocks, () => t('blocks.loadFailed'))
 const rows = computed(() => data.value || [])
@@ -119,12 +123,33 @@ async function submit() {
     <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
     <SCard :padded="false">
-      <STable :columns="columnState.visibleColumns.value" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')" dense>
+      <STable
+        :columns="columnState.visibleColumns.value"
+        :rows="rows"
+        :loading="loading"
+        row-key="user_id"
+        :empty-text="t('blocks.empty')"
+        dense
+        :expandable="!compact"
+        :expand-toggle="false"
+      >
         <template #cell-user_id="{ row }"><UserRef :user-id="row.user_id" /></template>
         <template #cell-source="{ row }">
           <SBadge :tone="row.source === 'manual' ? 'accent' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
         </template>
-        <template #cell-reason="{ row }"><span :title="row.reason || undefined">{{ row.reason || '—' }}</span></template>
+        <template #cell-reason="{ row, layout, expanded, toggleExpand }">
+          <SLink
+            v-if="row.reason && layout === 'table'"
+            as="button"
+            class="mod-reason-toggle"
+            :aria-expanded="expanded"
+            :title="t(expanded ? 'blocks.reasonHide' : 'blocks.reasonShow')"
+            @click="toggleExpand()"
+            >{{ row.reason }}</SLink
+          >
+          <span v-else class="mod-prewrap">{{ row.reason || '—' }}</span>
+        </template>
+        <template #expand="{ row }"><p class="mod-prewrap mod-body-text">{{ row.reason }}</p></template>
         <template #cell-violations="{ row }"><span class="mod-num">{{ num(row.violations) }}</span></template>
         <template #cell-created_at="{ row }"><SDateTime :value="row.created_at" mode="time" /></template>
         <template #cell-expires_at="{ row }">

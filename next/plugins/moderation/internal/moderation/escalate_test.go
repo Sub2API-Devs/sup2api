@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -42,7 +43,7 @@ type escalation struct {
 
 func startEscalation(t *testing.T, settings map[string]any) *escalation {
 	ahead := &atomic.Int64{}
-	p, h, fh := startDB(t, nil, settings, withClock(ahead), noRefreshTicks)
+	p, h, fh := startDB(t, settings, withClock(ahead), noRefreshTicks)
 	return &escalation{t: t, p: p, h: h, fh: fh, ahead: ahead}
 }
 
@@ -72,10 +73,14 @@ func (e *escalation) entry(uid int64) *Watch {
 // history lists the actions of uid's watch history, oldest first.
 func (e *escalation) history(uid int64) []WatchEvent {
 	e.t.Helper()
-	evs := decodeData[[]WatchEvent](e.t, e.h.Do("GET", fmt.Sprintf("/watchlist/%d/events", uid), nil, nil))
-	for i, j := 0, len(evs)-1; i < j; i, j = i+1, j-1 {
-		evs[i], evs[j] = evs[j], evs[i]
-	}
+	return historyOf(e.t, e.h, uid)
+}
+
+// historyOf is uid's watch history, oldest first.
+func historyOf(t *testing.T, h *pluginsdktest.Harness, uid int64) []WatchEvent {
+	t.Helper()
+	evs := decodeData[[]WatchEvent](t, h.Do("GET", fmt.Sprintf("/watchlist/%d/events", uid), nil, nil))
+	slices.Reverse(evs)
 	return evs
 }
 
@@ -138,9 +143,10 @@ func TestEscalateNewUserAndWindow(t *testing.T) {
 // Nobody is escalated with N = 0 (the default), nor the users of the lists
 // (locked entries), nor moderators; the ban wins over the escalation.
 func TestEscalateSkips(t *testing.T) {
-	settings := map[string]any{"mode": ModeObserve, "escalate_window_seconds": 3600,
-		"allowlist_user_ids": []string{"23"}, "blocklist_user_ids": []string{"24"}}
+	settings := map[string]any{"mode": ModeObserve, "escalate_window_seconds": 3600}
 	e := startEscalation(t, settings)
+	lockUser(t, e.h, 23, LockAllowlist)
+	lockUser(t, e.h, 24, LockBlocklist)
 	for i := 0; i < 3; i++ {
 		e.violate(27, 0)
 	}
@@ -149,9 +155,6 @@ func TestEscalateSkips(t *testing.T) {
 	}
 	settings["escalate_violations"] = 2
 	e.configure(settings)
-	waitFor(t, "locked entries", func() bool {
-		return e.p.watchLevel(23) == LevelObserve && e.p.watchLevel(24) == LevelEnforce
-	})
 	e.fh.Authz = func(uid int64, _ string) bool { return uid == 25 }
 	for _, uid := range []int64{23, 24, 25} {
 		for i := 0; i < 3; i++ {
@@ -204,20 +207,17 @@ func TestEscalateAfterManualDecision(t *testing.T) {
 	}
 }
 
-// A list change is a manual decision too: violations counted while the user
-// was locked do not escalate them after an unlock.
+// An unlock is a manual decision too: violations counted while the user was
+// locked do not escalate them after it.
 func TestEscalateAfterUnlock(t *testing.T) {
-	base := map[string]any{"mode": ModeObserve, "escalate_violations": 2, "escalate_window_seconds": 7200}
-	locked := map[string]any{"blocklist_user_ids": []string{"29"}}
-	for k, v := range base {
-		locked[k] = v
+	e := startEscalation(t, map[string]any{"mode": ModeObserve, "escalate_violations": 2, "escalate_window_seconds": 7200})
+	lockUser(t, e.h, 29, LockBlocklist)
+	e.violate(29, 0)
+	e.violate(29, 0)
+	decodeData[map[string]any](t, e.h.Do("DELETE", "/watchlist/29/lock", nil, nil))
+	if w := e.entry(29); w != nil {
+		t.Fatalf("unlocked entry = %+v", w)
 	}
-	e := startEscalation(t, locked)
-	waitFor(t, "locked entry", func() bool { w := e.entry(29); return w != nil && w.Locked })
-	e.violate(29, 0)
-	e.violate(29, 0)
-	e.configure(base)
-	waitFor(t, "unlocked", func() bool { return e.entry(29) == nil })
 	e.ahead.Add(int64(time.Hour)) // after the unlock (the database clock)
 	e.violate(29, 0)
 	if w := e.entry(29); w == nil || w.Level != LevelObserve {
