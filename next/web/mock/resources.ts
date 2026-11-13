@@ -169,9 +169,9 @@ function roleOut(r: MockRole) {
 on('GET', '/roles', (req) => paginate(roles.map(roleOut), req.query))
 on('POST', '/roles', (req) => {
   const b = req.body || {}
-  if (!/^[a-z][a-z0-9_]{1,63}$/.test(b.key || '')) return invalid('key', 'invalid role key')
-  if (roles.some((r) => r.key === b.key)) return fail(409, 'conflict', 'role key already exists')
+  if (!/^[a-z][a-z0-9_]{1,49}$/.test(b.key || '')) return invalid('key', 'invalid role key')
   if (BUILTIN_DEFAULTS[b.key] || b.key === 'super_admin') return invalid('key', 'key is reserved for a built-in role', 'reserved')
+  if (roles.some((r) => r.key === b.key)) return fail(409, 'conflict', 'role key already exists')
   const r: MockRole = { id: nextId(), key: b.key, name: b.name || L(b.key, b.key), description: b.description || '', builtin: false, superuser: false, permission_keys: [], assignable_role_keys: [], assign_custom: false, created_at: now(), updated_at: now() }
   roles.push(r)
   return roleOut(r)
@@ -217,9 +217,9 @@ on('PUT', '/roles/:id/assignable', (req) => {
   r.updated_at = now()
   return roleOut(r)
 })
-// The caller's managed roles (CONTRACTS §43.6): the mock signs in as the super admin, so every role but super_admin.
-on('GET', '/me/assignable-roles', () =>
-  roles
+// The caller's managed roles (CONTRACTS §43.6): every role but super_admin for the super admin, none for the other mock identities.
+on('GET', '/me/assignable-roles', (req) =>
+  (caller(req).superuser ? roles : [])
     .filter((r) => !r.superuser)
     .sort((a, b) => Number(b.builtin) - Number(a.builtin))
     .map((r) => ({ key: r.key, name: r.name, builtin: r.builtin, grantable: true, missing: [], missing_assignable: [], missing_assign_custom: false }))
