@@ -3,13 +3,18 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 )
 
 // TestAccountModelsAndLimits covers the core account attributes of CONTRACTS
@@ -245,5 +250,29 @@ func TestFetchModels(t *testing.T) {
 	if code, _ = e.do("POST", fmt.Sprintf("/accounts/%d/models/fetch", id), map[string]any{
 		"credentials": map[string]any{"api_key": "sk-wrong-key-123"}}); code != 503 {
 		t.Fatalf("account fetch with wrong key: %d", code)
+	}
+}
+
+// A dial the private-address guard refused does not echo the address the
+// proxy name resolved to (M3): models fetch, tests and quota probes all render
+// transport failures through transportError.
+func TestTransportErrorHidesTheRefusedAddress(t *testing.T) {
+	proxyURL, _ := url.Parse("http://localhost:9/")
+	hc := &http.Client{Transport: &http.Transport{
+		Proxy:       http.ProxyURL(proxyURL),
+		DialContext: netguard.Dialer(time.Second, false).DialContext,
+	}}
+	u, _ := url.Parse("https://upstream.example.com/v1/models?key=secret")
+	req, _ := http.NewRequest(http.MethodGet, u.String(), nil)
+	_, err := hc.Do(req)
+	if !errors.Is(err, netguard.ErrPrivate) {
+		t.Fatalf("dial not refused: %v", err)
+	}
+	got := transportError(upstreamAddr(u), err)
+	if want := "Get https://upstream.example.com/v1/models: " + netguard.ErrPrivate.Error(); got != want {
+		t.Fatalf("transportError = %q, want %q", got, want)
+	}
+	if got = transportError("", errors.New("boom")); got != "boom" {
+		t.Fatalf("plain error = %q", got)
 	}
 }

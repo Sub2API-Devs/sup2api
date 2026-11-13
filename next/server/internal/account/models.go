@@ -213,7 +213,7 @@ func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, a
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, core.ErrUnavailable.WithMessage(t(ctx, "upstream request failed: ", "上游请求失败：") + err.Error())
+		return nil, core.ErrUnavailable.WithMessage(t(ctx, "upstream request failed: ", "上游请求失败：") + transportError(upstreamAddr(u), err))
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxModelsBody))
