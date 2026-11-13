@@ -5,6 +5,7 @@ import { SEmpty, SGrid, SHint, SInput, SLink, SIcon, SSpinner } from '@sub2api/u
 import type { AccountType } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useAccountCaps } from '@/composables/useAccountCaps'
 import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
 import TrustBadge from '@/views/plugins/parts/TrustBadge.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
@@ -17,6 +18,11 @@ import { creationChoices } from './accountTypeChoices'
 const emit = defineEmits<{ (e: 'pick', t: AccountType): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
+const caps = useAccountCaps()
+/** A type the caller cannot create is shown greyed with the permission it needs. */
+function pick(at: AccountType) {
+  if (caps.creatable(at)) emit('pick', at)
+}
 const { grouped, loaded, load } = useAccountTypes()
 load(true)
 
@@ -50,11 +56,13 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
         :key="typeKey(at.plugin_key, at.type)"
         role="button"
         tabindex="0"
-        class="card flex cursor-pointer flex-col gap-2 p-3 text-left transition hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700"
+        class="card flex flex-col gap-2 p-3 text-left transition"
+        :class="caps.creatable(at) ? 'cursor-pointer hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700' : 'cursor-not-allowed opacity-60'"
+        :aria-disabled="!caps.creatable(at)"
         :data-type="typeKey(at.plugin_key, at.type)"
-        @click="emit('pick', at)"
-        @keydown.enter.self.prevent="emit('pick', at)"
-        @keydown.space.self.prevent="emit('pick', at)"
+        @click="pick(at)"
+        @keydown.enter.self.prevent="pick(at)"
+        @keydown.space.self.prevent="pick(at)"
       >
         <div class="flex items-start gap-2">
           <PluginAvatar :name="lt(at.plugin_name) || at.plugin_key" :plugin-key="at.plugin_key" :icon="at.icon" :asset-base="at.asset_base" size="md" />
@@ -71,6 +79,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
         <AccountTypePlatforms :items="at.platforms" />
 
         <SHint v-if="at.description" size="xs" class="line-clamp-2">{{ lt(at.description) }}</SHint>
+        <SHint v-if="!caps.creatable(at)" size="xs" tone="warning" data-testid="type-needs-relay">{{ t('accounts.typeNeedsRelay') }}</SHint>
 
         <div class="mt-auto border-t border-line pt-2">
           <SLink

@@ -24,6 +24,14 @@ export const ACCOUNT_KEYS = {
   reveal: ['account:credential:view', 'account:own:credential:view']
 } as const satisfies Record<string, readonly [string, string]>
 
+/** Single keys that widen what an own-level caller may set on an account (CONTRACTS §21). */
+export const ACCOUNT_FIELD_KEYS = {
+  relay: 'account:relay',
+  groupBind: 'account:group:bind',
+  groupManage: 'group:manage',
+  settingsCustom: 'account:settings:custom'
+} as const
+
 export const PROXY_KEYS = {
   read: ['proxy:read', 'proxy:own:read'],
   manage: ['proxy:manage', 'proxy:own:manage']

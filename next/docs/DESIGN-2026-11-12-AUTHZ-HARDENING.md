@@ -666,3 +666,11 @@
 - 影响对象：控制台用户。权限被他人改动后，下一个带更大版本头的响应约 1 秒后刷新菜单与按钮；失去当前页权限时离开该页。跨域部署需服务端 `Access-Control-Expose-Headers: X-Authz-Version`，否则头读不到、只剩 403 触发。
 - 测试：`http.spec`（头与 403 钩子）、`authzWatch.spec`（版本变大只刷新一次、变小不刷新、403 节流、降权后当前页跳到 /forbidden）。
 - 回滚：revert 提交即可，纯前端。
+
+## T75 账号表单字段级权限 useAccountCaps（G1、G2、W5-B3、W5-B4 前端）
+
+- 改动：新增 `composables/useAccountCaps(editing)`，`ACCOUNT_FIELD_KEYS`（relay、groupBind、groupManage、settingsCustom）放在 `useOwnership.ts`。scope 取 `account:update`（编辑）或 `account:create`（新建）的 all/own 级；`bindGroups = all || group:manage || account:group:bind`、`relay = all || account:relay`（与后端 `checkOwnChange` 只对 own 级检查一致）、`proxyByURL = proxy:manage || proxy:own:manage`、`customSettings = account:settings:custom`；`creatable(t) = !t.custom_upstream || relay` 只在这里计算。账号编辑器：无 bindGroups 时分组只读并提示所需权限；保存（新建与编辑）只在 `group_ids` 与原值（新建为空）不同时带上；无 proxyByURL 时不出现“粘贴代理串”；认证方式里不可建的类型置灰；类型有 `guarded_settings` 且无 customSettings 时提示只能用官方值；新建时拉取模型同样要求 creatable。批量编辑：无 bindGroups 时分组项禁用并提示。类型选择器：不可建的类型置灰、不可选并提示需要 `account:relay`。`AccountType` 类型补 `guarded_settings`、`custom_upstream`。
+- 偏离：spec 写的 `useAccountCaps(account?)` 改为 `useAccountCaps(editing)`（只需要“新建还是编辑”，批量编辑没有单个账号）；另加 `customSettings` 只用于提示，受限设置的表单改写仍由服务端完成。
+- 影响对象：own 级账号用户（供应商）。原来提交后才 403 的分组、粘贴代理、relay 类型，现在在表单上直接不可操作。编辑账号不再总是带 `group_ids`：没改分组的保存不再触发分组权限检查。
+- 测试：`useAccountCaps.spec`、`AccountEditor.spec`（无 bind 权限分组只读不提交、group_ids 没变不带、无代理管理权限无粘贴 URL、own 且无 relay 时 custom 认证方式置灰、受限设置提示）、`AccountTypePicker.spec`、`AccountBulkDialogs.spec`。
+- 回滚：revert 提交即可，纯前端。

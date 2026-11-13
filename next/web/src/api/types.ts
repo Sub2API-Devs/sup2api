@@ -382,6 +382,10 @@ export interface AccountType {
   auth_method_label?: LText
   form: AccountFormRef
   sensitive_fields: string[]
+  /** Settings fields restricted to official values without account:settings:custom (CONTRACTS §21.3). */
+  guarded_settings?: { field: string; allowed: string[] }[]
+  /** An account of the type can be pointed at any upstream: an own-level caller needs account:relay (§21.3.1). */
+  custom_upstream?: boolean
   /** Plugin suggestions prefilled into a new account's models / model_mapping (CONTRACTS §41). */
   default_models?: string[]
   default_models_by_subscription?: Record<string, string[]>
