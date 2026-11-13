@@ -296,3 +296,52 @@ func TestSuperAdminKeyOnItsOwnAccountNeedsAProof(t *testing.T) {
 		t.Fatalf("session: %d %v", code, out)
 	}
 }
+
+// The matrix of §80.2: a session, a key with the permission and a key
+// without it, each with and without a proof, on a step-up route.
+func TestStepUpMatrix(t *testing.T) {
+	t.Parallel()
+	k := newKeyEnv(t)
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	withPerm := k.createKey(t, login.User.ID, adminPassword, "user:read", "user:delete").Key
+	without := k.createKey(t, login.User.ID, adminPassword, "user:read").Key
+	n := 0
+	target := func() string {
+		n++
+		return "/users/" + strconv.FormatInt(mustCreateUser(t, k.s, "m"+strconv.Itoa(n)+"@example.com"), 10)
+	}
+	verify := func(token, path string) string {
+		return k.proof(t, token, core.StepUpUserDelete, "DELETE", path, map[string]any{"method": "password", "password": adminPassword})
+	}
+	for _, tc := range []struct {
+		name, token string
+		proof       bool
+		code        int
+		err         string
+	}{
+		{"session, no proof", login.AccessToken, false, 403, "verification_required"},
+		{"session, proof", login.AccessToken, true, 204, ""},
+		{"key with the permission, no proof", withPerm, false, 403, "verification_required"},
+		{"key with the permission, proof", withPerm, true, 204, ""},
+		{"key without the permission, no proof", without, false, 403, "permission_denied"},
+		{"key without the permission, proof", without, true, 403, "permission_denied"},
+	} {
+		path, proof := target(), ""
+		if tc.proof {
+			proof = verify(tc.token, path)
+		}
+		code, out := k.callProof(tc.token, proof, "DELETE", path, nil)
+		if code != tc.code || (tc.err != "" && errCode(out) != tc.err) {
+			t.Errorf("%s: %d %v, want %d %s", tc.name, code, out, tc.code, tc.err)
+		}
+	}
+	// Cross-subject: a session's proof does not work through a key, nor one
+	// for another target.
+	path := target()
+	if code, out := k.callProof(withPerm, verify(login.AccessToken, path), "DELETE", path, nil); code != 403 || errCode(out) != "verification_required" {
+		t.Errorf("session proof through a key: %d %v", code, out)
+	}
+	if code, out := k.callProof(withPerm, verify(withPerm, target()), "DELETE", path, nil); code != 403 || errCode(out) != "verification_required" {
+		t.Errorf("proof for another user: %d %v", code, out)
+	}
+}

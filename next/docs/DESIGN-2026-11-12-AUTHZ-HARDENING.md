@@ -657,3 +657,61 @@
 - 测试：authz `TestAssignCustomExcludesOwnRole`（lead 对自己与其他 lead 403、对 staff 持有者与普通用户放行、不能分配 lead、不能建带 `assign_custom` 的角色、不能把自己列进清单、对另一个通配角色的持有者 403；超管照常；超管把 lead 按名字列进 lead 的清单后，lead 管理自己与其他 lead 并可分配 lead）；`TestSetRoleAssignable` 的展开结果不再含角色自己。
 - 影响对象：带 `assign_custom` 的自定义角色的持有者，经管理接口作用于自己或同角色的其他持有者、分配该角色、交出 `assign_custom` 由成功变为 403。内置 admin（`assign_custom`，不持有自定义角色）不受影响；admin 同时持有自定义角色时，该角色同样不被它的通配覆盖。生产库没有自定义角色，无影响。前端 `GET /me/assignable-roles` 随之不再列出自己的角色。无迁移。CONTRACTS §43.6、§15.7 角色对象、FU2 段同步。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+# 期 4
+
+## S1–S4 访问密钥按权限可配置 + 高危操作二次验证（产品性改动，设计：DESIGN-access-key-stepup.md 第 8 节定稿）
+
+- 改动：
+  - **S1 二次验证**（`core/stepup.go`、`iam/stepup.go`、`httpapi.Router.StepUp`）。`core.StepUpVerifier` 只在 iam 实现一处。三个接口，会话与访问密钥都能调用：
+    - `GET /me/verify/methods?scope=`
+    - `POST /me/verify/begin {scope}`：通行密钥断言挑战，复用登录的 WebAuthn 与 auth_flows。
+    - `POST /me/verify {scope, context, method, password?, code?, flow_token?, credential?}`：签发 proof。
+
+    proof 的属性：
+    - 5 分钟有效，只能用一次。
+    - 绑定用户、本会话（JWT `fam`）或访问密钥 id、scope、操作上下文（请求的 `METHOD path`）。
+    - 存在 `auth_flows`（purpose `step_up_proof`），用 `DELETE … RETURNING` 原子消费。各节点共用，不依赖 Redis（同 §79.1）。
+    - 出示给不匹配的 scope、操作或主体时也一并作废。
+
+    策略（§8.1）：配了通行密钥或 2FA 时只接受这两种；都没配才接受密码。超管移交（`superadmin.transfer`）和改自己的登录密码（`self.password.change`）要密码加一种第二因素。访问密钥不能用通行密钥。失败沿用登录限流与 2FA 锁定。审计 `user.security_verify`。`Router.StepUp(scope)` 在权限检查之后从 `X-Verify-Proof` 消费 proof，失败返回 403 `verification_required`，`details` 含 `scope`、`context`、`methods`、`password_required`。
+
+    `SelfConfirmation`/`confirmSelf`、`withConfirmedFactors` 删除，下列接口改为消费 proof：
+    - `PUT /me/password`：不再收 `old_password`。处理函数先校验新密码，再消费 proof。
+    - `/me/two-factor/disable`、`/me/two-factor/backup-codes`：不再收 password/code。
+    - `/me/passkeys/begin`：不再收 password。
+    - `DELETE /me/passkeys/:id`、`DELETE /users/:id/security`（含本人）、`DELETE /users/:id`、`POST /system/super-admin/transfer`：不再收 current_password/code。
+    - `PATCH /users/:id`：改自己的密码或邮箱时分别要 `self.password.change`、`self.email.change`；改他人密码要 `user.password.reset`。
+
+    新增 `PATCH /me/passkeys/:id {name}` 改名。
+  - **S2 self 虚拟权限**（`authz/self.go`）：`self:profile`、`self:security`、`self:plugin_ui`。每个有效用户在 `loadPermissionSet` 里隐式持有，并入只在这一处；没有角色的有效用户也持有。它们不进 permissions 表、`role_permissions` 和角色编辑器，在访问密钥选择器里排在最前。`Router.Self(m, p, perm)` 就是 `Perm`。`Router.Authed` 删除，只允许会话的路由写成 `SessionOnly().Handle`，只剩 `/me/access-keys*`、`/me/sessions*`、`/auth/logout`。
+  - **S3 删除 sessionOnly 与 KeyAllowed**：访问密钥可以选用户持有的任何权限，仍是“用户实时权限 ∩ 密钥权限”。目录新增 `stepUp` 展示标记（`GET /permissions` 返回 `step_up`，取代 `session_only`），不变式为 stepUp ⇒ sensitive。下列高危路由挂 StepUp：
+    - 明文回显 3 个，不再只允许会话。
+    - `/plugins/upload`、`/plugins/install-from-market`（`plugin.install`）。
+    - 同意页 consent（`plugin.grant`）。
+    - 发布者写操作（`publisher.manage`）。
+    - 核心升级的 execute/recover/import（`system.update`）。
+
+    UserGuard 的 `ActOnIdentity` 遇到超管目标且经访问密钥时，不再 403 `session_only`，改为需要 proof：本请求已消费的 proof，或 scope 为 `superadmin.identity` 的 proof。authz 经 `UseStepUp` 取得 iam 的验证器，没有时拒绝。
+  - **S4 插件权限进入访问密钥**：选择器列出用户持有且 active 的插件模块。插件代理接受访问密钥，复用 `Authenticate` 和按密钥收窄的 `CanAny`；不向插件传“经由访问密钥”。`/plugins/:key/settings` 改为 Self（`self:plugin_ui`），处理函数里的 CanAny 不变。
+- 测试：
+  - iam：
+    - `TestStepUpMethodsPolicy`、`TestVerifyStepUpRefusesThePasswordWithTwoFactor`：配了 2FA 后密码被拒；错码计入锁定；超管移交与改密码类 scope 缺密码被拒。
+    - `TestConsumeStepUpBindings`：重放、过期、跨 scope、跨操作、跨会话、跨密钥、跨用户都被拒。
+    - `TestStepUpWithPasskey`、`TestRenamePasskey`。
+    - `TestStepUpMatrix`：会话、带权限密钥、不带权限密钥，各分有无 proof。
+    - `TestSuperAdminKeyOnItsOwnAccountNeedsAProof`、`TestSelfPermissions`（密钥不能管理密钥、会话或登出）。
+    - `TestFormerSessionOnlyPermissionsInAccessKeys`、`TestTransferSuperAdminHTTP`（密码加第二因素）。
+  - httpapi：`TestStepUp`、`TestSelf`。
+  - authz：flag invariants。
+  - plugin/routes、plugin/api：密钥经代理访问、经 settings 访问。
+  - 其他模块测试嵌 `testutil.StepUpPassed`。
+- 影响对象：
+  - 控制台（S5 待做）：上面改为 proof 的接口在前端接入 StepUpDialog 之前一律 403 `verification_required`，不能和 S5 分开发布。会话调用这些接口，每次都要先完成二次验证。
+  - 访问密钥：勾了对应权限后，可以调用原先只允许会话的权限与路由，高危的每次还要 proof（只能用 2FA 或密码）。只有 `self:*` 也勾上，访问密钥才能调用自助接口。插件路由按插件权限放行。
+  - 插件：经访问密钥调用时，插件拿到的仍是用户 id；插件内部按用户 id 问宿主的权限判断不受密钥收窄（设计接受，核心侧审计）。
+- 已知与接受：
+  - proof 绑定的是 URL，不含请求体：超管移交的 `target_user_id` 不在绑定内（同主体、一次性、5 分钟）。
+  - 路由级 proof 在处理函数之前消费，处理函数随后因请求体校验失败时 proof 也已用掉；`PUT /me/password` 已改为先校验。
+  - 超管密钥里已被禁用的插件权限，`Restrict` 仍然保留（超管 `Has` 恒真），与核心已删除的权限相同，属于此前就有的行为。
+- 回滚：revert S1–S4 及其 review fixes 的提交即可。无迁移；`auth_flows` 里残留的 `step_up_*` 行 5 分钟后过期，下次建流程时清除。已存的访问密钥里含原 sessionOnly 权限或插件权限的，回滚后重新按 KeyAllowed 丢弃。
