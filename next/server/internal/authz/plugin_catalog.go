@@ -10,8 +10,14 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// SyncPlugin implements core.PermissionCatalog. New permissions are inserted
-// with status active; existing ones keep their status and role grants.
+// runningPluginStatuses are the plugins.status values (install.StatusEnabled,
+// install.StatusUpgrading) under which a plugin serves traffic; a test keeps
+// the list in step with the install package.
+const runningPluginStatuses = `'enabled','upgrading'`
+
+// SyncPlugin implements core.PermissionCatalog. A new permission follows the
+// plugin: active while the plugin runs, disabled otherwise (SetPluginActive
+// turns it on at enable). Existing ones keep their status and role grants.
 func (s *Service) SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []core.PermissionDef, grantNewToRoleKeys []string) error {
 	if pluginKey == "" {
 		return core.ErrInvalidArgument.WithMessage("plugin key is required")
@@ -46,7 +52,9 @@ func (s *Service) SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, d
 		var inserted bool
 		err := tx.QueryRow(ctx, `
 INSERT INTO permissions (key, module, label, description, source, plugin_key, sensitive, status, sort)
-VALUES ($1, $2, $3, $4, 'plugin', $5, $6, 'active', $7)
+VALUES ($1, $2, $3, $4, 'plugin', $5::text, $6,
+    CASE WHEN EXISTS (SELECT 1 FROM plugins WHERE key = $5::text AND status IN (`+runningPluginStatuses+`))
+         THEN 'active' ELSE 'disabled' END, $7)
 ON CONFLICT (key) DO UPDATE SET module = EXCLUDED.module, label = EXCLUDED.label,
     description = EXCLUDED.description, sensitive = EXCLUDED.sensitive, sort = EXCLUDED.sort
     WHERE permissions.plugin_key = EXCLUDED.plugin_key

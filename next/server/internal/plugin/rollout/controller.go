@@ -595,6 +595,11 @@ func (c *Controller) finishFailed(ctx context.Context, r *rolloutRow, phase, msg
 		}
 		ok = true
 		if r.action == "upgrade" {
+			// The permission catalog is left alone: keys the target version
+			// registered at consent stay (active, the plugin keeps running)
+			// until the next activation syncs the catalog in commit. Nothing
+			// of the running version checks them, and role grants chosen at
+			// consent survive a retry.
 			_, err = tx.Exec(ctx, `UPDATE plugins SET status = 'enabled', desired_version = active_version,
 				updated_at = now(), row_version = row_version + 1 WHERE key = $1`, r.key)
 		} else {
