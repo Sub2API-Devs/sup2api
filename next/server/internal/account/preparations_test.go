@@ -41,6 +41,7 @@ func (p *preparationPlugin) OnAccountLifecycle(_ context.Context, in *pluginv1.A
 
 type preparationResource struct {
 	prepared     map[string]bool
+	prepareErr   error // PrepareAccount fails with it
 	ready        bool
 	subscription string
 	email        string
@@ -49,6 +50,9 @@ type preparationResource struct {
 }
 
 func (r *preparationResource) PrepareAccount(_ context.Context, p core.AccountPreparation) error {
+	if r.prepareErr != nil {
+		return r.prepareErr
+	}
 	r.prepared[p.Key] = true
 	return nil
 }
@@ -442,7 +446,7 @@ func TestAccountPatchSetsSchedulingAndLimits(t *testing.T) {
 // the full account:create is not limited.
 func TestAccountPreparationLimit(t *testing.T) {
 	authz := fakeAuthz{keys: map[int64][]string{}}
-	e, _, _, _ := preparationFixtureWith(t, authz)
+	e, resource, _, _ := preparationFixtureWith(t, authz)
 	admin := e.uid
 	alice := e.addUser("alice-preparation@example.test")
 	// The fixture type takes a custom upstream: an own-level caller needs
@@ -452,6 +456,19 @@ func TestAccountPreparationLimit(t *testing.T) {
 		t.Helper()
 		return e.doAs(uid, "POST", "/account-types/fixture/managed/preparations", map[string]any{"idempotency_key": idem})
 	}
+	// A preparation whose first prepare fails never returned its key: it
+	// must not hold a slot, however often the caller retries.
+	resource.prepareErr = core.ErrUnavailable
+	for i := range maxOpenDrafts + 1 {
+		if code, out := prepare(alice, fmt.Sprintf("failed-%d", i)); code != http.StatusServiceUnavailable {
+			t.Fatalf("failing preparation %d: %d %v", i+1, code, out)
+		}
+	}
+	if left := e.exec1(`SELECT count(*) FROM account_preparations`); left != 0 || resource.cancelled != maxOpenDrafts+1 {
+		t.Fatalf("failed preparations left %d rows, %d cancelled", left, resource.cancelled)
+	}
+	resource.prepareErr = nil
+
 	var keys []string
 	for i := range maxOpenDrafts {
 		code, out := prepare(alice, fmt.Sprintf("attempt-%d", i))

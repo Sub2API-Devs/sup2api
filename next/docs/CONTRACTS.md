@@ -56,7 +56,7 @@
 | 失败 | HTTP 状态码 + `{"error": {"code": "...", "message": "...", "details": {...}}}` |
 | 字段校验失败 | `invalid_argument`，`details.fields = [{"field","code","message"}]` |
 
-错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
+错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`too_many_drafts` 429（未完成的账号草稿或预备容器达到单用户上限，§49.9）、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
 
 ### 3.2 数据格式
 
@@ -3325,7 +3325,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
-| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick。每个用户最多 3 个未完成的新建草稿（`account_id`、`retired_at`、`for_account` 都为空；重新授权的草稿不计），超出返回 429 `too_many_drafts`；持有 `settings:manage` 不受限。计数与插入是一条语句、不加锁，并发时可能多出 1 个（2026-11-12 权限加固 W1-F13）。预备容器 `POST /account-types/:plugin_key/:type/preparations` 同理：每个用户最多 3 个未完成的（未被账号采用、`state` 为 `pending`/`ready`、未过期），重复的 `idempotency_key` 不算新的，全量 `account:create` 不受限 |
+| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick。每个用户最多 3 个未完成的草稿（`account_id`、`retired_at` 都为空），超出返回 429 `too_many_drafts`；持有 `settings:manage` 不受限。计数与插入是一条语句、不加锁，并发时可能多出 1 个（2026-11-12 权限加固 W1-F13）。预备容器 `POST /account-types/:plugin_key/:type/preparations` 同理：每个用户最多 3 个未完成的（未被账号采用、`state` 为 `pending`/`ready`、未过期），重复的 `idempotency_key` 不算新的，首次准备就失败的不占名额（核心随即撤销并删行），全量 `account:create` 不受限。两个上限各算各的：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行，会占草稿名额，反过来草稿不占预备容器名额 |
 | PUT | `/system/ccgateway/drafts/:key` | `{proxy_id}` → `{key}`；重新 Kick |
 | DELETE | `/system/ccgateway/drafts/:key` | → 204；在控制器上删除运行环境并删行。控制器删不掉时行保留并标记为过期（`last_seen_at` 提前一天），返回 503 + reason，清理任务下一分钟重试 |
 | GET | `/system/ccgateway/drafts/:key/status` | `{key, status: creating\|ready\|blocked, reason?, container}` |

@@ -168,7 +168,7 @@ func (s *Service) draftCreate(c *gin.Context) {
 	tag, e := s.DB.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by)
 		SELECT $1, $2, NULLIF($3::bigint, 0)
 		WHERE $4::int = 0 OR (SELECT count(*) FROM ccgateway_runtimes
-			WHERE created_by = $3 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL) < $4`,
+			WHERE created_by = $3 AND account_id IS NULL AND retired_at IS NULL) < $4`,
 		key, in.ProxyID, uid, limit)
 	if e != nil || tag.RowsAffected() == 0 {
 		httpapi.Fail(c, errOr(e, core.ErrTooManyDrafts))

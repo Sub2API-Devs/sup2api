@@ -26,6 +26,7 @@ export default {
     model_price_not_configured: '模型价格未配置',
     model_not_allowed: '模型不允许使用',
     rate_limited: '请求过于频繁',
+    too_many_drafts: '未完成的账号草稿过多。请先完成或关闭其中一个，或等待约 15 分钟由系统清理被放弃的草稿',
     no_available_account: '没有可用账号',
     plugin_unavailable: '插件不可用',
     unavailable: '服务不可用',
