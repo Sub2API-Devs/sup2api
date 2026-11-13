@@ -633,6 +633,78 @@ func TestRoleAssignableMigrationBackfill(t *testing.T) {
 	require.Equal(t, "true:operator,user", assignable("admin"))
 }
 
+// 0099 takes the super-only permissions (decision D2) back from the built-in
+// admin and operator roles, auditing each one as the system and moving the
+// authz version; custom roles, other permissions and a role holding none of
+// them are left alone, and a database with nothing to reclaim is untouched.
+func TestReclaimSuperOnlyMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	migrate := func() {
+		t.Helper()
+		exec(`DELETE FROM schema_migrations WHERE id='0099_reclaim_super_only.sql'`)
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		require.Equal(t, []string{"0099_reclaim_super_only.sql"}, done)
+	}
+	// held is the sorted permission keys of a role.
+	held := func(role string) (v string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT COALESCE(string_agg(p.key, ',' ORDER BY p.key), '')
+			FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id WHERE r.key = $1`, role).Scan(&v))
+		return v
+	}
+	version := func() (v int64) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT version FROM authz_meta WHERE id = 1`).Scan(&v))
+		return v
+	}
+	const all = "plugin:grant:critical,plugin:grant:db_schema_unconfined,plugin:grant:high,publisher:manage,system:update:execute,system:update:read,system:update:recover"
+
+	// A new database: nothing to reclaim, nothing written.
+	v := version()
+	migrate()
+	require.Equal(t, v, version())
+
+	// The roles as the defaults before left them, a custom role granted the
+	// same permissions, and a custom role that only looks built-in by key.
+	exec(`INSERT INTO roles (key, name, builtin, superuser) VALUES
+			('super_admin', '{}', true, true), ('admin', '{}', true, false), ('operator', '{}', true, false), ('user', '{}', true, false),
+			('updater', '{}', false, false);
+		INSERT INTO permissions (key, module, label, source, status) VALUES
+			('plugin:grant:critical', 'plugin', '{}', 'core', 'active'), ('plugin:grant:db_schema_unconfined', 'plugin', '{}', 'core', 'active'),
+			('publisher:manage', 'publisher', '{}', 'core', 'active'), ('system:update:execute', 'system_update', '{}', 'core', 'active'),
+			('system:update:recover', 'system_update', '{}', 'core', 'active'),
+			('plugin:grant:high', 'plugin', '{}', 'core', 'active'), ('system:update:read', 'system_update', '{}', 'core', 'active');
+		INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r, permissions p WHERE r.key IN ('admin', 'updater')
+			OR (r.key = 'operator' AND p.key LIKE 'system:update:%')`)
+	migrate()
+
+	require.Equal(t, "plugin:grant:high,system:update:read", held("admin"))
+	require.Equal(t, "system:update:read", held("operator"))
+	require.Equal(t, all, held("updater"), "a custom role lost its grants")
+	require.Equal(t, v+1, version())
+	// One audit row per grant taken back, by the system.
+	var audited string
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT string_agg(a.detail->>'role' || '=' || (a.detail->>'key'), ' ' ORDER BY a.detail->>'role', a.detail->>'key')
+		FROM audit_logs a JOIN roles r ON r.id::text = a.target_id AND r.key = a.detail->>'role'
+		WHERE a.action = 'authz.reclaim.super_only' AND a.target_type = 'role' AND a.user_id IS NULL`).Scan(&audited))
+	require.Equal(t, "admin=plugin:grant:critical admin=plugin:grant:db_schema_unconfined admin=publisher:manage admin=system:update:execute admin=system:update:recover "+
+		"operator=system:update:execute operator=system:update:recover", audited)
+
+	// Granted again by a super admin since: only a forgotten migration row
+	// would run the file again, and then nothing else changes.
+	migrate()
+	require.Equal(t, v+1, version())
+	require.Equal(t, all, held("updater"))
+}
+
 // 0098 keeps one super admin (decisions 1 and 2): a soft-deleted holder loses
 // the role, two undeleted holders (whatever their status) stop the
 // migration naming both, and afterwards a second superuser role or holder
