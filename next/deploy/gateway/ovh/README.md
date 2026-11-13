@@ -4,6 +4,16 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-13 moderation **0.11.1**（`790208acb`，develop 头，合并了 `fix/moderation-trace-reason` `4bcecfd43`；只升级插件，核心 0.1.284 不动；北京时间 15:09:32 rollout 268，约 5 秒，两节点同时切换）：
+- 内容（CONTRACTS §72 0.11.1）：TraceView 理由移到表格下方逐条全文显示（原来单行省略、只有 title 悬停，弹窗里表格溢出时整列不可见）；`llmReasonRunes` 500→2000，`clipReason` 截断加“…”（llm_questions 与 agent 共用）；`auditScope` NULL/无效 → input；BlocksTab 原因可展开；hostCompat `>=0.1.281 <0.2.0`、hostUICompat `^3.13`。无迁移。
+- 发布前（14:06:21）按用户同意通过管理接口把流程 #1「默认 · Jev 初审 + deepseek 复核」v2、#2「jev + llm」v3 的 scope 从 NULL（=all）设为 input（`~/rel284/flowscope.py`，改前数据 `~/rel284/flows-20261113060125.json`，比对只有 scope / updated_at 变化）；之后新记录被审文本不再含 `[assistant]` / `[tool]` 片段（`~/rel284/scopecheck.py`：改后 12 条全部干净，改前 300 条有 183 条含这些片段）。
+- 测试：worker 实现 + 自审，另一个独立审查（必须修 1 项：兼容声明，已修）；插件 go test 全量（含嵌入式 PG）、前端 183 个用例、vue-tsc、构建通过。用户要求直接发布，没有做线上备份测试。
+- 构建：`stage/moderation-0.11.1/`（取自 `stage/moderation-0.11.0/`，断言自核心 0.1.284 起只改插件 / web mock / docs，自 0.11.0 起无新迁移）。包 sha256 `fc7c74648979f079f9455fcf29e5b142cfae9b904df6888b8cc253492f347886`。
+- 升级：`rollout.py upload` → `review`（signature valid、consent approved、host_compat_ok，没有新权限）→ `upgrade`；两节点 serving 0.11.1（ready、restarts 0），07:09:33 UTC “plugin instance started”。new-api 渠道没有关；不备份数据库。
+- 核验：升级后新记录照常写入（07:09:48 起），被审文本无 `[assistant]` / `[tool]`；`errs.sh` 14:50–15:09 共 2131 次 5xx 0，15:09–15:40 共 241 次 5xx 0；两节点 moderation 日志 WARN / ERROR 0。线上控制台只读截图（`~/rel0111/pw/ui0111.mjs`，记录 288790）：1440、1024 弹窗、390 手机、暗色下第 2 级理由 169 字全文可见、无溢出、无 API 错误。
+- 回滚：在 `stage/moderation-0.11.1/` 执行 `rollout.py upload-prev`（重新上传 `stage/moderation-0.11.0/packages/moderation-0.11.0.s2plugin`）再 `rollout.py rollback`。流程范围要回到全部时：`python3 -I ~/rel284/flowscope.py restore ~/rel284/flows-20261113060125.json`（把 NULL 写成 all）。
+- 上游同步 PR 未提（需要用户原话同意）。
+
 2026-11-13 moderation **0.11.0**（`509655d10`，develop 头，合并了 `feat/moderation-contract` `da75da1d1`；只升级插件，核心 0.1.284 不动；北京时间 08:26:55 rollout 267，约 5 秒，两节点同时切换）：
 - 内容：0.10.0 的 contract 步骤（CONTRACTS §72 0.11.0）。迁移 0013（带 `SET LOCAL lock_timeout = '10s'`）删除 `user_analyses`、`watchlist` 的 9 个分析列及索引、`events` 的 6 个 `ai_*` 列，`config_state` 加 `lists_imported`；保留 `watch_events.analysis_id` 和 `watchlist.source` 的 `'analysis'`。设置删除 `analysis_*`、`on_error`、0.1 旧键、`exempt_user_ids`、`cache_ttl_seconds`、`allowlist_user_ids`、`blocklist_user_ids`、`ban_window_hours`（0.1 的 `api_key` 以隐藏 writeOnly 键保留，只为让核心打码）；名单只看锁定条目（PUT/DELETE `/watchlist/:id/lock`）；`ban_window_seconds`。all_but_own 放弃。0.10.0 的非测试代码不读写任何被删对象（worker `git grep` 核对，迁移兼容测试用 0.10.0 原 SQL）。
 - 测试：用户要求直接发布，没有再做线上备份测试。worker 在空库上跑了完整路径（0.10.0 准备 → 0.10.0 跑在 0013 之后的库上 → 上传升级 → 0.11.0 功能 → 设置清理 → 回滚 0.10.0 并写回名单与封禁窗口）31 个用例全部通过；ovh 构建时 go vet / go test 通过。
