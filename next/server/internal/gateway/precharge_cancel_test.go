@@ -71,7 +71,7 @@ func TestFinalizeBillabilityCanceledStreamBillsPrecharge(t *testing.T) {
 		}
 	})
 	t.Run("free policy bills nothing", func(t *testing.T) {
-		c := &call{precharged: est, upstreamResponded: true, disconnect: &core.ClientDisconnect{Policy: core.DisconnectFree}}
+		c := &call{precharged: est, upstreamResponded: true, disconnect: core.DisconnectFree}
 		rec := canceled()
 		rec.Tokens = core.UsageTokens{Input: 150, CacheRead: 50}
 		c.finalizeBillability(context.Background(), rec, "paid")
@@ -91,7 +91,7 @@ func TestFinalizeBillabilityCanceledStreamBillsPrecharge(t *testing.T) {
 		}
 	})
 	t.Run("free policy leaves a completed request alone", func(t *testing.T) {
-		c := &call{precharged: est, upstreamResponded: true, disconnect: &core.ClientDisconnect{Policy: core.DisconnectFree}}
+		c := &call{precharged: est, upstreamResponded: true, disconnect: core.DisconnectFree}
 		rec := &core.UsageRecord{Success: true, StatusCode: 200, Price: perToken, Tokens: core.UsageTokens{Input: 10, Output: 5}}
 		c.finalizeBillability(context.Background(), rec, "paid")
 		if !rec.Billable {

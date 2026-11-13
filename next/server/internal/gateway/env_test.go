@@ -486,12 +486,12 @@ type fakeBalance struct {
 	// disconnect is the client_disconnect_policy. Zero is "precharge", not
 	// the product default: a test that drops its client expects the upstream
 	// to stop, and only the tests about "continue" want it kept.
-	disconnect core.ClientDisconnect
+	disconnect string
 }
 
-func (b *fakeBalance) ClientDisconnect(context.Context) (core.ClientDisconnect, error) {
-	if b.disconnect.Policy == "" {
-		return core.ClientDisconnect{Policy: core.DisconnectPrecharge}, nil
+func (b *fakeBalance) ClientDisconnectPolicy(context.Context) (string, error) {
+	if b.disconnect == "" {
+		return core.DisconnectPrecharge, nil
 	}
 	return b.disconnect, nil
 }

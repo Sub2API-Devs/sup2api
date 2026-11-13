@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -288,7 +289,7 @@ func TestGatewaySettingsValidation(t *testing.T) {
 	n := GatewaySettings{MaxAttempts: 50, PlatformCallTimeoutMs: 10, DefaultHookTimeoutMs: 9000,
 		PlatformHotpathTimeoutMs: 9000}.normalized()
 	if !reflect.DeepEqual(n, GatewaySettings{MaxAttempts: 10, PlatformCallTimeoutMs: 100, DefaultHookTimeoutMs: 2000,
-		PlatformHotpathTimeoutMs: 2000, ClaudeDefaultMaxTokens: map[string]int{"default": 8192}, MediaDownloadMaxMB: 64}) {
+		PlatformHotpathTimeoutMs: 2000, ClaudeMaxTokens: ClaudeMaxTokensRule{Models: map[string]int{"default": 8192}}, MediaDownloadMaxMB: 64}) {
 		t.Fatalf("normalized %+v", n)
 	}
 	// The queue numbers are the exception: 0 turns a queue off, and a stored
@@ -296,7 +297,7 @@ func TestGatewaySettingsValidation(t *testing.T) {
 	if !reflect.DeepEqual((GatewaySettings{}).normalized(), (func() GatewaySettings {
 		d := defaultGatewaySettings()
 		d.QueueStickyMaxWaiting, d.QueueStickyWaitSeconds, d.QueueFallbackMaxWaiting, d.QueueFallbackWaitSecond = 0, 0, 0, 0
-		return d
+		return d.normalized()
 	})()) {
 		t.Fatal("zero value must yield the defaults, with the queues off")
 	}
@@ -370,8 +371,7 @@ func TestGatewaySettingsAPI(t *testing.T) {
 	}
 	if store.v == nil || !reflect.DeepEqual(*store.v, GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800,
 		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 8, QueueStickyWaitSeconds: 120,
-		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30,
-		ClaudeDefaultMaxTokens: map[string]int{"default": 8192}, MediaDownloadMaxMB: 64}) || store.by != 7 {
+		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30, MediaDownloadMaxMB: 64}) || store.by != 7 {
 		t.Fatalf("stored %+v by %d", store.v, store.by)
 	}
 	g.settings.mu.Lock()
@@ -399,36 +399,76 @@ func TestGatewaySettingsAPI(t *testing.T) {
 	}
 }
 
-// The conversion settings (CONVERT-MATRIX §6.1): claude_default_max_tokens
-// keeps a "default" key and bounded values, media_download_max_mb its range.
+// The conversion settings (CONVERT-MATRIX §6.1): claude_max_tokens is off
+// by default and gives nothing then, media_download_max_mb keeps its range.
 func TestConversionGatewaySettings(t *testing.T) {
-	n := GatewaySettings{ClaudeDefaultMaxTokens: map[string]int{"claude-x": 64000, "neg": -5}, MediaDownloadMaxMB: 5000}.normalized()
-	if !reflect.DeepEqual(n.ClaudeDefaultMaxTokens, map[string]int{"claude-x": 64000, "neg": 0, "default": 8192}) || n.MediaDownloadMaxMB != 1024 {
+	n := GatewaySettings{ClaudeMaxTokens: ClaudeMaxTokensRule{Models: map[string]int{"claude-x": 64000, "neg": -5, "big": 1 << 30}},
+		MediaDownloadMaxMB: 5000}.normalized()
+	if !reflect.DeepEqual(n.ClaudeMaxTokens.Models, map[string]int{"claude-x": 64000, "big": 1 << 20}) || n.MediaDownloadMaxMB != 1024 {
 		t.Fatalf("normalized %+v", n)
 	}
-	if n.claudeMaxTokens("claude-x") != 64000 || n.claudeMaxTokens("other") != 8192 || n.mediaDownloadMaxBytes() != 1024<<20 {
-		t.Fatal("lookups")
+	if n.ClaudeMaxTokens.maxTokens("claude-x") != 0 || n.ClaudeMaxTokens.overrideFor(claudeMaxTokensProtocol) != nil || n.mediaDownloadMaxBytes() != 1024<<20 {
+		t.Fatal("a rule that is off must give nothing")
 	}
-	m := func(v map[string]int) *map[string]int { return &v }
+	n.ClaudeMaxTokens.Enabled = true
+	n = n.normalized()
+	if n.ClaudeMaxTokens.maxTokens("claude-x") != 64000 || n.ClaudeMaxTokens.maxTokens("other") != 0 {
+		t.Fatal("lookups without a default")
+	}
+	if n.ClaudeMaxTokens.overrideFor(claudeMaxTokensProtocol) == nil || n.ClaudeMaxTokens.overrideFor("openai.chat") != nil ||
+		n.ClaudeMaxTokens.overrideFor("anthropic.count_tokens") != nil {
+		t.Fatal("the override applies to anthropic.messages only, not count_tokens")
+	}
+	if d := (GatewaySettings{}).normalized().ClaudeMaxTokens; d.Enabled || !reflect.DeepEqual(d.Models, map[string]int{"default": 8192}) {
+		t.Fatalf("a row without the rule: %+v", d)
+	}
+	rule := func(enabled bool, v map[string]int) *ClaudeMaxTokensRule {
+		return &ClaudeMaxTokensRule{Enabled: enabled, Models: v}
+	}
 	i := func(v int) *int { return &v }
+	tooMany, tooLarge := map[string]int{}, map[string]int{}
+	for j := range maxClaudeMaxTokensModels + 1 {
+		tooMany[fmt.Sprint("m", j)] = 1
+	}
+	// Names of 200 characters are allowed one by one (counted as
+	// characters, not bytes); 100 of them in three-byte characters
+	// compile past the override's size cap.
+	long := strings.Repeat("模", maxClaudeMaxTokensName-3)
+	for j := range maxClaudeMaxTokensModels {
+		tooLarge[fmt.Sprintf("%s%03d", long, j)] = 1
+	}
 	for _, tc := range []struct {
 		in   gatewaySettingsInput
 		code string
 	}{
 		{gatewaySettingsInput{MediaDownloadMaxMB: i(0)}, "out_of_range"},
 		{gatewaySettingsInput{MediaDownloadMaxMB: i(1025)}, "out_of_range"},
-		{gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{"default": -1})}, "out_of_range"},
-		{gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{" x": 1})}, "invalid_model"},
-		{gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{"x": 1, "default": 0}), MediaDownloadMaxMB: i(1)}, ""},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{"default": 0})}, "out_of_range"},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{" x": 1})}, "invalid_model"},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(false, tooMany)}, "too_many"},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{strings.Repeat("模", maxClaudeMaxTokensName): 1})}, ""},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{strings.Repeat("模", maxClaudeMaxTokensName+1): 1})}, "invalid_model"},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(true, tooLarge)}, "too_large"},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{"x": 1}), MediaDownloadMaxMB: i(1)}, ""},
+		{gatewaySettingsInput{ClaudeMaxTokens: rule(false, map[string]int{})}, ""},
 	} {
 		fe := tc.in.validate(context.Background())
 		if tc.code == "" && len(fe) != 0 || tc.code != "" && (len(fe) != 1 || fe[0].Code != tc.code) {
 			t.Errorf("%+v: %+v", tc.in, fe)
 		}
+		// The console matches the rule's errors by this exact field name.
+		if tc.in.ClaudeMaxTokens != nil && len(fe) == 1 && fe[0].Field != "claude_max_tokens" {
+			t.Errorf("field of %+v: %q", tc.in, fe[0].Field)
+		}
 	}
 	v := defaultGatewaySettings()
-	(&gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{"x": 1})}).applyTo(&v)
-	if got := v.normalized().ClaudeDefaultMaxTokens; !reflect.DeepEqual(got, map[string]int{"x": 1, "default": 8192}) {
-		t.Fatalf("replaced map %v", got)
+	(&gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{"x": 1})}).applyTo(&v)
+	if got := v.normalized().ClaudeMaxTokens; !got.Enabled || !reflect.DeepEqual(got.Models, map[string]int{"x": 1}) {
+		t.Fatalf("replaced rule %+v", got)
+	}
+	// Emptied by the administrator: stays empty, unlike a row without it.
+	(&gatewaySettingsInput{ClaudeMaxTokens: rule(true, map[string]int{})}).applyTo(&v)
+	if got := v.normalized().ClaudeMaxTokens; len(got.Models) != 0 || got.override != nil {
+		t.Fatalf("emptied rule %+v", got)
 	}
 }

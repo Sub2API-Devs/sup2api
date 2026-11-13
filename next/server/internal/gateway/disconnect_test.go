@@ -49,9 +49,9 @@ func promptSide(t core.UsageTokens) core.UsageTokens {
 
 // holdingEnv is an env whose upstream holds after message_start until the
 // returned channel is closed, under the given disconnect policy.
-func holdingEnv(t *testing.T, policy core.ClientDisconnect) (*env, chan struct{}) {
+func holdingEnv(t *testing.T, policy string, opts ...envOpt) (*env, chan struct{}) {
 	t.Helper()
-	e := newEnv(t)
+	e := newEnv(t, opts...)
 	e.balance.disconnect = policy
 	hold := make(chan struct{})
 	e.up.set("acc-1", &upstreamRule{hold: hold})
@@ -84,7 +84,7 @@ func wantPrechargeWithReportedPrompt(t *testing.T, rec *core.UsageRecord) {
 // Under "continue" the upstream answer is read to its end after the client
 // left and the request pays what the upstream reported (CONTRACTS §25.8).
 func TestClientDisconnectContinueBillsReportedUsage(t *testing.T) {
-	e, hold := holdingEnv(t, core.ClientDisconnect{Policy: core.DisconnectContinue, Wait: 10 * time.Second})
+	e, hold := holdingEnv(t, core.DisconnectContinue)
 
 	hangUpAfterStart(t, e)
 	// The upstream must outlive the client: it is still holding.
@@ -109,28 +109,23 @@ func TestClientDisconnectContinueBillsReportedUsage(t *testing.T) {
 	}
 }
 
-// A "continue" that outlasts its wait stops the upstream and falls back to
+// A "continue" read has no wait of its own: the request's timeouts end it,
+// the same as with the client still there, and the request falls back to
 // the pre-charge estimate.
-func TestClientDisconnectContinueGivesUpAfterWait(t *testing.T) {
-	const wait = time.Second
-	e, hold := holdingEnv(t, core.ClientDisconnect{Policy: core.DisconnectContinue, Wait: wait})
+func TestClientDisconnectContinueEndsWithRelayTimeout(t *testing.T) {
+	e, hold := holdingEnv(t, core.DisconnectContinue,
+		withEnvironment(core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 1}, nil))
 	defer close(hold)
 
-	// Taken before the client leaves: the wait cannot start sooner, so an
-	// upstream canceled within it was not read on.
-	left := time.Now()
 	hangUpAfterStart(t, e)
-	awaitUpstreamCanceled(t, e, "after the wait")
-	if d := time.Since(left); d < wait {
-		t.Fatalf("upstream request was canceled after %v, before the %v wait had passed", d, wait)
-	}
+	awaitUpstreamCanceled(t, e, "at the relay timeout")
 	wantPrechargeWithReportedPrompt(t, e.record())
 }
 
 // Shutdown ends an answer that is only still read for its usage: a client
 // that left is no reason to hold the server open.
 func TestClientDisconnectContinueStopsAtShutdown(t *testing.T) {
-	e, hold := holdingEnv(t, core.ClientDisconnect{Policy: core.DisconnectContinue, Wait: time.Hour})
+	e, hold := holdingEnv(t, core.DisconnectContinue)
 	defer close(hold)
 
 	hangUpAfterStart(t, e)
@@ -146,7 +141,7 @@ func TestClientDisconnectContinueStopsAtShutdown(t *testing.T) {
 
 // "precharge" stops the upstream at once and bills the estimate.
 func TestClientDisconnectPrechargeBillsPromptOnce(t *testing.T) {
-	e, hold := holdingEnv(t, core.ClientDisconnect{Policy: core.DisconnectPrecharge})
+	e, hold := holdingEnv(t, core.DisconnectPrecharge)
 	defer close(hold)
 
 	hangUpAfterStart(t, e)
@@ -156,7 +151,7 @@ func TestClientDisconnectPrechargeBillsPromptOnce(t *testing.T) {
 
 // "free" stops the upstream at once and bills nothing.
 func TestClientDisconnectFreeBillsNothing(t *testing.T) {
-	e, hold := holdingEnv(t, core.ClientDisconnect{Policy: core.DisconnectFree})
+	e, hold := holdingEnv(t, core.DisconnectFree)
 	defer close(hold)
 
 	hangUpAfterStart(t, e)

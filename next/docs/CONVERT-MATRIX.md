@@ -295,7 +295,7 @@ NULL 表示继承：账号 NULL → 分组；分组 NULL → `allow`。三列都
 
 | 字段 | 类型与默认 | 含义 |
 |---|---|---|
-| `claude_default_max_tokens` | `{"default": 8192}`，键为模型名 | 转换到 Anthropic 时客户端没给输出上限用的 `max_tokens`；按客户端模型精确匹配，否则 `default`；值 ≥ 0；必须有 `default` 键（缺了按 8192 补） |
+| `claude_max_tokens`（2026-11-14 取代 `claude_default_max_tokens`） | `{"enabled": false, "models": {"default": 8192}}`，`models` 键为模型名 | 可开关的内置参数覆盖（CONTRACTS §84.1）：开启时给每个发往 Anthropic 且没有 `max_tokens` 的请求补上，按客户端模型精确匹配，否则 `default`；转换请求客户端没给输出上限时用它的值，关闭或没有匹配时用转换器兜底 8192 |
 | `media_download_max_mb` | 64，范围 1–1024 | 转换到 Gemini 时下载 http(s) 媒体的单个文件上限 |
 
 ### 6.2 接口
@@ -304,7 +304,7 @@ NULL 表示继承：账号 NULL → 分组；分组 NULL → `allow`。三列都
 |---|---|
 | `GET/POST/PATCH /accounts`、`/accounts/:id` | `conversion_loss_policy`: `"allow"\|"safe"\|"strict"\|null`；非法值 400 `invalid_argument`，`details.fields[{field:"conversion_loss_policy", code:"invalid"}]`；权限同账号其他字段（含 own 级） |
 | `GET/POST/PATCH /groups`、`/groups/:id` | 同上（`group:update`） |
-| `GET/PUT /settings/gateway` | `claude_default_max_tokens`、`media_download_max_mb`；校验错误 `details.fields`（负数、缺 default 以外的非法值、超范围） |
+| `GET/PUT /settings/gateway` | `claude_max_tokens`、`media_download_max_mb`；校验错误 `details.fields`，字段名 `claude_max_tokens`（超范围、非法模型名、超过 100 项、总长度超限） |
 | `GET /account-types` | `endpoints[].grade`、`endpoints[].via` |
 | 使用记录列表与详情 | `conversion`（§7）；`self` 范围不返回（与 `upstream_protocol` 一致） |
 | 使用记录筛选 | `conversion=native\|converted\|good\|fair\|discouraged\|local\|lossy`（`lossy` = 有任何损失） |
@@ -435,7 +435,7 @@ NULL 表示继承：账号 NULL → 分组；分组 NULL → `allow`。三列都
 | responses `reasoning.summary` | 到 anthropic/gemini：有值即 thinking 可见 / `includeThoughts`；到 chat 丢 other |
 | 历史里的推理 | 跨协议一律丢弃，记 reasoning（§3.2） |
 | anthropic 工具循环 | 开 thinking 且最后一条带 tool_use 的 assistant 消息没有本家签名 thinking 块 → 本次不开 thinking，丢 reasoning（§3.2） |
-| 到 anthropic 的 `max_tokens` 缺省（D5） | 客户端没给输出上限：`max_tokens = claude_default_max_tokens[客户端模型]`，没有该键用 `default`（默认 8192）；开了 thinking 时再取 `max(该值, budget_tokens + 1)`，且不低于 1280（new-api 规则）。客户端给了就原样，不改。只作用于转换到 Anthropic 的请求，原生 Anthropic 请求不改写 |
+| 到 anthropic 的 `max_tokens` 缺省（D5） | 客户端没给输出上限：网关设置 `claude_max_tokens` 开启时取 `models[客户端模型]`，没有该键用 `default`；关闭或都没有时用转换器兜底 8192（Anthropic 必填）；开了 thinking 时再取 `max(该值, budget_tokens + 1)`，且不低于 1280（new-api 规则）。客户端给了就原样，不改。转换器只管转换请求；原生 Anthropic 请求由 `claude_max_tokens` 开启后的内置参数覆盖补（CONTRACTS §84.1） |
 
 ### 9.5 结束原因
 
@@ -501,7 +501,7 @@ NULL 表示继承：账号 NULL → 分组；分组 NULL → `allow`。三列都
 testdata/recorded/<protocol>/<case>.{request.json,response.json,stream.sse}   真实上游录制（原生），脱敏
 testdata/golden/<from>~<to>/<case>/
     case.json            {options:{model, stream}, upstream:"recorded/gemini.stream_generate/tools.sse" 或路径列表（相对本目录或 testdata）,
-                          media:{"<url>":"fixtures/x.png"}, claude_default_max_tokens:{"default":8192,"<model>":n}, note}
+                          media:{"<url>":"fixtures/x.png"}, claude_default_max_tokens:{"default":8192,"<model>":n}（夹具键沿用旧名，代表 claude_max_tokens 的 models）, note}
     in.request.json      客户端请求
     want.request.json    期望的上游请求；转换应失败时改为 want.request_error.txt（RequestError 原文）
     want.losses.json     {"tool":[...],"reasoning":[...],"image":[...],"other":[...]}（请求侧）
@@ -525,7 +525,7 @@ testdata/ir/<upstream protocol>/<case>.{json,sse}.txt   reader 输出的 IR 快�
 - 媒体（`gateway/convert_media_test.go`）：下载成功内联、超限、超时、SSRF 拒绝、MIME 不支持、同请求缓存。
 - 使用记录：`conversion` 字段各情形（原生 NULL、转换、组合、rejected、截断）。
 - count_tokens（`gateway/count_local_test.go`）：挑中原生账号转发、挑中 local 账号估算（不占限流额度、记录形状、无额外响应头）、priority 决定、gemini 两种请求体、估算数值（文本、工具、各类媒体常数）。
-- 设置：`claude_default_max_tokens`、`media_download_max_mb` 读写与校验；账号/分组字段读写与校验、`/account-types` 的 grade/via、使用记录筛选；迁移测试。
+- 设置：`claude_max_tokens`（2026-11-14 前为 `claude_default_max_tokens`）、`media_download_max_mb` 读写与校验；账号/分组字段读写与校验、`/account-types` 的 grade/via、使用记录筛选；迁移测试。
 - `go test -race` 全量（容器内）；web 单测与截图（账号编辑器、分组表单、网关设置、使用记录详情）。
 
 ## 11. 分工（4 个可并行子任务）
@@ -564,7 +564,7 @@ testdata/ir/<upstream protocol>/<case>.{json,sse}.txt   reader 输出的 IR 快�
 | D2 | 调度顺序 | priority 优先，等级只在同一 priority 内排序；粘性不变 | — | §5.2 |
 | D3 | 账号类型能否拒绝转换 | 全部自然接受转换，没有任何退出机制（同 new-api） | 渠道按格式自动转换 | §5.1 |
 | D4 | chat 客户端的推理输出 | 输出 `reasoning_content` | 同（`relaykit/relayconvert/internal/claude_messages/to_oai_chat_resp.go` 等） | §9.8 chat writer；现有 chat → responses 一并输出 |
-| D5 | 到 Anthropic 的 `max_tokens` 缺省 | 参考 new-api | 全局设置 `claude.default_max_tokens`：模型名 → 值的映射，必须有 `default`，默认 `{"default": 8192}`（`setting/model_setting/claude.go`）；转换时客户端没给就按模型取值（`relaykit/relayconvert/internal/oai_chat/to_claude_messages_req.go` 108–113、`oai_responses/to_claude_messages_req.go` 71）；有推理时至少 1280、手动 thinking 抬到 `budget + 1`（`internal/shared/claude/reasoning.go` 92–115）；原生 Claude 请求也补（`relay/channel/claude/adaptor.go` 50–53） | 网关设置 `claude_default_max_tokens`（同形状、同默认）；只作用于转换到 Anthropic 的请求，按客户端模型取值，thinking 时抬高规则同 new-api（§6.1、§9.4）；原生请求不改写（核心原生转发不改请求体，需要时用 §86 声明的 paramOverride） |
+| D5 | 到 Anthropic 的 `max_tokens` 缺省 | 参考 new-api | 全局设置 `claude.default_max_tokens`：模型名 → 值的映射，必须有 `default`，默认 `{"default": 8192}`（`setting/model_setting/claude.go`）；转换时客户端没给就按模型取值（`relaykit/relayconvert/internal/oai_chat/to_claude_messages_req.go` 108–113、`oai_responses/to_claude_messages_req.go` 71）；有推理时至少 1280、手动 thinking 抬到 `budget + 1`（`internal/shared/claude/reasoning.go` 92–115）；原生 Claude 请求也补（`relay/channel/claude/adaptor.go` 50–53） | 网关设置 `claude_max_tokens`（2026-11-14 起：可开关的内置参数覆盖，默认关闭，`default` 不必填，CONTRACTS §84.1）：开启时原生请求也补（同 new-api），转换请求客户端没给时用它的值，关闭时转换器兜底 8192；thinking 时抬高规则同 new-api（§6.1、§9.4） |
 | D6 | 到 Gemini 的 http(s) 图片 URL | 参考 new-api | 转 Gemini 时所有媒体都解析为 base64 `inlineData`（`internal/oai_chat/to_gemini_chat_req.go` 330–345、`internal/oai_responses/to_gemini_chat_req.go` 236、365）；URL 由 `service/file_service.go` `loadFromURL` 下载：SSRF 防护客户端（`service/download.go` 52–68），单文件上限 `MAX_FILE_DOWNLOAD_MB` 默认 64（`common/init.go` 193），失败或 MIME 不受 Gemini 支持时整个请求报错；user 文本里的 markdown data URL 图片拆成 `inlineData`（同文件 280–320） | `gateway/convert_media.go`：netguard SSRF 检查、直连、单文件 `media_download_max_mb`（默认 64）、60 秒超时、同请求缓存；失败/超限/MIME 不支持 → `RequestError`（该类型跳过，没有其他类型则 400）；markdown 内联图片同样拆分；到 Anthropic 的 URL 保持 url 源（§9.2） |
 | D7 | 提示缓存参数与标记 | 参考 new-api | 不做 OpenAI `prompt_cache_*` 与 Anthropic `cache_control` 的互转；`prompt_cache_key` chat ↔ responses 原样（`internal/oai_chat/to_oai_responses_req.go` 405、`internal/oai_responses/to_oai_chat_req.go` 81、112），Claude → chat 把消息文本块的 `cache_control` 原样带到 chat 文本部件（`internal/claude_messages/to_oai_chat_req.go` 184–189；system 块只对 OpenRouter 的 Claude 带，133–144）；chat → Claude 不带缓存标记 | 同 new-api：§9.1“缓存”行与说明；sup2api 没有 OpenRouter 方言，system 块的 `cache_control` 一律丢 other |
 | D8 | 推理签名跨协议、换到原生上游 | 参考 new-api | 不做任何信封或清理：OpenAI 推理 → Claude thinking 块不带 signature（`internal/oai_chat/to_claude_messages_resp.go` 342–363、461–466）；Claude signature 不传给 OpenAI 客户端（`internal/claude_messages/to_oai_chat_resp.go` 88–90），`redacted_thinking` 记“continuation_state_lost”诊断（`internal/toolconv/response.go` 214–220）；请求转换不搬运别家推理历史；原生 Claude 渠道不清理请求；对话靠渠道亲和留在同一渠道（`service/channel_affinity.go`）；Gemini 转换的 model 轮次第一个 functionCall（或文本）部件写旁路签名 `context_engineering_is_the_way_to_go`，默认开启（`internal/shared/gemini/request.go` 64–95、`setting/model_setting/gemini.go` 53） | §3.2：推理只传文本；签名与加密推理记响应侧 reasoning 损失；请求侧丢弃别家推理；不生成信封（现有 `sup2api-anthropic-thinking-v1:` 停用）；原生路由不清理，靠粘性；Gemini 旁路签名同值；另加 Anthropic 工具循环关 thinking 规则防 400 |

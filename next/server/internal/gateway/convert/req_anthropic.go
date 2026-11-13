@@ -14,7 +14,7 @@ import (
 
 // Anthropic limits (CONVERT-MATRIX §9.4, D5).
 const (
-	claudeDefaultMaxTokens = 8192 // gateway setting default
+	claudeDefaultMaxTokens = 8192 // the required field's fallback
 	claudeMinThinking      = 1024 // smallest budget_tokens
 	claudeThinkingFloor    = 1280 // smallest derived max_tokens with thinking
 )
