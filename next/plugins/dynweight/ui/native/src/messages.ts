@@ -15,7 +15,7 @@ const zh = {
   cancel: '取消',
   // DynweightAccountTab: the core reads the detail tab label at plugin.dynweight.tabs.<component>.
   tabs: { status: '有效权重', events: '权重事件', config: '配置', DynweightAccountTab: '动态权重' },
-  filter: { account: '账号', group: '分组', model: '模型', all: '全部', search: '查询', clear: '清空' },
+  filter: { account: '账号', group: '分组', model: '模型', all: '全部', search: '查询', clear: '清空', needsAccount: '你只能查看部分账号，请先选择账号再查询。' },
   status: {
     hint: '每个（账号、分组、客户端模型）独立计数和调整；调度时用有效权重替换账号在该分组的权重。',
     loadFailed: '加载有效权重失败',
@@ -252,7 +252,7 @@ const en: typeof zh = {
   actionFailed: 'Action failed',
   cancel: 'Cancel',
   tabs: { status: 'Effective weights', events: 'Weight events', config: 'Configuration', DynweightAccountTab: 'Dynamic weight' },
-  filter: { account: 'Account', group: 'Group', model: 'Model', all: 'All', search: 'Search', clear: 'Clear' },
+  filter: { account: 'Account', group: 'Group', model: 'Model', all: 'All', search: 'Search', clear: 'Clear', needsAccount: 'You can see some accounts only: pick an account, then search.' },
   status: {
     hint: 'Each (account, group, client model) is counted and adjusted on its own; scheduling replaces the account weight in the group with the effective weight.',
     loadFailed: 'Failed to load the effective weights',

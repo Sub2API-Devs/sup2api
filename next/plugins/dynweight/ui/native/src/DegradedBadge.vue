@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { SChip, useAutoRefresh, useViewport } from '@sub2api/ui'
-import { canSeeDegraded, fetchDegraded, useDwHost, type Degraded } from './host'
+import { fetchDegraded, seesAllAccounts, useDwHost, type Degraded } from './host'
 
 // account.list.toolbar slot: "N accounts degraded" as a toggle chip that
 // filters the account list to them (setIds) and back. `ids` is the set this
@@ -18,7 +18,7 @@ const degraded = ref<Degraded | null>(null)
 const applied = ref('') // the ids this chip set, joined
 
 async function load() {
-  if (!canSeeDegraded()) return
+  if (!seesAllAccounts()) return
   try {
     degraded.value = await fetchDegraded()
   } catch {

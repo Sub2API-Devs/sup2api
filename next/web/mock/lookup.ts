@@ -7,6 +7,7 @@
 // page must not look right against the mock and fail against the core.
 import { fail, on, type MockRequest } from './router'
 import { caller, filterOwned, hasPerm, ownerScope, type Identity } from './core'
+import { parsePermission } from '../src/authz/implies'
 import { accounts } from './accounts'
 import { pricedModels } from './billing'
 import { ME_ID, groups, keys, myGroups, proxies, users } from './resources'
@@ -60,8 +61,10 @@ const KINDS: Record<string, Kind> = {
   },
   groups: {
     rows(_req, who, mine) {
-      if (!mine && !hasPerm(who, 'group:read')) return denied('group:read')
-      return (mine ? myGroups(who.id) : groups).map((g) => ({ id: g.id, name: g.name, status: g.status }))
+      const named = !mine && !hasPerm(who, 'group:read') ? scopeGroups(who) : null
+      if (named && !named.length) return denied('group:read')
+      const rows = mine ? myGroups(who.id) : named ? groups.filter((g) => named.includes(g.id)) : groups
+      return rows.map((g) => ({ id: g.id, name: g.name, status: g.status }))
     }
   },
   'api-keys': {
@@ -110,6 +113,11 @@ const KINDS: Record<string, Kind> = {
       }))
     }
   }
+}
+
+/** The groups the caller's own scopes name (group/G, group/G/account/X; core PermissionSet.ScopeGroups). */
+function scopeGroups(who: Identity): number[] {
+  return who.permissions.map((k) => parsePermission(k)?.scope.group ?? 0).filter((g) => g > 0)
 }
 
 /** Reads the parameters as the core does, with its 400s (CONTRACTS §96.1); they come before the permission. */

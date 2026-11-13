@@ -6432,6 +6432,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 行与批量重置：manifest `ui.accountActions` 的 `reset`（权限 `dynweight:manage`，`route: "POST /reset"`，`bulk: true`，带 `{n}` 确认文案），由核心渲染进每行操作菜单和批量栏，调用约定（body 恒为 `{account_ids:[…]}`，每批固定 `manifest.MaxAccountBatch` 个，95 秒超时）、提示和刷新都在核心（§23.3 UI 3.6）；插件只有现成的 `POST /reset`，不写任何前端代码。
   - 详情标签页：`account.detail.tabs` 插槽（`DynweightAccountTab`，标签文案取 `plugin.dynweight.tabs.DynweightAccountTab`）列出该账号的全部键（`GET /status?account_id=`，不限已降权），表格与"有效权重"标签页共用 `KeyStatusTable`（展开 `KeyDetail`），没有账号列。0.5.1 起改紧凑：顶部一行摘要（键数、低于基准的键数、最低有效 / 基准、本账号覆盖和"设置"链接到 `?tab=config&override_account=<id>`），说明收进 ⓘ 提示，"事件""重置全部"（`POST /reset {account_id}`，确认后执行；只对 `dynweight:manage`）是同一行的小按钮；表格每键一行，"最近窗口"合成"成功率 · 次数"，"事件""重置"收进行尾菜单，只有一页时不显示分页；展开明细是"标签 · 值"网格加规则迷你表（触发条件、各窗口命中格子、本窗结果、样本数），没有回升项的告警是一行提示加"去配置"链接。行上的"事件"跳到 `?tab=events&account=&group=&model=`。
   - 插件页读 `?account=`（及 `group=`、`model=`）预填"有效权重"和"权重事件"标签页的键筛选；带预填进入"有效权重"时"只看已降权"默认关闭，以便看到该账号的全部键。
+  - 只能查看部分账号的查看者（`account:read` 带 own、分组或账号范围，没有全量，`seesAllAccounts`）：`/status`、`/events` 不带 `account_id`、`/degraded`、`/stats` 覆盖全部账号，核心要求全量 `account:read`（manifest 路由的 `RouteAccounts`）。这类查看者的“有效权重”“权重事件”标签页在选定账号前不发请求，提示先选账号（`keyListApi` 把不带账号的查询在本地答成空表），不显示本节点计数（`/stats`），工具栏降权徽标不请求（权限加固期 4 验证修复，dynweight 0.5.9）。
 
 ### 74.6 发布
 
@@ -7962,7 +7963,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 | kind | 全量（不带 `mine`） | `mine=true` |
 |---|---|---|
 | users | `user:read` | 不支持（400） |
-| groups | `group:read`：全部分组，含已停用；只有 `account:group:bind`：调用者自己可用的分组（与 `mine=true` 同一范围，即 own 级账号可绑定的分组，`segment.UsableGroupSQL`） | 任何登录用户：`GET /me/groups` 的范围（状态 `active`，且公开或已授权给调用者所在的用户组，§97） |
+| groups | `group:read`：全部分组，含已停用；只有 `account:group:bind`：调用者自己可用的分组（与 `mine=true` 同一范围，即 own 级账号可绑定的分组，`segment.UsableGroupSQL`）；两者都没有：调用者自己的权限范围里点名的分组（任一动作的 `group/G`、`group/G/account/X`，访问密钥按密钥自己的权限，`PermissionSet.ScopeGroups`，`Entity.Named`），让控制台按名称显示自己的范围，一个都没有时 403（权限加固期 4 验证修复） | 任何登录用户：`GET /me/groups` 的范围（状态 `active`，且公开或已授权给调用者所在的用户组，§97） |
 | api-keys | `usage:all:read`：全部用户的密钥（使用记录本来就向它展示所有密钥的 id、名称、所属用户） | `apikey:self:manage`：调用者自己的密钥 |
 | accounts | `account:read`：全部账号；只有 `account:own:read` 时自动只看自己创建的（同 `GET /accounts`，§21.2） | `account:read` 或 `account:own:read`：只看自己创建的 |
 | models | `price:read`：价格表里的全部模型，含已停用的价格 | `apikey:self:manage`：已启用的价格里，调用者任一可用分组（`/me/groups` 的范围）的模型名单放行的模型（0.1.279 时这等于 `GET /me/prices` 对每个可用分组结果的并集；§97 起 `/me/prices?group_id=` 只列分组里的账号提供的模型，所以这个范围是各可用分组 `/me/prices?group_id=` 结果并集的超集，§79.5） |

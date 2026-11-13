@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { MAX_ACCOUNT_BATCH, type PluginHost, type UseListResult } from '@sub2api/host'
+import { MAX_ACCOUNT_BATCH, type ApiClient, type PluginHost, type UseListResult } from '@sub2api/host'
 import type { SelectOption, StatusTone, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
@@ -368,8 +368,29 @@ export interface Degraded {
   account_ids: number[]
 }
 export const fetchDegraded = () => api().get<Degraded>('/degraded')
-/** GET /degraded covers every account: the core asks the full account:read (own-level viewers get a 403). */
-export const canSeeDegraded = () => useDwHost().permissions.has('account:read')
+
+/**
+ * The node views cover every account: GET /degraded and /stats, and /status
+ * and /events without an account_id. The core asks the full account:read for
+ * them (manifest routes, RouteAccounts); a narrower scope (own, a group, some
+ * accounts) gets a 403 there and has to name an account.
+ */
+export const seesAllAccounts = () => useDwHost().permissions.has('account:read')
+
+/**
+ * The plugin API for a key list (/status, /events) under useList: for a
+ * viewer without seesAllAccounts, a query naming no account is answered
+ * empty here instead of being refused by the core.
+ */
+export function keyListApi(): ApiClient {
+  const client = api()
+  if (seesAllAccounts()) return client
+  return {
+    ...client,
+    list: (path, query, opts) =>
+      query?.account_id ? client.list(path, query, opts) : Promise.resolve({ items: [], page: { page: 1, page_size: 0, total: 0 }, paged: false })
+  }
+}
 
 // The account list renders the slot once per row: ids asked for in the same
 // tick are fetched together, MAX_ACCOUNT_BATCH per GET /weights (its limit).

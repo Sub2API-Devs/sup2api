@@ -212,3 +212,17 @@ func TestRestrictScoped(t *testing.T) {
 		t.Fatalf("superuser restrict = %+v", got)
 	}
 }
+
+// ScopeGroups lists the groups named by group scopes of any action, once,
+// sorted; group/*, own, row ids and unscoped keys name none.
+func TestScopeGroups(t *testing.T) {
+	t.Parallel()
+	set := PermissionSetOf("account:read:group/12", "account:update:group/3/account/5", "proxy:read:own",
+		"account:test:group/*", "account:delete:account/9", "account:create:group/12", "user:read")
+	if got := set.ScopeGroups(); !slices.Equal(got, []int64{3, 12}) {
+		t.Fatalf("ScopeGroups = %v", got)
+	}
+	if got := PermissionSetOf("account:read", "proxy:read:own").ScopeGroups(); len(got) != 0 {
+		t.Fatalf("no group scope: %v", got)
+	}
+}

@@ -108,6 +108,22 @@ func (s PermissionSet) DataScope(uid int64, action perm.Key) DataScope {
 	return Compile(uid, s.Scoped[action])
 }
 
+// ScopeGroups lists the groups its scopes name (group/G, group/G/account/X)
+// under any action, sorted: the groups whose names the holder's own grants
+// show (lookup.Entity.Named).
+func (s PermissionSet) ScopeGroups() []int64 {
+	var out []int64
+	for _, scopes := range s.Scoped {
+		for _, sc := range scopes {
+			if sc.Group > 0 {
+				out = append(out, sc.Group)
+			}
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 // KeyList lists the canonical keys of the set, sorted (not the superuser
 // flag), without the scopes of an action it holds for every row.
 func (s PermissionSet) KeyList() []string {

@@ -29,6 +29,9 @@ var entities = []*Entity{
 		// account:group:bind alone finds the groups the caller can use: the
 		// groups an "own" account holder may bind.
 		Read: "group:read", OwnRead: "account:group:bind",
+		// A group-scoped grant (account:read:group/G) shows its group by
+		// name to a holder of neither.
+		Named: core.PermissionSet.ScopeGroups,
 		// GET /me/groups.
 		Mine: &Mine{Scope: callerIs(groupOpenTo)},
 	},

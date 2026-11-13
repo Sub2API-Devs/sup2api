@@ -13,7 +13,7 @@
 1. **一个版本发布全部迁移 0097–0103**：托管核心要求库里的迁移是本核心清单的连续前缀（`app/managed_checks.go` `appliedPrefix`）。发布前再合一次 develop：develop 若已新增 0097 及以后的迁移，本分支的迁移要整体后移重新编号（0098 的 checksum 已在期 4 P4F2 变过，测试库需重建；生产未跑过）。
 2. **S1–S4、S5、R0 与整合审查的 2FA 开启同版本发布**：后端改为 proof 之后，旧控制台的改密码、关 2FA、重新生成备用码、添加通行密钥、开启 2FA、超管移交、ccgateway 远程设置等都会 403 `verification_required`。只回滚其中一部分也会出同样的问题，要一起回滚。
 3. **资源范围两步走**：本版本是 R2a（0103 只新增，8 个旧 own key 作为别名保持 active）。R2b 在确认全部节点都已升级后的下一版本做：按旧 own 行重新同步新表 → 目录把旧 key 标 removed → 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥中的旧写法与冗余旧行（写审计）→ 前端删除 `LEGACY_OWN`（`implies.ts` 的别名表与 Go `Parse` 的别名表保留）。见“期 4 资源范围（R0–R7）发布说明”。
-4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。旧节点上 admin（0099 收回超管专属权限）与 operator（0102 收回 `role:define`）暂时不能管理角色，由超管处理；旧节点重启时会把 `role:manage` 等目录行的状态改回，新节点重启后恢复。托管升级先停副本再迁移，没有新旧混跑阶段。
+4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。新旧混跑且最后启动的是新节点时，`role:manage` 已被标为 removed，旧节点上 admin 与 operator 都不能管理角色（旧节点只认 `role:manage`），由超管处理。最后启动的是旧节点时（旧节点重启、或整体回滚只剩旧节点），旧节点把 `role:manage` 改回 active，而 admin、operator 存量的 `role:manage` 授予行从未删除，所以两者在旧节点上都能再新建、改、删角色和分配角色，operator 也重新得到 D3（P4F1/0102）收回的角色定义权，直到某个新节点重启；回滚后的处理见第 2 节。托管升级先停副本再迁移，没有新旧混跑阶段。
 5. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.286`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.286 开始（moderation `hostUICompat ^3.15`）。发布号不是 0.1.286 时，把 `grep -rn 0.1.286 next/plugins next/sdk/manifest` 的结果与 `web/packages/ui/README.md`“UI SDK 3.15”一节一并改掉。dynweight 取 0.5.9（develop 已发布 0.5.8）。
 6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
 7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。发布前按运维清单第 8 条查；有安装时先卸载再装，或由用户决定一次性改 `publisher_id`（写审计）。
@@ -35,7 +35,10 @@
 
 - 0099、0101–0103 设 `SET LOCAL lock_timeout = '10s'` 并先锁 `authz_meta`，有写入才推进 authz 版本，各节点约 30 秒内重新加载权限；0100 只设 `lock_timeout`；0097、0098 两者都不设。
 - **托管部署回滚核心**：旧核心启动时发现库里有它不认识的迁移会拒绝启动（`database includes migrations unknown to this core`），所以必须先删除迁移记录：`DELETE FROM schema_migrations WHERE id IN ('0097_role_assignable.sql','0098_one_super_admin.sql','0099_reclaim_super_only.sql','0100_account_admin_locked.sql','0101_operator_assignable.sql','0102_operator_reclaim_role_define.sql','0103_scoped_permissions.sql');`。删了记录的迁移在再次升级时会重跑：0099、0101、0102 会再次收回期间由超管设回的授权（写审计）；删了 `admin_locked` 列等对象而没删记录则不会重建。非托管部署可以不删记录。
-- 回滚核心时插件也回滚到上一版本（新版本插件的 `hostCompat` 不接受旧核心）。访问密钥里新增的规范写法旧代码忽略，旧写法仍在。回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
+- **只回滚核心不行，插件要一起切回上一版本**：十个插件的新版本 `hostCompat` 都是 `>=0.1.286`，旧核心（0.1.285）上它们启动失败（`incompatible with host 0.1.285`），`/healthz` 一直 503；不健康期间旧核心的内置安装器约每 20 秒重试一次上传，每分钟写约 24 条 `plugin.upload` 审计。做法：发布前记下各插件的 `plugins.active_version`（`SELECT key, active_version FROM plugins ORDER BY key;`）；回滚时先启动旧核心，再用旧核心的 `POST /api/v1/plugins/:key/upgrade {"version": "<发布前的版本>"}` 逐个切回本版本升级过的插件（超管会话），几秒内恢复健康。生产备份验证（av_prod 快照）时需要切回的是 6 个：anthropic 0.3.1、ccgateway 0.1.132、codex 0.1.3、dynweight 0.5.8、moderation 0.11.2、volcengine 0.12.6，以发布当天的记录为准。
+- 访问密钥里新增的规范写法旧代码忽略，旧写法仍在。回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
+- **回滚后 operator 重新得到角色管理**：整体回滚（只剩旧节点）后，旧核心把 `role:manage` 改回 active，admin、operator 存量的 `role:manage` 授予仍在，两者在旧版本上都能新建、修改、删除角色并分配角色（operator 也包括 D3 收回的角色定义）。回滚窗口要保持 D3 的效果，由超管在旧版本角色页取消 operator 的 `role:manage`（再次升级时 `role:assign` 已在，不受影响）；不处理时，再次升级后新核心把 `role:manage` 标回 removed，operator 回到只有 `role:assign`（`role:define` 不会被重新继承，生产备份验证已确认）。
+- **回滚再升级后，本版本新增的插件权限不会再自动授予**：回滚插件时旧核心删除新版本才有的插件权限行，授予随外键一起删除（例如 moderation 0.12.0 的 `plugin.moderation:moderation:exempt`，升级时按 `inheritFrom` 自动授予 admin）。再次升级时权限行重新登记，但激活时不按 `defaultRoles`/`inheritFrom` 授予（P4C：激活不授予，只有同意时登记的新权限才授予），admin 因此不再持有。再次升级后由超管在角色页重新授予本版本新增的插件权限，并用运维清单第 6 条核对 manifest 默认角色的差异。
 
 ### 3. 行为变化（最终口径）
 
@@ -949,7 +952,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
   1. `authz/sync.go`：核心权限拆分继承时跳过默认集合不含该 key 的内置角色（`builtinsWithout`）。内置角色的核心权限就是其默认集合，旧 key 上的授予来自旧默认、不是管理员选择，所以拆分不带过去；自定义角色照常继承。目前只影响 `role:define` 在内置 operator 上（admin 默认含两半，operator 默认含 `role:assign`；user、supplier 没有 `role:manage`）。插件权限的继承不受影响。
   2. `0102_operator_reclaim_role_define.sql`：收回本版本更早启动已经给出的那条授予（测试库、预发、做过生产备份验证的库）。只删除内置（`builtin AND NOT superuser`）`operator` 上的核心权限 `role:define`，每条写 `authz.reclaim` 审计（actor 为系统，`detail.via = "migration 0102"`、`role`、`key`），有收回才移动 `authz_meta.version`。写法同 0099/0101：`SET LOCAL lock_timeout = '10s'`，先 `SELECT … FROM authz_meta FOR UPDATE`。自定义角色与 operator 的其他权限不动；超管之后仍可再授予。
 - 测试：authz `TestSyncCoreSplitsRoleManage`（持有 `role:manage` 的内置 admin、operator 与自定义角色首次同步后：operator 只有 `role:assign`，admin 两半都有，自定义角色两半都有并有继承审计）；migrations `TestOperatorReclaimRoleDefineMigration`（新库不写不移版本；收回 operator 的、保留 admin 与自定义角色的、一条审计、版本 +1；再跑无变化）。
-- 影响对象：内置 operator 的持有者不能再定义角色（新建、改权限、删除角色）（生产 operator 0 人）。发布说明草稿：回滚到旧版本后 admin（0099）与 operator（本项）暂时都不能管理角色，由超管处理。
+- 影响对象：内置 operator 的持有者不能再定义角色（新建、改权限、删除角色）（生产 operator 0 人）。回滚时：新旧混跑且最后启动的是新节点时，旧节点上 admin 与 operator 都不能管理角色；整体回滚、旧节点最后启动时旧核心把 `role:manage` 改回 active，两者存量的 `role:manage` 授予让它们重新能管理角色（operator 也包括角色定义），见发布说明第 1 节第 4 条与第 2 节。
 - 回滚：revert 同步改动即恢复拆分时的继承（只对之后首次创建的 key 生效）；迁移不可逆向执行，需要时由超管在角色页给 operator 重新勾选 `role:define`，或按 `authz.reclaim`（`via = migration 0102`）审计手工补回。
 
 ## 期 4 P4F2：0098 多超管报错不再含用户邮箱
@@ -1386,3 +1389,12 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - **其他**：e2e `guardTestVersion` 改为 0.2.9-test（与 guard overlay 一致）；`PLUGIN-CODEX.md` 补 0.1.4；mock 的明文回显、删除用户、插件上传/市场安装/同意也走二次验证；二次验证弹窗补 `host.install` 文案（R0 新增的 scope 原来显示原文）；期 4 条目按任务组重排并标注被后续任务改写的地方；R2a 与资源范围发布说明补托管部署的回滚步骤。
 - 审查确认无问题的：proof 绑定（用户、会话或密钥、scope、`METHOD path`）与一次性消费；无验证器时失败收紧；`X-Verify-Proof` 不转发给插件；`Restrict`/`Implies` 不会让密钥宽于用户；`Router.Self` 与 `withSelf` 只给有效用户；`KeyAllowed`、`sessionOnly`、`SelfConfirmation` 已删干净；0102/0103 在生产形态数据上可执行且可重跑；T84 版本与测试包版本一致。
 - 留给用户决定（未改）：见文首“发布说明”第 6 节“待用户决定”。
+
+## 期 4 生产备份验证修复（第 1 轮）
+
+- 分组查找（UX）：只持有分组范围账号权限、没有 `group:read` 与 `account:group:bind` 的用户（例如 `account:read:group/19`），在访问密钥选择器和角色编辑器里看到的分组只有“#19”，`GET /lookup/groups?ids=19` 返回 403。改为：`lookup.Entity` 新增 `Named`，groups 设为 `core.PermissionSet.ScopeGroups`（权限集合里任一动作的 `group/G`、`group/G/account/X` 点名的分组，访问密钥按密钥自己的权限），两个权限都没有时只查这些分组，一个都没有仍 403。持有 `account:group:bind` 的口径不变（可用分组，不并上点名的分组）。CONTRACTS §96.3。
+- dynweight 插件页（UX）：分组、账号或 own 范围的 `account:read` 持有者打开插件页时，“有效权重”默认查询 `GET /status?degraded=1` 不带账号，核心按 `RouteAccounts` 要求全量 `account:read`，页面显示原始的 “permission denied”。改为：`host.ts` 的 `seesAllAccounts`（原 `canSeeDegraded`，全量 `account:read`）与 `keyListApi`：不能看全部账号时，“有效权重”“权重事件”在选定账号前把查询在本地答成空表并提示先选账号，本节点计数（`/stats`）不显示；工具栏降权徽标沿用同一判断。dynweight 0.5.9 未发布，不另升版本。CONTRACTS §74.5。
+- 发布说明（文档）：第 1 节第 4 条与第 2 节补充整体回滚时 `role:manage` 恢复、operator 重新得到角色管理及处理方式；只回滚核心不可行、插件逐个经旧核心 `POST /plugins/:key/upgrade` 切回上一版本（版本取发布前记录）；回滚再升级后本版本新增的插件权限（如 moderation `exempt`）不再自动授予、需超管重新授予。P4F1 条目的“发布说明草稿”同步改写。
+- 未改：旧核心给第二个用户授予 `super_admin` 时被 0098 触发器拒绝并返回 500，是旧代码的行为，已记在“期 1 生产备份验证修复（第 2 轮）”。
+- 测试：core `TestScopeGroups`；lookup `TestLookup`（只有范围授予的 dave：列出点名的分组、`ids` 与 `q` 查不到范围外的分组、响应形状）、`TestLookupAccessKey`（密钥带分组范围可查、用户有而密钥没有时 403）；dynweight UI `permissions.spec.ts` `keyListApi`（范围查看者不带账号不请求、带账号照常请求；全量时就是插件 API）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
