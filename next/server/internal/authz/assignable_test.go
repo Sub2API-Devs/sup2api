@@ -431,6 +431,21 @@ func TestHeldRoleWritesNeedAssign(t *testing.T) {
 			t.Errorf("lead1 may not %s a role it manages: %v", name, err)
 		}
 	}
+	// An access key has no assignable list: even the super admin's key
+	// writes only custom roles without holders.
+	rootKey := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"role:define", "role:read", "user:read"}})
+	for _, key := range []string{"held", "empty"} {
+		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x"), PermissionKeys: []string{"user:read"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addUser(t, s, "held@x.com", "held")
+	if _, err := s.UpdateRole(rootKey, root, roleID(t, s, "held"), UpdateRoleInput{Name: lt("Keyed", "密钥")}); !isCode(err, "permission_denied") || detail(err, "role") != "held" {
+		t.Errorf("root key renames a held role: %v", err)
+	}
+	if _, err := s.UpdateRole(rootKey, root, roleID(t, s, "empty"), UpdateRoleInput{Name: lt("Keyed", "密钥")}); err != nil {
+		t.Errorf("root key may not rename a role without holders: %v", err)
+	}
 }
 
 // Deleting a role with holders revokes it from them, so the actor must be
