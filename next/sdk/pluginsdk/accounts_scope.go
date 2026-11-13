@@ -42,7 +42,7 @@ import (
 // request the plugin is serving: call these inside the HTTP handler, with its
 // request, not from a job or after the handler returned. Otherwise the call
 // is codes.PermissionDenied, which RequireAccounts turns into a 403 like a
-// user without either account key. Hosts before this call answer
+// user holding account:<action> at no scope. Hosts before this call answer
 // codes.Unimplemented, which fails closed here; a plugin relying on it
 // declares the matching hostCompat.
 
@@ -50,7 +50,8 @@ import (
 type AccountScope struct {
 	// All: the user reaches every account.
 	All bool
-	// allowed are, without All, the asked accounts the user created.
+	// allowed are, without All, the asked accounts within the user's scope
+	// (own, groups, ids; CONTRACTS §21.0).
 	allowed map[int64]bool
 }
 
@@ -71,8 +72,8 @@ func (s AccountScope) Filter(ids []int64) []int64 {
 
 // ResolveAccountScope asks the host what req's caller may do (action "read",
 // "update" or "test") to the accounts ids. The error is ErrNoCaller for a
-// request without a user, codes.PermissionDenied when the user holds neither
-// account key (or the plugin lacks "accounts.read", or req is not a request
+// request without a user, codes.PermissionDenied when the user holds
+// account:<action> at no scope (or the plugin lacks "accounts.read", or req is not a request
 // in flight), or the failed host call.
 func ResolveAccountScope(ctx context.Context, h Host, req *pluginv1.HTTPRequest, action string, ids ...int64) (AccountScope, error) {
 	uid := req.GetCaller().GetUserId()

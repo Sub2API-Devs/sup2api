@@ -80,8 +80,8 @@ func TestManifestShape(t *testing.T) {
 }
 
 // TestRouteAccounts pins the accounts the core checks before forwarding: the
-// own level passes for accounts the caller created, a request naming none (a
-// group, the node view) needs account:<action>, and the settings routes act
+// a narrower scope (own, groups, ids) passes for the accounts it reaches, a
+// request naming none (a group, the node view) needs the full account:<action>, and the settings routes act
 // on no account.
 func TestRouteAccounts(t *testing.T) {
 	var m manifest.Manifest
