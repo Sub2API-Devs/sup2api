@@ -343,10 +343,10 @@ const (
 	disposeExpired = "expired"
 )
 
-// disposePreparation cancels p for reason: it tells the plugin (the cancel
-// phase; only a cancel by its creator stops on a refusal), marks the row
-// cancelling, which no longer counts as open, has the resource drop what it
-// started, then marks it cancelled (an abandoned one is deleted) and audits
+// disposePreparation cancels p for reason: it marks the row cancelling,
+// which no longer counts as open, tells the plugin (the cancel phase: before
+// that for a cancel by its creator, which a refusal stops; otherwise once
+// the row starts cancelling), has the resource drop what it started, then marks it cancelled (an abandoned one is deleted) and audits
 // it. A row not in a state reason applies to is a conflict, but for the
 // sweep. A failure leaves it cancelling for the sweep to retry.
 func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparation, reason string) error {
@@ -362,24 +362,34 @@ func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparat
 	if err != nil {
 		return err
 	}
-	if err := s.preparationCallback(ctx, p, "cancel", ""); err != nil {
-		if reason == disposeCancelled {
-			return err
+	if reason == disposeCancelled {
+		if err := s.preparationCallback(ctx, p, "cancel", ""); err != nil {
+			return err // the plugin may refuse its creator's cancel
 		}
-		slog.WarnContext(ctx, "account: preparation cancel callback", "key", p.Key, "reason", reason, "err", err)
 	}
-	tag, err := s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelling' WHERE key=$1 AND account_id IS NULL
-		AND CASE $2::text WHEN 'abandoned' THEN state='pending'
-			WHEN 'expired' THEN state='cancelling' OR state IN ('pending','ready') AND (expires_at<=now() OR last_seen_at<now()-interval '15 minutes')
-			ELSE state IN ('pending','ready','cancelling') END`, p.Key, reason)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
+	var was string
+	err = s.d.DB.Pool.QueryRow(ctx, `UPDATE account_preparations ap SET state='cancelling'
+		FROM (SELECT key, state FROM account_preparations WHERE key=$1 FOR UPDATE) old
+		WHERE ap.key=old.key AND ap.account_id IS NULL
+		AND CASE $2::text WHEN 'abandoned' THEN ap.state='pending'
+			WHEN 'expired' THEN ap.state='cancelling' OR ap.state IN ('pending','ready') AND (ap.expires_at<=now() OR ap.last_seen_at<now()-interval '15 minutes')
+			ELSE ap.state IN ('pending','ready','cancelling') END
+		RETURNING old.state`, p.Key, reason).Scan(&was)
+	if store.IsNoRows(err) {
 		if reason == disposeExpired {
 			return nil
 		}
 		return core.ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	// The system disposing of it tells the plugin once, when it starts to
+	// (not on a retry of one already cancelling); a refusal does not stop it.
+	if reason != disposeCancelled && was != "cancelling" {
+		if err := s.preparationCallback(ctx, p, "cancel", ""); err != nil {
+			slog.WarnContext(ctx, "account: preparation cancel callback", "key", p.Key, "reason", reason, "err", err)
+		}
 	}
 	if err := resource.CancelAccountPreparation(ctx, p); err != nil {
 		return err

@@ -144,7 +144,10 @@ func TestAccountPreparationOwnershipReadinessAndAdoption(t *testing.T) {
 }
 
 func TestAccountPreparationCleanupHonorsRenewal(t *testing.T) {
-	e, resource, proxy := preparationFixture(t)
+	e, resource, proxy, plugin := preparationPluginFixture(t)
+	cancels := func() int {
+		return len(slices.DeleteFunc(slices.Clone(plugin.phases), func(p string) bool { return p != "cancel" }))
+	}
 	code, out := e.do("POST", "/account-types/fixture/managed/preparations", map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}})
 	if code != 201 {
 		t.Fatalf("prepare: %d %v", code, out)
@@ -155,8 +158,8 @@ func TestAccountPreparationCleanupHonorsRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.disposePreparation(ctx, preparation, disposeExpired); err != nil || resource.cancelled != 0 {
-		t.Fatalf("active preparation was swept: %v", err)
+	if err := e.svc.disposePreparation(ctx, preparation, disposeExpired); err != nil || resource.cancelled != 0 || cancels() != 0 {
+		t.Fatalf("active preparation was swept: %v, plugin told %d times", err, cancels())
 	}
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_preparations SET expires_at=now()-interval '1 minute' WHERE key=$1`, key); err != nil {
 		t.Fatal(err)
@@ -167,6 +170,9 @@ func TestAccountPreparationCleanupHonorsRenewal(t *testing.T) {
 	}
 	if res, err := tasks.run(t, ctx, PreparationCleanupTask); err != nil || res.Count != 0 || resource.cancelled != 1 {
 		t.Fatalf("cleanup was not idempotent: %+v %v", res, err)
+	}
+	if cancels() != 1 {
+		t.Fatalf("plugin told of the cancel %d times", cancels())
 	}
 }
 

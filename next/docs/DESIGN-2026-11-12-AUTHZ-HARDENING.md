@@ -694,7 +694,7 @@
 
 ## 期 4 P4F4：小清理（期 3 审查小问题）
 
-- 预备容器：`abandonPreparation` 并入 `disposePreparation(ctx, p, reason)`（`account/preparations.go`，唯一一处）。`reason` 为 `cancelled`（本人取消，插件 cancel 回调拒绝时中止，同前）、`abandoned`（首次准备失败，调用方已持锁；只处理 `pending`，成功后删行，归还名额与幂等键，同前）、`expired`（清理任务，筛选同前）。三者都先回调插件 cancel 阶段（后两者失败只记日志、不阻止清理；此前放弃与清理不回调），撤销资源后写 `account.preparation.cancel` 审计（`detail.reason`；actor 为创建者，清理任务为系统；此前放弃不写审计，取消在撤销前写）。
+- 预备容器：`abandonPreparation` 并入 `disposePreparation(ctx, p, reason)`（`account/preparations.go`，唯一一处）。`reason` 为 `cancelled`（本人取消，插件 cancel 回调拒绝时中止，同前）、`abandoned`（首次准备失败，调用方已持锁；只处理 `pending`，成功后删行，归还名额与幂等键，同前）、`expired`（清理任务，筛选同前）。三者都回调插件 cancel 阶段：本人取消在改状态前回调（插件拒绝即中止，同前），放弃与清理在该行真正开始撤销（由非 `cancelling` 改为 `cancelling`）后回调一次，失败只记日志、不阻止清理，被续期而未清理的、重试中的不再回调（此前放弃与清理不回调；审查后修正回调时机），撤销资源后写 `account.preparation.cancel` 审计（`detail.reason`；actor 为创建者，清理任务为系统；此前放弃不写审计，取消在撤销前写）。
 - 插件同意：`new_permission_roles`、`role_keys_for_new_permissions` 里的未知角色由 install 先校验（`checkNamedRolesExist`），400 的字段名与请求一致，目录已有的权限写的未知角色也 400（此前静默忽略；authz `CanGrantToRoles` 的 `role_keys` 字段只作兜底）。
 - 删除：`buildReview` 里随即被 `resolveDefaultRoles` 覆盖的 `DefaultRoles` 赋值；无生产调用方的 `core.Authorizer.CanActOn` 与 `authz.Service.CanActOn`（以及各测试替身）；`authz/menus.go`、`plugin/api/ui.go` 传给 `manifest.FilterUI` 的判断里重复的 `perm == ""`（`FilterUI` 自己处理）。
 - 测试：account `TestAccountPreparationLimit`（放弃各有审计与插件 cancel 回调）；install `TestConsentRoleGrantRights`（未知角色的字段名，含已有权限）；其余为现有测试。

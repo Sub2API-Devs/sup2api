@@ -219,7 +219,7 @@ func builtinsWithout(key string) []string {
 // syncGrant runs sql, an automatic grant returning the role id and the
 // granted key (a permission, or an assignable role) of each row it adds,
 // and audits each row as authz.sync.grant by the system with via plus the
-// key as detail. A nil via grants without auditing.
+// key as detail.
 func (s *Service) syncGrant(ctx context.Context, tx pgx.Tx, via map[string]any, sql string, args ...any) error {
 	type grant struct {
 		role int64
@@ -233,7 +233,7 @@ func (s *Service) syncGrant(ctx context.Context, tx pgx.Tx, via map[string]any, 
 		var g grant
 		return g, r.Scan(&g.role, &g.key)
 	})
-	if err != nil || via == nil {
+	if err != nil {
 		return err
 	}
 	for _, g := range grants {
