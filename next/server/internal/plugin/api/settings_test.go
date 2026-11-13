@@ -215,8 +215,9 @@ func TestSchemaSecretsLegacyUnreachable(t *testing.T) {
 		_, maskAll = schemaSecrets([]byte(schema))
 		assert.True(t, maskAll, schema)
 	}
-	// So does a reference at the root of a schema with secrets.
-	_, maskAll = schemaSecrets([]byte(`{"$ref":"#/$defs/s","$defs":{"s":{"properties":{"k":{"writeOnly":true}}}}}`))
+	// So does a reference at the root of a schema with secrets that is not
+	// followed (a local one to the root's $defs is).
+	_, maskAll = schemaSecrets([]byte(`{"$ref":"#/$defs/s/properties/k","$defs":{"s":{"properties":{"k":{"writeOnly":true}}}}}`))
 	assert.True(t, maskAll)
 
 	// A marker belonging to no single setting masks them all.
@@ -247,4 +248,24 @@ func TestSecretsWithoutSchema(t *testing.T) {
 
 	// A schema form keeps to its own fields.
 	assert.Empty(t, (&SettingsView{}).secrets(old))
+}
+
+// The writeOnly and x-sensitive fields of a local $defs object a property
+// refers to are masked where the reference stands (FU4).
+func TestMaskValuesThroughLocalRef(t *testing.T) {
+	const schema = `{"properties":{"primary":{"$ref":"#/$defs/upstream"},"backup":{"$ref":"#/$defs/upstream"},"name":{"type":"string"}},
+		"$defs":{"upstream":{"type":"object","properties":{"base_url":{"type":"string","x-sensitive":true},"key":{"type":"string","writeOnly":true},"label":{"type":"string"}}}}}`
+	fields := schemaFields(schema)
+	// The settings validator follows the same reference.
+	require.NoError(t, validateSettings([]byte(schema), map[string]any{"backup": map[string]any{"key": "k"}}))
+	require.Error(t, validateSettings([]byte(schema), map[string]any{"backup": map[string]any{"key": 5}}))
+	v := map[string]any{
+		"name":    "n",
+		"primary": map[string]any{"base_url": "https://a", "key": "k1", "label": "a"},
+		"backup":  map[string]any{"base_url": "https://b", "key": "k2", "label": "b"},
+	}
+	maskValues(fields, v)
+	assert.Equal(t, map[string]any{"base_url": Mask, "key": Mask, "label": "a"}, v["primary"])
+	assert.Equal(t, map[string]any{"base_url": Mask, "key": Mask, "label": "b"}, v["backup"])
+	assert.Equal(t, "n", v["name"])
 }

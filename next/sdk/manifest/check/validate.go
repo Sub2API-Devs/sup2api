@@ -508,8 +508,8 @@ func (v *validator) maskableSecrets(field, schema string) {
 			unreachable[i] = "(the schema itself, which must be a JSON object without a marker)"
 		}
 	}
-	v.add(field, "unmaskable_secret", "writeOnly, format password and x-sensitive are only masked on properties of nested objects (at most %d deep), and a schema using them takes no $ref; found at %s",
-		manifest.MaxSecretDepth, strings.Join(unreachable, ", "))
+	v.add(field, "unmaskable_secret", "writeOnly, format password and x-sensitive are only masked on properties of nested objects (at most %d deep), and a schema using them takes no reference other than a local \"#/$defs/<name>\" or \"#/definitions/<name>\" where a value path leads (no cycle, at most %d inside one another); found at %s",
+		manifest.MaxSecretDepth, manifest.MaxSecretRefDepth, strings.Join(unreachable, ", "))
 }
 
 // form validates a console form; settings=true for ui.settings.
