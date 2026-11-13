@@ -99,7 +99,7 @@ func TestActOnOthers(t *testing.T) {
 	ctx := context.Background()
 	var asked []int64
 	g := guardFunc(func(_ int64, targets ...int64) error { asked = targets; return nil })
-	if err := ActOnOthers(ctx, g, 7, 3, 7); !errors.Is(err, ErrSelfTarget) || asked != nil {
+	if err := ActOnOthers(ctx, g, 7, 3, 7); !errors.Is(err, ErrSelfTarget) || !slices.Equal(asked, []int64{3}) {
 		t.Fatalf("self among targets: err = %v, asked = %v", err, asked)
 	}
 	if err := ActOnOthers(ctx, g, 7, 3, 4); err != nil || !slices.Equal(asked, []int64{3, 4}) {
@@ -118,8 +118,12 @@ func TestActOnOthers(t *testing.T) {
 	if err := ActOnOthers(ctx, denied, 7, 3); !errors.Is(err, ErrPermissionDenied) {
 		t.Fatalf("guard's denial: %v", err)
 	}
+	// The others' denial comes first: no exemption is asked for.
 	if err := ActOnOthers(ctx, denied, 9, 9, 3); !errors.Is(err, ErrPermissionDenied) {
-		t.Fatalf("guard's denial after the exemption: %v", err)
+		t.Fatalf("guard's denial of the others: %v", err)
+	}
+	if err := ActOnOthers(ctx, denied, 7, 7, 3); !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("guard's denial before the self check: %v", err)
 	}
 }
 

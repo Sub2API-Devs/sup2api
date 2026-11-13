@@ -162,10 +162,11 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 // right now: a disabled user can do nothing, and comparing against that
 // would let anyone with user:update re-enable a disabled admin or set its
 // password and take the account over (SEC-H2). The actor itself among the
-// targets and the system (actor 0) pass; ActOnOthers asks ActOnSelf first. An
+// targets and the system (actor 0) pass; ActOnOthers asks ActOnSelf for the former. An
 // access key acts with less than its owner's roles, so its owner is a target
 // like any other: no access key changes a superuser, its own included
-// (decision 1).
+// (decision 1), except where ActOnOthers takes the owner out and asks
+// ActOnSelf (FU5).
 func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error {
 	return s.canActOnUsers(ctx, s.querier(), actorID, targetIDs...)
 }
@@ -183,8 +184,12 @@ func (s *Service) ActOnSelf(ctx context.Context, actorID int64) error {
 	if !set.Superuser {
 		return core.ErrSelfTarget
 	}
+	if s.db == nil {
+		return nil // tests without a database: nowhere to audit
+	}
 	detail := map[string]any{"reason": "self_by_superuser", "via": "session", "request_id": core.RequestID(ctx)}
-	if key, ok := core.AccessKey(ctx); ok && key.UserID == actorID {
+	if core.ByAccessKey(ctx, actorID) {
+		key, _ := core.AccessKey(ctx)
 		detail["via"], detail["access_key_id"] = "access_key", key.KeyID
 	}
 	return s.audit(ctx, q, actorID, "user.act_on_self", "user", actorID, detail)

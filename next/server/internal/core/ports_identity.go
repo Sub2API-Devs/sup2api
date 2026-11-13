@@ -207,16 +207,18 @@ var ErrSelfTarget = ErrConflict.WithMessage("you cannot do this to yourself")
 // ActOnOthers is UserGuard for actions nobody but a superuser takes on
 // themselves, such as moving money to oneself or choosing one's own user
 // group (M7, C-L7, FU5). The route has already checked the permission, so a
-// superuser's access key reaches here only when it holds it; the actor
-// itself is then no target of CanActOnUsers.
+// superuser's access key reaches here only when it holds it. The other
+// targets go first, so an exemption is audited only for a request that
+// passes.
 func ActOnOthers(ctx context.Context, g UserGuard, actorID int64, targetIDs ...int64) error {
-	if actorID != 0 && slices.Contains(targetIDs, actorID) {
-		if err := g.ActOnSelf(ctx, actorID); err != nil {
-			return err
-		}
-		targetIDs = slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == actorID })
+	if actorID == 0 || !slices.Contains(targetIDs, actorID) {
+		return g.CanActOnUsers(ctx, actorID, targetIDs...)
 	}
-	return g.CanActOnUsers(ctx, actorID, targetIDs...)
+	others := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == actorID })
+	if err := g.CanActOnUsers(ctx, actorID, others...); err != nil {
+		return err
+	}
+	return g.ActOnSelf(ctx, actorID)
 }
 
 // GuardOrDeny is g, or a guard refusing everything with ErrInternal when g
