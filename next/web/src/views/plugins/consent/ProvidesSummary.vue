@@ -208,6 +208,7 @@ const hasProvides = computed(() => {
               <span class="font-mono opacity-70">({{ p.key }})</span>
               <SIcon v-if="p.sensitive" name="lock" class="h-3 w-3" />
               <span v-if="p.default_roles?.length" class="opacity-70">{{ t('plugins.consent.defaultRoles', { roles: p.default_roles.map(roleName).join(listSep) }) }}</span>
+              <span v-if="p.inherit_from?.length" class="opacity-70">{{ t('plugins.consent.inheritFrom', { keys: p.inherit_from.join(listSep) }) }}</span>
             </SBadge>
           </li>
         </ul>

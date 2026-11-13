@@ -442,9 +442,9 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 }
 
 // catalogKeys are the keys of m's userPermissions and of their inheritFrom
-// that the permission catalog has now (tx holds the plugin row, so no other
-// consent changes them meanwhile).
-func catalogKeys(ctx context.Context, tx pgx.Tx, m *manifest.Manifest) (map[string]bool, error) {
+// that the permission catalog has now (in consent, tx holds the plugin row,
+// so no other consent changes them meanwhile).
+func catalogKeys(ctx context.Context, tx store.Querier, m *manifest.Manifest) (map[string]bool, error) {
 	var keys []string
 	for _, up := range m.UserPermissions {
 		keys = append(keys, manifest.PermissionKey(m.Key, up.Key))

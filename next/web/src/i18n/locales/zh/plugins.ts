@@ -208,6 +208,7 @@ export default {
     userPermissions: '用户权限',
     grantToRoles: '改为授予以下角色（全部不勾选则按默认授予）：',
     defaultRoles: '默认授予：{roles}',
+    inheritFrom: '原 {keys} 的持有者继承',
     database: '数据库',
     migrations: '迁移 {n} 个',
     showMigrations: '查看迁移',

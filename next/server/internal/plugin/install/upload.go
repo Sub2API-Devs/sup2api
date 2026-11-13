@@ -68,6 +68,9 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		return nil, err
 	}
 	r := buildReview(p.Manifest, p.Files, rec.verification, s.opt.HostVersion, rec.current)
+	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
+		return nil, err
+	}
 	r.ConsentStatus = rec.consent
 	r.PackageSHA256, r.PackageSize, r.UploadedAt = p.SHA256, int64(len(p.Raw)), rec.uploadedAt
 	r.UpgradeFrom = rec.upgradeOf

@@ -208,6 +208,7 @@ export default {
     userPermissions: 'User permissions',
     grantToRoles: 'Grant the new permissions to these roles instead (leave all unticked to use the defaults):',
     defaultRoles: 'by default: {roles}',
+    inheritFrom: 'holders of {keys} keep it',
     database: 'Database',
     migrations: '{n} migration(s)',
     showMigrations: 'Show migrations',

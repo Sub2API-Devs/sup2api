@@ -22,8 +22,9 @@ func TestPermissionDefsSort(t *testing.T) {
 }
 
 // roleGrants: an explicit NewPermissionRoles entry beats the older
-// RoleKeysForNewPermissions, which beats the manifest defaultRoles (admin
-// when omitted); PermissionDefs hands them on with qualified inheritFrom.
+// RoleKeysForNewPermissions, which beats a rename (inherit only), which
+// beats the manifest defaultRoles (admin when omitted, none for []);
+// PermissionDefs hands them on with inheritFrom.
 func TestRoleGrantsPriority(t *testing.T) {
 	m := &manifest.Manifest{Key: "growth", UserPermissions: []manifest.UserPermission{
 		{Key: "growth:use", DefaultRoles: []string{"user", "admin"}, InheritFrom: []string{"growth:read"}},
@@ -32,10 +33,9 @@ func TestRoleGrantsPriority(t *testing.T) {
 		{Key: "growth:quiet", DefaultRoles: []string{}},
 	}}
 	cases := []struct {
-		name string
-		req  ConsentRequest
-		want map[string][]string
-
+		name     string
+		req      ConsentRequest
+		want     map[string][]string
 		existing map[string]bool
 	}{
 		{"manifest", ConsentRequest{}, map[string][]string{"growth:use": {"user", "admin"}, "growth:stats:read": {"admin"}, "growth:manage": {"operator"}, "growth:quiet": {}}, nil},
@@ -47,6 +47,9 @@ func TestRoleGrantsPriority(t *testing.T) {
 			map[string]bool{"plugin.growth:growth:read": true}},
 		{"explicit", ConsentRequest{RoleKeysForNewPermissions: []string{"ops"}, NewPermissionRoles: map[string][]string{"growth:use": {"auditor"}, "growth:manage": {}}},
 			map[string][]string{"growth:use": {"auditor"}, "growth:stats:read": {"ops"}, "growth:manage": {}, "growth:quiet": {"ops"}}, nil},
+		{"explicit beats rename", ConsentRequest{NewPermissionRoles: map[string][]string{"growth:use": {"auditor"}}},
+			map[string][]string{"growth:use": {"auditor"}, "growth:stats:read": {"admin"}, "growth:manage": {"operator"}, "growth:quiet": {}},
+			map[string]bool{"plugin.growth:growth:read": true}},
 	}
 	for _, c := range cases {
 		got := roleGrants(m, c.req, c.existing)

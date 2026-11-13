@@ -528,7 +528,7 @@
     ```
     手工 SQL 不写审计，也不会递增 `authz_meta.version`，各节点的权限缓存要到下一次权限变更或重启才刷新；更推荐在角色页勾选（立即生效并带审计）。
   - 旧控制台（仍发 `role_keys_for_new_permissions: ["admin"]`）照旧只给 admin。
-  - 上传时自动沿用同意（`carryOverConsent`，升级没有新增宿主权限时）发的是空请求：新增的用户权限按 manifest 默认授予，无人审核；此前不授予任何角色（审查发现，接受：defaultRoles 本来就是系统目录默认，与核心升级自动授予一致）。
+  - 上传时自动沿用同意（`carryOverConsent`，升级没有新增宿主权限时）发的是空请求：新增的用户权限按 manifest 默认授予（改名的除外，只继承，见 T60 追加），无人审核；此前不授予任何角色（审查发现，接受：defaultRoles 本来就是系统目录默认，与核心升级自动授予一致）。
   - 已知边界：`inheritFrom` 只看本次同步前已有的授予，同一次同步里新建的两个 key 之间不传递；协调器激活传 nil，激活时才重新建出的 key（例如升级失败后激活旧版本，旧版本里被新版本删掉的 key）只按 `inheritFrom` 继承、不按 `defaultRoles` 授予，此前同样不授予。
 - 回滚：revert 这个提交即可，无迁移；已按新默认授出的角色权限保留，需要时在角色页取消。
 
@@ -562,7 +562,8 @@
 - 改动：
   - 改名规则（`install.roleGrants`）：新 key 声明了 `inheritFrom`，且同意时目录里已有其中某个旧 key（`catalogKeys` 一次查出本插件声明的 key 与它们的 `inheritFrom` key），视为改名或拆分，`GrantRoles` 为空，只靠 `SyncPlugin` 的继承；目录里没有旧 key（全新安装）才按 `defaultRoles`。没声明 `inheritFrom` 的新 key 照旧按 `defaultRoles`。同意请求的显式覆盖（`new_permission_roles`、旧字段）仍然优先。`checkRoleGrantRights` 复用同一份 `catalogKeys` 判断哪些 key 是新建的。
   - “不授予任何角色”的写法：`UserPermission.DefaultRoles` 区分省略（nil，`null` 同）与显式空数组：前者为 admin，后者不授予。字段去掉 `omitempty`，序列化往返不丢 `[]`（核心存的是包里的原始 manifest，不受影响；测试辅助会重新序列化）。校验不变。`moderation:exempt` 写 `"defaultRoles": []`。
-  - 测试：`TestRoleGrantsPriority` 增加改名与 `[]` 两种情形，`TestConsentRenameInheritsOnly` 走同意流程对比有无旧 key，`TestUserPermissionRoles` 覆盖省略、`null`、`[]` 与序列化往返。
+  - 同意页（审查发现）：审核视图的 `user_permissions[].default_roles` 改为按当前目录算出的结果（`Review.resolveDefaultRoles` 复用 `catalogKeys` 与 `roleGrants`，上传与 `GET .../review` 都用），改名的 key 显示为空；控制台另显示“原 X 的持有者继承”（`inherit_from`）。
+  - 测试：`TestRoleGrantsPriority` 增加改名、显式覆盖优先于改名与 `[]` 几种情形，`TestConsentRenameInheritsOnly` 走同意流程对比有无旧 key，`TestUserPermissionRoles` 覆盖省略、`null`、`[]` 与序列化往返。
 - 影响对象：升级 growth 时 `growth:use` 只给原 `growth:read` 的持有者（不再让所有用户突然能签到领奖）；`moderation:exempt` 在任何情况下都只靠继承。其他插件此后改名权限时同样只继承。显式写 `"defaultRoles": []` 的插件在旧核心上会被当成省略（给 admin）。
 - 回滚：revert 这个提交即可；回滚后升级同意时改名的新 key 又会叠加 `defaultRoles`，`[]` 回到等同省略。
 

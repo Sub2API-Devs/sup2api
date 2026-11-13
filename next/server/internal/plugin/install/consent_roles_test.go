@@ -107,14 +107,19 @@ VALUES ('plugin.guard:rules:view', 'plugin.guard', '{"en":"x"}', 'plugin', 'guar
 				t.Fatal(err)
 			}
 		}
-		if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: explicitGuardGrants()}, e.admin); err != nil {
-			t.Fatal(err)
-		}
-		defs := e.perms.syncs[len(e.perms.syncs)-1].defs
 		want := []string{"user"}
 		if old {
 			want = []string{}
 		}
+		// The consent page shows the same roles.
+		r, err := e.svc.Review(ctx, "guard", "0.1.0")
+		if err != nil || !slices.Equal(r.UserPermissions[0].DefaultRoles, want) || !slices.Equal(r.UserPermissions[1].DefaultRoles, []string{"admin"}) {
+			t.Fatalf("old key %v: review %+v, %v", old, r.UserPermissions, err)
+		}
+		if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: explicitGuardGrants()}, e.admin); err != nil {
+			t.Fatal(err)
+		}
+		defs := e.perms.syncs[len(e.perms.syncs)-1].defs
 		if !slices.Equal(defs[0].GrantRoles, want) || !slices.Equal(defs[0].InheritFrom, []string{"rules:view"}) || !slices.Equal(defs[1].GrantRoles, []string{"admin"}) {
 			t.Fatalf("old key %v: defs %+v", old, defs)
 		}
