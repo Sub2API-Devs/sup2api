@@ -180,9 +180,11 @@ var supplierPermissions = []string{
 // role only by being added here: day-to-day users, groups, accounts and
 // proxies, read access to money and observability, and what a user has.
 // Left out on purpose: role:define, balance:adjust, usage:settle,
-// user:delete, user:password:reset, account:credential:view, the guarded
-// account settings (settings:custom, group:bind, relay), prices, sticky
-// sessions, settings, plugins, publishers and core updates.
+// user:delete, user:password:reset, account:credential:view,
+// account:settings:custom (the one account key that restricts a full-level
+// caller; group:bind and relay only bind own-level callers and mean nothing
+// next to the full-level keys), price:manage, task:manage, sticky sessions,
+// settings, plugins, publishers and core updates.
 //
 // The own-level account and proxy keys are redundant next to the full-level
 // ones, and kept: the role editor stores "all" as {all, own}, and holding

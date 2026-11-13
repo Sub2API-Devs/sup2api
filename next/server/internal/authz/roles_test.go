@@ -261,6 +261,13 @@ func TestOperatorWhitelist(t *testing.T) {
 	if err := setRoles(s, operator, plain, RoleUser, RoleSupplier); err != nil {
 		t.Fatalf("operator assigns supplier: %v", err)
 	}
+	// ...and still act on the supplier afterwards, to take the role back.
+	if err := s.CanActOnUser(ctx, operator, plain); err != nil {
+		t.Fatalf("operator acts on a supplier: %v", err)
+	}
+	if err := setRoles(s, operator, plain, RoleUser); err != nil {
+		t.Fatalf("operator revokes supplier: %v", err)
+	}
 }
 
 // M5: a role:define holder cannot change or delete a role granting more than

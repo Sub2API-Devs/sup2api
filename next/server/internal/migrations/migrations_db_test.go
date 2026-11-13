@@ -805,6 +805,17 @@ func TestOperatorAssignableMigration(t *testing.T) {
 	n, _ = audits()
 	require.Equal(t, 2, n)
 
+	// Production as an earlier start of this version left it: the supplier
+	// role exists and is on the list 0097 generated.
+	exec(`UPDATE roles SET assign_custom = true WHERE key = 'operator';
+		INSERT INTO role_assignable_roles (role_id, assignable_role_id)
+		SELECT r.id, a.id FROM roles r JOIN roles a ON a.key IN ('operator', 'helper') WHERE r.key = 'operator'`)
+	migrate()
+	require.Equal(t, "false:supplier,user", assignable("operator"))
+	n, detail = audits()
+	require.Equal(t, 3, n)
+	require.JSONEq(t, `{"via":"migration 0101","role_keys":["supplier","user"],"assign_custom":false,"added":[],"removed":["helper","operator"],"removed_assign_custom":true}`, detail)
+
 	// A custom role that merely has the key is not the built-in operator.
 	exec(`UPDATE roles SET builtin = false, assign_custom = true WHERE key = 'operator'`)
 	migrate()
