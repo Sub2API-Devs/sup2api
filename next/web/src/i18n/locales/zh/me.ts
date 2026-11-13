@@ -1,5 +1,4 @@
 export default {
-  confirmPassword: '当前密码',
   profile: {
     title: '个人中心',
     description: '你的资料，以及登录账号的方式。',
