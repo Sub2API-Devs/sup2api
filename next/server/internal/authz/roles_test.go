@@ -476,10 +476,10 @@ WHERE target_type = 'role' AND action LIKE 'role.%' AND user_id = $1 ORDER BY id
 	if !slices.Equal(got, want) {
 		t.Fatalf("audit actions = %v, want %v", got, want)
 	}
-	// The reset says what the role now has.
+	// The reset says what the role had and now has.
 	var assign string
-	if err := db.Pool.QueryRow(ctx, `SELECT detail->>'assignable_role_keys' FROM audit_logs WHERE action = 'role.reset' AND detail->>'key' = 'operator'
-  AND detail->'permission_keys' ? 'task:run'`).Scan(&assign); err != nil || assign != `["supplier", "user"]` {
+	if err := db.Pool.QueryRow(ctx, `SELECT detail->'after'->>'assignable_role_keys' FROM audit_logs WHERE action = 'role.reset' AND detail->>'key' = 'operator'
+  AND detail->'after'->'permission_keys' ? 'task:run' AND detail->'before'->'permission_keys' ? 'task:run' AND NOT detail ? 'via'`).Scan(&assign); err != nil || assign != `["supplier", "user"]` {
 		t.Fatalf("role.reset detail: %q %v", assign, err)
 	}
 }

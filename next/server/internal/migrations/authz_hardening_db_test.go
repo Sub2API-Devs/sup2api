@@ -59,7 +59,9 @@ func (h *hardeningDB) migrate() error {
 // one; a user role an administrator took balance:self:read from), custom
 // roles holding former own-level keys alone or next to the full key,
 // role:manage, or super-only permissions, one super admin, and access keys
-// naming retired keys.
+// naming retired keys. As on the production database the admin and
+// operator roles have no holders (the one admin is soft-deleted) and the
+// user role has some.
 func (h *hardeningDB) seed() {
 	h.exec(`
 INSERT INTO roles (key, name, builtin, superuser) VALUES
@@ -82,9 +84,9 @@ SELECT r.id, p.id FROM roles r, permissions p WHERE
     OR (r.key = 'mixed' AND p.key IN ('account:read', 'account:own:read', 'account:own:delete', 'proxy:read', 'proxy:own:read'))
     OR (r.key = 'delegator' AND p.key IN ('role:manage', 'user:read'))
     OR (r.key = 'updater' AND p.key IN ('plugin:grant:critical', 'publisher:manage', 'system:update:execute'));
-INSERT INTO users (email, password_hash) VALUES ('root@x', ''), ('admin@x', ''), ('op@x', ''), ('seller@x', ''), ('d@x', '');
+INSERT INTO users (email, password_hash, deleted_at) VALUES ('root@x', '', NULL), ('admin@x', '', now()), ('op@x', '', NULL), ('seller@x', '', NULL), ('d@x', '', NULL);
 INSERT INTO user_roles (user_id, role_id) SELECT u.id, r.id FROM users u JOIN roles r ON (u.email, r.key) IN (
-    ('root@x', 'super_admin'), ('admin@x', 'admin'), ('op@x', 'operator'), ('seller@x', 'user'), ('seller@x', 'seller'), ('d@x', 'delegator'));
+    ('root@x', 'super_admin'), ('admin@x', 'admin'), ('op@x', 'user'), ('seller@x', 'user'), ('seller@x', 'seller'), ('d@x', 'delegator'));
 INSERT INTO user_access_keys (user_id, name, token_hash, token_hint, permissions)
 SELECT u.id, u.email, md5(u.email), '0000', k.perms FROM users u JOIN (VALUES
     ('root@x', '{user:read,role:manage,account:own:read}'::text[]),
@@ -173,10 +175,11 @@ func (h *hardeningDB) syncCore() {
 // permissions leave the built-in admin and operator, access keys name the
 // replacements, the retired keys are gone and defaults_rev starts at 0.
 // Everything is audited, the version moves once, a second run changes
-// nothing. The core sync afterwards gives each built-in role the defaults
-// it lacks (their assignable lists, the supplier role, the user role's
-// balance:self:read), keeps what they hold beyond them, brings none of the
-// retired or reclaimed keys back, and does it once.
+// nothing. The core sync afterwards creates the supplier role, resets the
+// admin and operator, which nobody holds, to their defaults (what a new
+// database gets; the operator's grants beyond them go), gives the user
+// role, which has holders, the defaults it lacks (balance:self:read),
+// brings none of the retired or reclaimed keys back, and does it once.
 func TestAuthzHardeningMigration(t *testing.T) {
 	h := newHardeningDB(t)
 	version := h.text(`SELECT version::text FROM authz_meta`)
@@ -211,28 +214,36 @@ func TestAuthzHardeningMigration(t *testing.T) {
 	require.Equal(t, migrated, h.state())
 
 	lastSeeded := h.text(`SELECT max(id)::text FROM permissions`)
-	// The core sync creates the supplier role, fills the built-in roles in
-	// (only the defaults they lack: the operator keeps account:credential:view
-	// and system:update:read, gets no own scope next to the full key) and
-	// gives back none of the retired keys, the reclaimed super-only ones, nor
-	// role:define to the operator.
+	// The core sync creates the supplier role, resets the admin and the
+	// operator to their defaults: what a new database gets (the operator
+	// loses account:credential:view and system:update:read, gets the own
+	// scope instead), and fills the user role in. None of the retired keys,
+	// the reclaimed super-only ones, nor role:define on the operator come
+	// back.
 	h.syncCore()
+	fresh := &hardeningDB{t: t, db: testutil.DB(t), ctx: h.ctx}
+	fresh.syncCore()
+	require.Equal(t, fresh.roleGrants("admin", "operator"), h.roleGrants("admin", "operator"), "admin and operator are not their defaults")
 	require.Equal(t, "admin=true:operator,supplier,user delegator=true:operator,user operator=false:supplier,user", h.assignable())
 	require.Equal(t, "supplier account:create:own, supplier account:credential:view:own, supplier account:delete:own, supplier account:read:own, "+
 		"supplier account:test:own, supplier account:update:own, supplier proxy:manage:own, supplier proxy:read:own, supplier usage:self:read", h.roleGrants("supplier"))
 	require.Equal(t, "", h.text(`SELECT COALESCE(string_agg(key, ','), '') FROM permissions WHERE key LIKE '%:own:%' OR key = 'role:manage'`))
 	opGrants := h.roleGrants("operator")
-	for _, g := range strings.Split(operator, ", ") {
-		require.Contains(t, opGrants, g, "the operator lost a grant beyond its defaults")
-	}
+	require.NotContains(t, opGrants, "operator account:credential:view,")
+	require.NotContains(t, opGrants, "system:update:read")
 	require.NotContains(t, opGrants, "role:define")
-	require.NotContains(t, opGrants, "account:credential:view:own")
+	require.Contains(t, opGrants, "operator account:credential:view:own")
 	require.NotContains(t, h.roleGrants("admin", "operator"), "system:update:execute")
-	require.Contains(t, h.roleGrants("user"), "user balance:self:read")
-	// Each fill is audited with the rev. Of what existed before the sync:
-	// the permission the user role lacked and the assignable lists
-	// (assign_custom on the admin).
-	require.Equal(t, "admin assign_custom, admin operator, admin supplier, admin user, operator supplier, operator user, user balance:self:read",
+	require.Equal(t, "user apikey:self:manage, user balance:self:read, user gateway:use, user usage:self:read", h.roleGrants("user"))
+	// The resets are audited as role.reset by the system with the rev and
+	// the role before and after; the fill of what existed before the sync
+	// (the permission the user role lacked) with the rev.
+	require.Equal(t, "admin true true, operator true false", h.text(`SELECT string_agg(g, ', ' ORDER BY g) FROM (
+            SELECT r.key || ' ' || (a.detail->'before'->'permission_keys' ? 'system:update:read')::text || ' ' ||
+                (a.detail->'after'->'permission_keys' ? 'system:update:read')::text AS g
+            FROM audit_logs a JOIN roles r ON r.id = a.target_id::bigint
+            WHERE a.action = 'role.reset' AND a.user_id IS NULL AND a.detail->>'via' = 'sync' AND a.detail->>'defaults_rev' = '1') x`))
+	require.Equal(t, "user balance:self:read",
 		h.text(`SELECT string_agg(g, ', ' ORDER BY g) FROM (
             SELECT r.key || ' ' || COALESCE(a.detail->>'key', 'assign_custom') AS g
             FROM audit_logs a JOIN roles r ON r.id = a.target_id::bigint
@@ -240,10 +251,10 @@ func TestAuthzHardeningMigration(t *testing.T) {
             WHERE a.action = 'authz.sync.grant' AND a.detail->>'defaults_rev' = '1' AND (p.id IS NULL OR p.id <= $1)) x`, lastSeeded))
 	require.Equal(t, "1", h.text(`SELECT min(defaults_rev)::text FROM roles WHERE builtin`))
 
-	// A restart fills nothing again: what an administrator removes stays
-	// removed.
-	h.exec(`DELETE FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE key = 'user')
-        AND permission_id = (SELECT id FROM permissions WHERE key = 'balance:self:read')`)
+	// A restart neither fills nor resets again: what an administrator
+	// removes stays removed.
+	h.exec(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE key IN ('user', 'admin'))
+        AND permission_id IN (SELECT id FROM permissions WHERE key IN ('balance:self:read', 'role:define'))`)
 	synced := h.state()
 	h.syncCore()
 	require.Equal(t, synced, h.state())
@@ -286,8 +297,10 @@ func TestAuthzHardeningNeedsOneSuperAdmin(t *testing.T) {
 // every role and access key (own scopes, the redundant ones the migration
 // only audited, role:manage, the super-only permissions taken back), with
 // group scopes written since dropped and audited. What the core sync's
-// first fill gave a built-in role stays (here the user role's
-// balance:self:read): one of its 0.1.285 defaults too. Upgrading again then
+// first pass changed on a built-in role stays: what it filled in (here the
+// user role's balance:self:read, one of its 0.1.285 defaults too) and what
+// a reset took from a role nobody held (here the operator's
+// account:credential:view and system:update:read). Upgrading again then
 // gives the same grants as the first upgrade.
 func TestAuthzHardeningRollback(t *testing.T) {
 	h := newHardeningDB(t)
@@ -308,7 +321,9 @@ func TestAuthzHardeningRollback(t *testing.T) {
 	require.Equal(t, schema, h.schema())
 	// 0.1.285 grants nothing for the permissions only 0.1.286 has (its sync
 	// marks them removed); the supplier role is new and left alone.
-	require.Equal(t, strings.Replace(grants, "user apikey:self:manage", "user apikey:self:manage, user balance:self:read", 1),
+	want := strings.NewReplacer("user apikey:self:manage", "user apikey:self:manage, user balance:self:read",
+		"operator account:credential:view, ", "", "operator system:update:read, ", "").Replace(grants)
+	require.Equal(t, want,
 		filterGrants(h.roleGrants("admin", "operator", "user", "seller", "mixed", "delegator", "updater", "super_admin"), grants))
 	require.Equal(t, keys, h.accessKeys())
 	require.Equal(t, "1", h.text(`SELECT count(*)::text FROM audit_logs WHERE detail->>'via' = 'rollback 0.1.286' AND detail->>'dropped' = 'account:test:group/12'`))

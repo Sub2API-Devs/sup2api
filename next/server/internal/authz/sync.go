@@ -18,11 +18,12 @@ import (
 // holds a built-in key, builtinKeyConflict) and grants newly created
 // core permissions and built-in roles (as assignable) to the built-in roles
 // whose defaults include them. A built-in role whose defaults_rev is behind
-// its rev (an upgrade from a core without it, or defaults that changed) gets
-// every default it lacks, once: nothing it holds is taken away, and what an
-// administrator removes afterwards stays removed. Safe to run concurrently
-// from several nodes; set-based to keep round trips low. The version is only
-// bumped when something changed.
+// its rev (an upgrade from a core without it, or defaults that changed) is
+// brought to its defaults once (advanceDefaults): reset to them when nobody
+// holds it, otherwise given every default it lacks, nothing it holds taken
+// away. Either way what an administrator changes afterwards stays as
+// changed. Safe to run concurrently from several nodes; set-based to keep
+// round trips low. The version is only bumped when something changed.
 func (s *Service) SyncCore(ctx context.Context) error {
 	defs := CorePermissions()
 	var (
@@ -86,15 +87,21 @@ RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom, rRevs)
 			return err
 		}
 		// The roles getting every default they lack, with what the audit
-		// says of why: created now, or behind their rev.
+		// says of why: created now, or behind their rev and held; and
+		// those behind their rev that nobody holds, reset to them.
 		fills := map[string]map[string]any{}
 		for k, created := range newRoles {
 			if created {
 				fills[k] = map[string]any{"role_created": true}
 			}
 		}
-		if err := s.advanceDefaults(ctx, tx, rKeys, rRevs, rCustom, func(k string, rev int32) {
-			fills[k] = map[string]any{"defaults_rev": rev}
+		resets := map[string]bool{}
+		if err := s.advanceDefaults(ctx, tx, rKeys, rRevs, rCustom, func(k string, rev int32, held bool) {
+			if held {
+				fills[k] = map[string]any{"defaults_rev": rev}
+			} else {
+				resets[k] = true
+			}
 			changed = true
 		}); err != nil {
 			return err
@@ -120,9 +127,16 @@ RETURNING key, (xmax = 0)`, keys, modules, labels, descs, sensitive, sorts, scop
 			return err
 		}
 
-		// Built-in roles get their default permissions and assignable roles
-		// (grantDefaults).
+		// Built-in roles get their default permissions and assignable roles:
+		// a reset writes them all (the permissions created above included),
+		// the others get theirs through grantDefaults.
 		for _, r := range builtinRoles {
+			if resets[r.key] {
+				if err := s.resetUnheld(ctx, tx, r); err != nil {
+					return err
+				}
+				continue
+			}
 			fill := fills[r.key]
 			// Scoped defaults are granted on a fill only: the actions exist
 			// already, so none is new.
@@ -189,36 +203,39 @@ func builtinKeyConflict(ctx context.Context, q store.Querier, builtinKeys []stri
 }
 
 // advanceDefaults moves each built-in role of keys whose defaults_rev is
-// behind its rev (revs) up to it, turning assign_custom on where its
-// defaults have it (custom; audited), and calls behind with the role and
-// the rev reached: SyncCore then grants it the defaults it lacks.
-func (s *Service) advanceDefaults(ctx context.Context, tx pgx.Tx, keys []string, revs []int32, custom []bool, behind func(key string, rev int32)) error {
+// behind its rev (revs) up to it and calls behind with the role, the rev
+// reached and whether it is held (roleHolders; the super admin role, never
+// reset, counts as held): SyncCore then grants a held role the defaults it
+// lacks, turned assign_custom on here where its defaults have it (custom;
+// audited), and resets one nobody holds (resetUnheld).
+func (s *Service) advanceDefaults(ctx context.Context, tx pgx.Tx, keys []string, revs []int32, custom []bool, behind func(key string, rev int32, held bool)) error {
 	type moved struct {
 		id     int64
 		key    string
 		rev    int32
+		held   bool
 		custom bool
 	}
 	rows, err := tx.Query(ctx, `
 WITH behind AS (
-    SELECT r.id, t.rev, t.ac AND NOT r.assign_custom AS custom
+    SELECT r.id, t.rev, r.superuser OR `+roleHolders+` > 0 AS held, t.ac AND NOT r.assign_custom AS custom
     FROM roles r JOIN unnest($1::text[], $2::int[], $3::bool[]) AS t(k, rev, ac) ON t.k = r.key
     WHERE r.builtin AND r.defaults_rev < t.rev)
-UPDATE roles r SET defaults_rev = b.rev, assign_custom = r.assign_custom OR b.custom
+UPDATE roles r SET defaults_rev = b.rev, assign_custom = r.assign_custom OR (b.held AND b.custom)
 FROM behind b WHERE r.id = b.id
-RETURNING r.id, r.key, b.rev, b.custom`, keys, revs, custom)
+RETURNING r.id, r.key, b.rev, b.held, b.held AND b.custom`, keys, revs, custom)
 	if err != nil {
 		return err
 	}
 	roles, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (moved, error) {
 		var m moved
-		return m, r.Scan(&m.id, &m.key, &m.rev, &m.custom)
+		return m, r.Scan(&m.id, &m.key, &m.rev, &m.held, &m.custom)
 	})
 	if err != nil {
 		return err
 	}
 	for _, m := range roles {
-		behind(m.key, m.rev)
+		behind(m.key, m.rev, m.held)
 		if !m.custom {
 			continue
 		}
@@ -227,6 +244,18 @@ RETURNING r.id, r.key, b.rev, b.custom`, keys, revs, custom)
 		}
 	}
 	return nil
+}
+
+// resetUnheld resets the built-in role def, behind its rev with nobody
+// holding it, to its defaults as ResetRole does (resetDefaults, by the
+// system, audited with via sync and the rev): no user's rights change, and
+// whoever is given the role next gets what its defaults say.
+func (s *Service) resetUnheld(ctx context.Context, tx pgx.Tx, def builtinRole) error {
+	r, err := scanRole(tx.QueryRow(ctx, roleSelect+` WHERE r.key = $1`, def.key))
+	if err != nil {
+		return err
+	}
+	return s.resetDefaults(ctx, tx, 0, r, def, map[string]any{"via": "sync", "defaults_rev": def.rev})
 }
 
 // grantDefaults grants the built-in role roleKey its defaults through sql

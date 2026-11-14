@@ -17,9 +17,10 @@
 --      role:assign only, D3) and gives the custom roles holding it an
 --      assignable list.
 --   7. roles.defaults_rev: which revision of its defaults a built-in role
---      has had. Existing roles start at 0, so the core sync grants each
---      built-in role the defaults it lacks once (the defaults live in code
---      only, authz builtinRoles; nothing is taken away there).
+--      has had. Existing roles start at 0, so the core sync brings each
+--      built-in role to its defaults once (the defaults live in code only,
+--      authz builtinRoles): one nobody holds is reset to them, one somebody
+--      holds gets those it lacks, nothing taken away.
 --
 -- Safe to run again: schema changes are IF NOT EXISTS, the rewrites find
 -- nothing left to rewrite (the retired keys are gone), and the super-only
@@ -231,7 +232,7 @@ FROM rekeyed;
 DELETE FROM permissions WHERE source = 'core' AND key IN (SELECT old_key FROM authz_retired);
 
 -- 7. The revision of its defaults a built-in role has had (authz
--- builtinRoles); 0 until the core sync fills it in.
+-- builtinRoles); 0 until the core sync applies them.
 ALTER TABLE roles ADD COLUMN IF NOT EXISTS defaults_rev integer NOT NULL DEFAULT 0;
 
 -- The version moves when this run wrote something: every write above left

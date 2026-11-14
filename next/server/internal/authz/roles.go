@@ -52,9 +52,14 @@ SELECT r.id, r.key, r.name, r.description, r.builtin, r.superuser, r.created_at,
     COALESCE((SELECT array_agg(ar.key ORDER BY ar.key) FROM role_assignable_roles ra
         JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser WHERE ra.role_id = r.id), '{}'),
     r.assign_custom,
-    (SELECT count(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id
-        WHERE ur.role_id = r.id AND u.deleted_at IS NULL)
+    ` + roleHolders + `
 FROM roles r`
+
+// roleHolders counts the holders of role r, soft-deleted users aside: the
+// roles page's user count, and what SyncCore judges a built-in role behind
+// its rev by (held: filled in; nobody: reset).
+const roleHolders = `(SELECT count(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id
+        WHERE ur.role_id = r.id AND u.deleted_at IS NULL)`
 
 func scanRole(row pgx.Row) (*Role, error) {
 	var r Role
@@ -271,10 +276,8 @@ func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 }
 
 // ResetRole restores a built-in role actorID may edit (editableRole) to its
-// defaults (builtinRoles): name, description, core permissions and
-// assignable list, marking them applied (defaults_rev). Plugin permissions
-// on the role are left alone, since they are granted per plugin at consent
-// time. The actor must hold every default, as for SetRolePermissions and
+// defaults (builtinRoles): name, description and what resetDefaults
+// writes. The actor must hold every default, as for SetRolePermissions and
 // SetRoleAssignable; what the reset drops is within the actor already
 // (editableRole), so it cannot weaken a role above the actor (C-L2).
 func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, error) {
@@ -287,40 +290,62 @@ func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, erro
 		if !r.Builtin || !ok {
 			return errNotBuiltinRole
 		}
-		keys, grants, err := resolvePermissions(ctx, tx, def.defaultPermissions())
-		if err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3 WHERE id = $1`, id, def.name, def.description); err != nil {
 			return err
 		}
-		// Defaults naming a built-in role not created yet are skipped, as
-		// SyncCore does.
-		assign, err := queryRoles(ctx, tx, `SELECT id, key, superuser FROM roles WHERE key = ANY($1) AND builtin AND NOT superuser ORDER BY key`, def.assignable)
-		if err != nil {
-			return err
-		}
-		grant, err := grantOf(ctx, tx, r.Key, keys, roleKeysOf(assign), def.assignCustom)
-		if err != nil {
-			return err
-		}
-		if err := s.covers(ctx, tx, actorID, grant, cannotGrant(ctx)); err != nil {
-			return err
-		}
-		if err := setRoleAssignable(ctx, tx, id, assign, def.assignCustom); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3, defaults_rev = $4, updated_at = now() WHERE id = $1`,
-			id, def.name, def.description, def.rev); err != nil {
-			return err
-		}
-		if err := writeGrants(ctx, tx, id, grants, true); err != nil {
-			return err
-		}
-		return s.audit(ctx, tx, actorID, "role.reset", "role", id, map[string]any{"key": r.Key, "permission_keys": keys,
-			"assignable_role_keys": roleKeysOf(assign), "assign_custom": def.assignCustom})
+		return s.resetDefaults(ctx, tx, actorID, r, def, map[string]any{})
 	})
 	if err != nil {
 		return nil, err
 	}
 	return s.GetRole(ctx, id)
+}
+
+// resetDefaults makes def, the defaults of built-in role r, its core
+// permissions (scoped ones included), assignable list and assign_custom,
+// marks them applied (defaults_rev) and audits it as role.reset by actorID
+// with detail, to which it adds the key and the role before and after
+// (roleDetail). actorID must hold all the defaults hand out (covers; the
+// system passes). Plugin permissions on the role are left alone: they are
+// granted per plugin at consent time. Defaults naming a built-in role not
+// created yet are skipped, as SyncCore does. ResetRole and SyncCore (a
+// role nobody holds, behind its rev) both reset through it.
+func (s *Service) resetDefaults(ctx context.Context, tx pgx.Tx, actorID int64, r *Role, def builtinRole, detail map[string]any) error {
+	keys, grants, err := resolvePermissions(ctx, tx, def.defaultPermissions())
+	if err != nil {
+		return err
+	}
+	assign, err := queryRoles(ctx, tx, `SELECT id, key, superuser FROM roles WHERE key = ANY($1) AND builtin AND NOT superuser ORDER BY key`, def.assignable)
+	if err != nil {
+		return err
+	}
+	grant, err := grantOf(ctx, tx, r.Key, keys, roleKeysOf(assign), def.assignCustom)
+	if err != nil {
+		return err
+	}
+	if err := s.covers(ctx, tx, actorID, grant, cannotGrant(ctx)); err != nil {
+		return err
+	}
+	if err := setRoleAssignable(ctx, tx, r.ID, assign, def.assignCustom); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE roles SET defaults_rev = $2 WHERE id = $1`, r.ID, def.rev); err != nil {
+		return err
+	}
+	if err := writeGrants(ctx, tx, r.ID, grants, true); err != nil {
+		return err
+	}
+	after, err := s.getRole(ctx, tx, r.ID)
+	if err != nil {
+		return err
+	}
+	detail["key"], detail["before"], detail["after"] = r.Key, roleDetail(r), roleDetail(after)
+	return s.audit(ctx, tx, actorID, "role.reset", "role", r.ID, detail)
+}
+
+// roleDetail is what a role grants, for an audit's before and after.
+func roleDetail(r *Role) map[string]any {
+	return map[string]any{"permission_keys": r.PermissionKeys, "assignable_role_keys": r.AssignableRoleKeys, "assign_custom": r.AssignCustom}
 }
 
 // SetRolePermissions replaces the permissions of a role actorID may edit
