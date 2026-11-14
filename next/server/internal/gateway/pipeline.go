@@ -123,6 +123,9 @@ type call struct {
 	// sched collects the accounts scheduling did not use and why
 	// (usage_logs.anomalies.scheduling, CONTRACTS §24.6).
 	sched schedTrace
+	// trail is each attempt sent upstream, in order
+	// (usage_logs.anomalies.attempts, CONTRACTS §98).
+	trail trailState
 	// balance is the core balancing's usage read for this request (balance.go),
 	// read at the same moment as the ranking and reused by failover.
 	balance     *balanceState
@@ -853,6 +856,7 @@ func (c *call) submit() {
 	rec.Conversion = c.conversionTrace()
 	c.concludeScheduling(c.c.Request.Context())
 	rec.Scheduling = c.schedulingTrace()
+	rec.AttemptTrail = c.attemptTrail()
 	c.statsCompletedAt = c.g.now()
 	c.statsCanceled = c.c.Request.Context().Err() != nil
 	c.observeRequest(observation.Completed, rec)

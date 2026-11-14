@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -110,7 +111,7 @@ func TestUsageSearchByRequestID(t *testing.T) {
 }
 
 func TestParseFilterInvalidSearch(t *testing.T) {
-	for _, query := range []string{"status_code=oops", "status_code=600", "status_code=-1", "stream=maybe", "client_ip=not-an-ip", "api_key_id=-1", "from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z"} {
+	for _, query := range []string{"status_code=oops", "status_code=600", "status_code=-1", "stream=maybe", "retried=maybe", "client_ip=not-an-ip", "api_key_id=-1", "from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z"} {
 		t.Run(query, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest("GET", "/usage?"+query, nil)
@@ -358,4 +359,122 @@ func TestUsageConversionTraceAndFilter(t *testing.T) {
 	require.Nil(t, mine["conversion"])
 	detail := f.get(f.user, "/usage/"+strconv.FormatInt(int64(row["id"].(float64)), 10), 200)["data"].(map[string]any)
 	require.Equal(t, "allow", detail["conversion"].(map[string]any)["policy"])
+}
+
+// The attempt trail of a retried request (CONTRACTS §98): every view gets it,
+// shaped for the caller - ids for an operator who may read accounts, names
+// only in the detail, numbered accounts without account:read, outcomes alone
+// for the owner. A request sent once and a row from before the trail have
+// none; retried= filters the list, the summary and the export, and the
+// trail is no anomaly.
+func TestUsageAttemptTrail(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	var a1, a2 int64
+	require.NoError(t, f.db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('Trail One','anthropic','apikey','') RETURNING id`).Scan(&a1))
+	require.NoError(t, f.db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('Trail Two','anthropic','apikey','') RETURNING id`).Scan(&a2))
+	retried := f.record("trail-retried", false)
+	retried.Attempts, retried.AccountID = 3, &a2
+	retried.AttemptTrail = &core.AttemptTrail{V: 1, Steps: []core.AttemptStep{
+		{AccountID: a1, Status: 502, ErrorType: "upstream_error", Ms: 640, Message: "upstream connect error", Next: core.AttemptSame},
+		{AccountID: a1, Status: 502, ErrorType: "upstream_error", Ms: 702, Message: "upstream connect error", Next: core.AttemptSwitch},
+		{AccountID: a2, Status: 200, Ms: 2950},
+	}}
+	once := f.record("trail-once", false)
+	old := f.record("trail-old", false)
+	old.Attempts = 2
+	f.svc.process(ctx, []*core.UsageRecord{retried, once, old})
+	require.Equal(t, "null", f.scalar(`SELECT COALESCE(anomalies->'attempts', 'null'::jsonb)::text FROM usage_logs WHERE request_id='trail-once'`))
+
+	row := func(path, rid string) map[string]any {
+		for _, r := range f.get(f.user, path, 200)["data"].([]any) {
+			if m := r.(map[string]any); m["request_id"] == rid {
+				return m
+			}
+		}
+		t.Fatalf("%s: no %s", path, rid)
+		return nil
+	}
+	steps := func(v any) []any {
+		require.IsType(t, map[string]any{}, v)
+		return v.(map[string]any)["steps"].([]any)
+	}
+	id := f.scalar(`SELECT id::text FROM usage_logs WHERE request_id='trail-retried'`)
+
+	// An operator with account:read: as stored in the list, named in the detail.
+	list := steps(row("/usage", "trail-retried")["attempt_trail"])
+	require.Len(t, list, 3)
+	require.Equal(t, map[string]any{"account_id": float64(a1), "status": float64(502), "error_type": "upstream_error", "ms": float64(640),
+		"message": "upstream connect error", "next": "same"}, list[0])
+	require.Equal(t, map[string]any{"account_id": float64(a2), "status": float64(200), "ms": float64(2950)}, list[2])
+	require.Nil(t, row("/usage", "trail-once")["attempt_trail"])
+	require.Nil(t, row("/usage", "trail-old")["attempt_trail"], "a row from before the trail")
+	d := f.get(f.user, "/usage/"+id, 200)["data"].(map[string]any)
+	detail := steps(d["attempt_trail"])
+	require.Equal(t, "Trail One", detail[0].(map[string]any)["account_name"])
+	require.Equal(t, "Trail Two", detail[2].(map[string]any)["account_name"])
+	require.NotContains(t, d["anomalies"], core.AnomalyAttempts, "served as attempt_trail")
+
+	// The owner: each attempt's outcome and time, nothing of the accounts.
+	for _, v := range []any{row("/me/usage", "trail-retried")["attempt_trail"], f.get(f.user, "/me/usage/"+id, 200)["data"].(map[string]any)["attempt_trail"]} {
+		self := steps(v)
+		require.Len(t, self, 3)
+		require.Equal(t, map[string]any{"status": float64(502), "error_type": "upstream_error", "ms": float64(640)}, self[0])
+		require.Equal(t, map[string]any{"status": float64(200), "ms": float64(2950)}, self[2])
+	}
+
+	// An operator without account:read: the same account keeps one number.
+	f.svc.Authz = denyPerms{keys: []string{"account:read"}}
+	for _, v := range []any{row("/usage", "trail-retried")["attempt_trail"], f.get(f.user, "/usage/"+id, 200)["data"].(map[string]any)["attempt_trail"]} {
+		refs := steps(v)
+		require.Equal(t, map[string]any{"account_ref": float64(1), "status": float64(502), "error_type": "upstream_error", "ms": float64(702),
+			"message": "upstream connect error", "next": "switch"}, refs[1])
+		require.Equal(t, map[string]any{"account_ref": float64(2), "status": float64(200), "ms": float64(2950)}, refs[2])
+	}
+
+	// retried= in the list, the summary and the export, for everyone.
+	export := func(uid int64, path string) []string {
+		req := httptest.NewRequest("GET", "/api/v1"+path, nil)
+		req.Header.Set("Authorization", "Bearer "+strconv.FormatInt(uid, 10))
+		w := httptest.NewRecorder()
+		f.h.ServeHTTP(w, req)
+		require.Equal(t, 200, w.Code, w.Body.String())
+		return strings.Split(strings.TrimSpace(strings.TrimPrefix(w.Body.String(), "\uFEFF")), "\n")
+	}
+	for _, path := range []string{"/usage", "/me/usage"} {
+		for q, want := range map[string]int{"retried=true": 2, "retried=false": 1, "retried=": 3} {
+			require.Len(t, f.get(f.user, path+"?"+q, 200)["data"], want, path+"?"+q)
+			sum := f.get(f.user, path+"/summary?group_by=none&from=2026-09-01T00:00:00Z&"+q, 200)["data"].([]any)
+			require.Equal(t, float64(want), sum[0].(map[string]any)["requests"], path+"/summary?"+q)
+			require.Len(t, export(f.user, path+"/export?lang=en&"+q), 1+want, path+"/export?"+q)
+		}
+		f.get(f.user, path+"?retried=maybe", 400)
+	}
+	sum := f.get(f.user, "/usage/summary?group_by=none&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	require.Equal(t, float64(0), sum[0].(map[string]any)["anomalies"], "a trace is not an anomaly")
+
+	// The export's call chain: numbered accounts here, then ids, then the
+	// count for the owner and for the row from before the trail.
+	chain := func(lines []string) string {
+		cells := strings.Split(lines[1], ",")
+		return cells[len(cells)-1]
+	}
+	lines := export(f.user, "/usage/export?lang=zh&request_id=trail-retried")
+	require.True(t, strings.HasSuffix(lines[0], ",调用链路"), lines[0])
+	require.Equal(t, "账号1×2 → 账号2", chain(lines))
+	f.svc.Authz = allowAll{}
+	require.Equal(t, "#"+strconv.FormatInt(a1, 10)+"×2 → #"+strconv.FormatInt(a2, 10), chain(export(f.user, "/usage/export?lang=en&request_id=trail-retried")))
+	require.Equal(t, "2 attempts", chain(export(f.user, "/usage/export?lang=en&request_id=trail-old")))
+	require.Equal(t, "", chain(export(f.user, "/usage/export?lang=en&request_id=trail-once")))
+	require.Equal(t, "3 次", chain(export(f.user, "/me/usage/export?lang=zh&request_id=trail-retried")))
+}
+
+// A stored trail that cannot be read is dropped, whoever reads it.
+func TestShapeTrailDropsUnreadable(t *testing.T) {
+	t.Parallel()
+	for _, view := range []trailView{trailAccounts, trailRefs, trailSelf} {
+		r := Record{AttemptTrail: json.RawMessage(`{"steps":[{"account_id":5`)}
+		require.Nil(t, r.shapeTrail(view))
+		require.Nil(t, r.AttemptTrail)
+	}
 }

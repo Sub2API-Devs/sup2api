@@ -74,6 +74,49 @@ var exportColumns = []exportColumn{
 	{"调用 IP", "Client IP", false, false, func(r *Record, _ *time.Location) string { return r.ClientIP }},
 }
 
+// attemptChain is the call chain cell of a retried request (CONTRACTS §98):
+// the accounts its attempts went to in order, consecutive attempts on one
+// account merged ("#16×2 → #12"), numbered instead where the account ids
+// are hidden ("Account 1×2 → Account 2"). The owner of the request, and a
+// row from before the trail, get the attempt count. A request sent once
+// gets nothing.
+func attemptChain(r *Record, zh bool) string {
+	if r.Attempts < 2 {
+		return ""
+	}
+	var tr core.AttemptTrail
+	if json.Unmarshal(r.AttemptTrail, &tr) != nil || len(tr.Steps) == 0 || tr.Steps[0].AccountID == 0 && tr.Steps[0].AccountRef == 0 {
+		if zh {
+			return strconv.Itoa(r.Attempts) + " 次"
+		}
+		return strconv.Itoa(r.Attempts) + " attempts"
+	}
+	ref := "Account "
+	if zh {
+		ref = "账号"
+	}
+	var parts []string
+	for i := 0; i < len(tr.Steps); {
+		first, n := tr.Steps[i], 1
+		for i+n < len(tr.Steps) && tr.Steps[i+n].AccountID == first.AccountID && tr.Steps[i+n].AccountRef == first.AccountRef {
+			n++
+		}
+		part := "#" + strconv.FormatInt(first.AccountID, 10)
+		if first.AccountID == 0 {
+			part = ref + strconv.Itoa(first.AccountRef)
+		}
+		if n > 1 {
+			part += "×" + strconv.Itoa(n)
+		}
+		parts = append(parts, part)
+		i += n
+	}
+	if tr.Omitted > 0 {
+		parts = append(parts, "+"+strconv.Itoa(tr.Omitted))
+	}
+	return strings.Join(parts, " → ")
+}
+
 func (s *Service) myExport(c *gin.Context) {
 	uid, _ := core.UserID(c.Request.Context())
 	s.export(c, &uid)
@@ -112,6 +155,10 @@ func (s *Service) export(c *gin.Context, self *int64) {
 			cols = append(cols, col)
 		}
 	}
+	// The call chain comes last, in the header's language.
+	cols = append(cols, exportColumn{zh: "调用链路", en: "Call chain", value: func(r *Record, _ *time.Location) string {
+		return attemptChain(r, lang == "zh")
+	}})
 	name := "usage_" + time.Now().In(loc).Format("20060102_150405") + ".csv"
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", `attachment; filename="`+name+`"`)
@@ -166,6 +213,7 @@ func (s *Service) export(c *gin.Context, self *int64) {
 			if self != nil {
 				r.hideUpstream()
 			}
+			r.shapeTrail(trailViewFor(self, accounts))
 			line := make([]string, len(cols))
 			for i, col := range cols {
 				line[i] = csvCell(col.value(&r, loc))

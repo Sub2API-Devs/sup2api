@@ -8412,3 +8412,89 @@ WHERE s.kind = 'personal' AND u.deleted_at IS NOT NULL;
 | 规则到导出用价格 | `billing` 的 `exportPrice`：`listPrice` 之后，有 `multiplier` 且不等于 1 时用同步价格的 `scalePrice` 折进价格 | 只有 `GET /key/prices` | 下游读不到规则，所以只有这里把倍数折进价格；`scalePrice` 也是“从上游同步价格并应用倍率”用的函数，两处行为相同（97.6、§17.1） |
 
 包的分工与依赖方向：`segment` 管用户组的读写（增删改、成员、个人专属、两个方向的授权与专属倍率）和上表里它名下的那几个函数；`billing` 管 `price_rules` 的存取与校验、价格快照与 `Resolve`、定价表、试算、`/me/prices`、`/key/prices`；`group`、`apikey`、`iam`、`lookup`、`usage`、`gateway` 各改自己的接口和 SQL。依赖方向是 `billing → group, segment`，`apikey / group / iam / lookup → segment`，`segment` 不依赖它们，没有环；这几个包之间是直接 import（§1 的约定是只经 `core` 的接口依赖，这里按上面的方向放开）。为了不成环，成员列表（它要返回用户行）放在 `iam`；`SegmentGroupSetting.group.platforms` 所需的平台查询、规则条数和价格快照的失效通知，由 `app` 组装时注入 `segment`。
+
+## 98. 使用记录调用链路（2026-11-15，用户要求：日志展示每次请求依次尝试的账号，参考 new-api use_channel；无迁移；核心 0.1.288 候选）
+
+一次请求失败后换号或同号重试时，使用记录此前只有最终账号和 `attempts`（尝试次数），看不出依次试了哪些账号、各自怎么失败的。核心现在把每次**发往上游的尝试**按顺序记下来，日志列表和详情显示成调用链路。
+
+### 98.1 存储与格式
+
+- 位置：`usage_logs.anomalies.attempts`（常量 `core.AnomalyAttempts`），值是 JSON 字符串（与 `scheduling`、`availability` 相同的“字符串里装 JSON”），核心类型 `core.AttemptTrail` / `core.AttemptStep`（`core/ports_billing.go`）。无迁移。
+- **只在 `attempts ≥ 2` 时写**；只发了一次的请求（绝大多数）不写，`anomalies` 不变。
+
+```json
+{"v":1,
+ "steps":[{"account_id":16,"status":502,"error_type":"upstream_error","ms":640,"message":"upstream returned HTTP 502","next":"same"},
+          {"account_id":16,"status":502,"error_type":"upstream_error","ms":702,"message":"upstream returned HTTP 502","next":"switch"},
+          {"account_id":12,"status":200,"ms":2950}],
+ "omitted":0}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `account_id` | 这次尝试的账号 |
+| `status` | 失败的尝试：该次错误的状态码（`gwError.Status`）；走通的尝试：记录最终的 `status_code`（上游的状态，或转发途中失败时记录的状态） |
+| `error_type` | 失败时该次的 `error_type`（与 `usage_logs.error_type` 同一套取值）；走通且记录成功时省略，走通但记录失败（如转发途中出错、WebSocket 轮次失败）时为记录的 `error_type` |
+| `ms` | 这次尝试本身的耗时：HTTP 从选定账号发出到该次结束（走通的那次含响应转发），不含失败策略的退避等待；WebSocket 是握手耗时 |
+| `message` | 失败时本次尝试记下的原因（账号处置原因、传输错误，没有时取给客户端的错误文本；与该次的 `error_message` 同源，网关在每次尝试开始时清空 `error_message`，所以记录上的 `error_message` 是最后一次尝试的原因），截到 160 字节（UTF-8 边界，`truncateUTF8`）；成功省略 |
+| `next` | 这次之后核心做了什么：`same`（同一账号再试）或 `switch`（换了账号）；最后一步省略。按**下一次实际选中的账号是否同一个**回填，不论是失败策略的同号重试还是普通故障转移决定的 |
+| `omitted` | 超过 10 步（`max_attempts` 上限 10，失败策略 `max_retries ≤ 9`）后未列出的尝试数；超出时第 10 步仍有 `next` |
+
+- **一步 = 一次 `attempts` 计数**：与 `c.rec.Attempts` 同步，在 `gateway/dispatch.go` 的尝试循环和 `gateway/websocket.go` 的 `connect`（首轮握手）里，每次尝试结束、`planFailure` 之前记（`gateway/attempt_trail.go` 的 `noteAttempt`；`ms` 因而不含退避等待），提交记录时（`submit`）整理成 `rec.AttemptTrail`。被限流、并发满、排队而没有发出的账号不算尝试，只在 `anomalies.scheduling` 里（§24.6）。插件内部自己的重试不在范围内。WebSocket 后续轮次复用连接，`attempts = 1`，不写。
+
+### 98.2 接口：`attempt_trail`
+
+`GET /usage`、`/me/usage`（列表）、`GET /usage/:id`、`/me/usage/:id`（详情）的每条记录多一个字段 `attempt_trail`：对象；只发了一次的请求和本功能之前的旧行为 `null`。列表 SQL 取 `CASE WHEN u.attempts > 1 THEN u.anomalies->>'attempts' END`，服务端解析后按调用者裁剪再输出（`usage/api.go` 的 `shapeTrail` / `trailViewFor`），解析不了的整个丢弃（`null`），不会原样泄出。
+
+| 调用者 | 每步保留 |
+|---|---|
+| 运营，有 `account:read` | 原样；**详情**另补 `account_name`（`accountNames`，已删除账号也能读到；读不到名称时只有 id） |
+| 运营，无 `account:read` | 去掉 `account_id`，换成 `account_ref`（1、2、… 按首次出现编号，同一账号同一编号），其余保留 |
+| 自助（`/me/usage`、`/me/usage/:id`、自助导出） | 只留 `status`、`error_type`、`ms`；账号、`message`、`next` 都去掉 |
+
+- **列表不查账号名**：列表每步只有 `#ID`（或 `account_ref`），名称只在详情里补，一条记录一次查询。
+- 详情的 `anomalies` 不再带 `attempts` 键（它已作为 `attempt_trail` 按上表裁剪过返回），避免无 `account:read` 的运营从 `anomalies` 里读到账号 id。
+
+例（详情，运营有 `account:read`）：
+
+```json
+"attempt_trail": {"v":1,"omitted":0,"steps":[
+  {"account_id":16,"account_name":"Claude A","status":502,"error_type":"upstream_error","ms":640,"message":"upstream returned HTTP 502","next":"same"},
+  {"account_id":16,"account_name":"Claude A","status":502,"error_type":"upstream_error","ms":702,"message":"upstream returned HTTP 502","next":"switch"},
+  {"account_id":12,"account_name":"Claude B","status":200,"ms":2950}]}
+```
+
+### 98.3 筛选 `retried`
+
+- `retried=true` → `u.attempts > 1`，`retried=false` → `u.attempts = 1`（选不出账号的 `attempts = 0` 两边都不含）；值按 `strconv.ParseBool` 读，其它值 400 `invalid retried`。在 `parseFilter` 里，列表、汇总、导出的全站与自助视图都生效。
+- `retried` 不在 `summaryRollableParams` 里：带它的汇总读 `usage_logs`，不读小时汇总。
+- 旧行（`attempts > 1` 但没有 `attempts` 记录）同样算 `retried=true`。
+
+### 98.4 导出列“调用链路 / Call chain”
+
+`GET /usage/export`、`/me/usage/export` 的最后一列（表头随 `lang`，`usage/export.go` 的 `attemptChain`）：
+
+- 运营有 `account:read`：`#16×2 → #12`（同一账号连续的尝试合并为 `×N`）；无 `account:read`：`账号1×2 → 账号2` / `Account 1×2 → Account 2`（`account_ref`）。超出 10 步时末尾加 `→ +N`。
+- 自助导出，以及没有 `attempts` 记录的旧行：只写次数，`3 次` / `3 attempts`。
+- 只发了一次的请求留空。
+
+### 98.5 统计口径不变
+
+调用链路是路由轨迹，不是记录的异常：`usage/rollup.go` 的 `anomalousRow` 把 `attempts` 与 `failure_policy`、`availability`、`scheduling` 一起排除，汇总（含小时汇总）的 `anomalies` 计数不变。其它统计不读它。
+
+### 98.6 旧行与滚动窗口
+
+- 本功能之前的行、以及滚动升级期间旧核心写的行没有 `attempts` 记录：`attempt_trail` 为 `null`；`attempts > 1` 的这类行前端照常显示重试角标，悬停和详情提示“早于调用链路功能，只记录了尝试次数”；导出写次数。
+- 旧核心不认识 `retried` 参数（忽略，返回不筛选的结果），也不返回 `attempt_trail`（前端按旧行处理）。
+- 旧核心的 `anomalousRow` 不排除 `attempts`：窗口内旧节点实时算的汇总、以及旧节点刷新的小时汇总会把新节点写的重试行算进 `anomalies`。全部节点升级后，若要更正，把窗口内的小时标脏重算（同 §97.8 C：`INSERT INTO usage_hourly_dirty (hour) SELECT generate_series(...)`，`:from` 取第一个新节点启动的时间，`:to` 取最后一个旧节点停止的时间）。
+
+### 98.7 前端
+
+- 列表：重试过的请求在最终账号旁显示重试角标，悬停卡片列出链路，每步只显示 `#ID`（或“账号 1 / 账号 2”）；详情“调用链路”显示 `#ID 名称`、每步状态、耗时、错误信息和下一步。最终账号标签不变。
+- 自助视图由页面明确传入（不靠路径猜测），只显示每步状态与耗时，不渲染账号。
+- 筛选“重试”在更多筛选里，`retried` 参数可从 URL 带入并以 `SFilterChips` 标签显示（§95.3）。
+
+### 98.8 测试
+
+- 网关 `gateway/attempt_trail_test.go`：`TestAttemptTrail`（单次不写、换号 A→B、失败策略同号 A→A→B、全部失败）、`TestAttemptTrailBounds`（超 10 步计入 `omitted`、第 10 步仍有 `next`、`message` 截断）；`gateway/websocket_test.go` 的 `TestWebSocketHandshakeFailoverDisablesTheAccount`（握手换号的链路，最后一步取轮次结果）。
+- 使用记录 `usage/api_filter_test.go`：`TestUsageAttemptTrail`（PostgreSQL：三种视图的裁剪、详情补名而列表不带名、旧行与单次为 `null`、`retried` 在列表/汇总/导出的全站与自助视图、汇总 `anomalies` 不计、导出调用链路列的三种写法）、`TestShapeTrailDropsUnreadable`、`TestParseFilterInvalidSearch`（`retried=maybe`）。
