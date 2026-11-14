@@ -23,10 +23,12 @@ import (
 var ErrNotFound = errors.New("plugin package is not available on this node")
 
 // Store holds packages by lower-case hex sha256. Put returns only after the
-// package is durable where other nodes fetch it from.
+// package is durable where other nodes fetch it from. Has reports whether
+// Get would find the package, without transferring it.
 type Store interface {
 	Put(ctx context.Context, sum string, data []byte) error
 	Get(ctx context.Context, sum string) ([]byte, error)
+	Has(ctx context.Context, sum string) (bool, error)
 }
 
 func validSum(sum string) bool {
@@ -94,6 +96,17 @@ func (d Dir) Get(_ context.Context, sum string) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func (d Dir) Has(_ context.Context, sum string) (bool, error) {
+	if !validSum(sum) {
+		return false, fmt.Errorf("invalid plugin package sha256 %q", sum)
+	}
+	_, err := os.Stat(d.path(sum))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // Shell stores packages through the local shell's management socket. The
@@ -199,6 +212,33 @@ func (s *Shell) Get(ctx context.Context, sum string) ([]byte, error) {
 	return data, nil
 }
 
+// Has asks for the first byte only (the shell serves packages with range
+// support and, on a follower, fetches a missing one from the primary
+// first, as Get does).
+func (s *Shell) Has(ctx context.Context, sum string) (bool, error) {
+	if !validSum(sum) {
+		return false, fmt.Errorf("invalid plugin package sha256 %q", sum)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url(sum), nil)
+	if err != nil {
+		return false, err
+	}
+	s.authorize(req)
+	req.Header.Set("Range", "bytes=0-0")
+	res, err := s.client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("check plugin package through the shell: %w", err)
+	}
+	defer res.Body.Close()
+	switch res.StatusCode {
+	case http.StatusOK, http.StatusPartialContent:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	}
+	return false, fmt.Errorf("check plugin package through the shell: HTTP %d", res.StatusCode)
+}
+
 // Source resolves the bytes of one plugin version. A market version is
 // downloaded by each node from its market URL; anything else, and a market
 // download that fails, comes from Store.
@@ -227,4 +267,13 @@ func (s *Source) Fetch(ctx context.Context, sum, url string) ([]byte, error) {
 		return nil, err
 	}
 	return data, check(sum, data)
+}
+
+// Has reports whether Store still holds sum: a package removed from it is
+// gone unless a market download serves it again (Fetch).
+func (s *Source) Has(ctx context.Context, sum string) (bool, error) {
+	if s == nil || s.Store == nil {
+		return false, errors.New("no plugin package store configured")
+	}
+	return s.Store.Has(ctx, strings.ToLower(sum))
 }

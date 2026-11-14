@@ -165,6 +165,9 @@ type ReviewHostPerm struct {
 	// Current grant (upgrades only).
 	CurrentStatus string         `json:"current_status,omitempty"`
 	CurrentScope  map[string]any `json:"current_scope,omitempty"`
+	// Revoked: an administrator revoked it and no consent has granted it
+	// since (grants.Revoked); a consent grants it only when it names it.
+	Revoked bool `json:"revoked"`
 }
 
 type ReviewDiff struct {
@@ -215,6 +218,17 @@ func riskOf(id string) string {
 func LoadGrants(ctx context.Context, q store.Querier, key string) (map[string]Grant, error) {
 	return loadGrants(ctx, q, `SELECT permission, scope, status, plugin_version, granted_by, granted_at
 		FROM plugin_permission_grants WHERE plugin_key = $1`, key)
+}
+
+// loadPriorGrants reads what an upgrade is reviewed and decided against:
+// the plugin's grants and its revoked host permissions (grants.Revoked).
+func loadPriorGrants(ctx context.Context, q store.Querier, key string) (map[string]Grant, map[string]bool, error) {
+	current, err := LoadGrants(ctx, q, key)
+	if err != nil {
+		return nil, nil, err
+	}
+	revoked, err := grants.Revoked(ctx, q, key)
+	return current, revoked, err
 }
 
 // LoadVersionGrants reads the grant rows key@version runs with: the set
@@ -357,6 +371,14 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 	return r
 }
 
+// noteRevoked marks the host permissions an administrator revoked, which
+// the consent grants only when it names them (decide).
+func (r *Review) noteRevoked(revoked map[string]bool) {
+	for i := range r.HostPermissions {
+		r.HostPermissions[i].Revoked = revoked[r.HostPermissions[i].ID]
+	}
+}
+
 // diffGrants compares the requested permissions with the current grants.
 func diffGrants(m *manifest.Manifest, current map[string]Grant) *ReviewDiff {
 	d := &ReviewDiff{Added: []DiffItem{}, Widened: []DiffItem{}, Removed: []DiffItem{}}
@@ -448,15 +470,19 @@ func (s *Service) Review(ctx context.Context, key, version string) (*Review, err
 	if keyID != nil {
 		ver.KeyID = *keyID
 	}
-	var current map[string]Grant
+	var (
+		current map[string]Grant
+		revoked map[string]bool
+	)
 	upgradeFrom := ""
 	if status != StatusAwaitingConsent {
-		if current, err = LoadGrants(ctx, s.d.DB.Pool, key); err != nil {
+		if current, revoked, err = loadPriorGrants(ctx, s.d.DB.Pool, key); err != nil {
 			return nil, err
 		}
 		upgradeFrom, _ = s.runningVersion(ctx, s.d.DB.Pool, key, version)
 	}
 	r := buildReview(p.Manifest, p.Files, ver, s.opt.HostVersion, current)
+	r.noteRevoked(revoked)
 	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
 		return nil, err
 	}

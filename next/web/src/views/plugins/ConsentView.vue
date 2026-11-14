@@ -78,7 +78,9 @@ const rows = computed<HPRow[]>(() => {
       const carried = !!r.diff && hp.current_status === 'granted' && !diffTag
       const required = requiredPermsOf(hp, risk)
       const lacking = carried ? undefined : required.find((p) => !auth.hasDynamic(p))
-      return { ...hp, risk, requiredPerm: lacking ?? required[0] ?? null, allowed: !lacking, locked: risk === 'low', diffTag, carried }
+      // A revoked low-risk permission is not granted automatically: it is sent only when ticked.
+      const locked = risk === 'low' && !hp.revoked
+      return { ...hp, risk, requiredPerm: lacking ?? required[0] ?? null, allowed: !lacking, locked, diffTag, carried }
     })
     .sort((a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || a.id.localeCompare(b.id))
 })
@@ -87,7 +89,7 @@ function initChecks() {
   for (const k of Object.keys(checked)) delete checked[k]
   for (const row of rows.value) {
     if (row.locked || row.carried) checked[row.id] = true
-    else if (!row.allowed) checked[row.id] = false
+    else if (!row.allowed || row.revoked) checked[row.id] = false
     else if (row.risk === 'medium') checked[row.id] = !row.optional
     else checked[row.id] = false
   }

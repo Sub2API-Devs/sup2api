@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -50,8 +51,9 @@ const (
 )
 
 // ErrPackageGone: the version is recorded but no node holds its package any
-// more (a failed upgrade's package, cleaned up), so it cannot be reviewed or
-// run until it is uploaded again (CONTRACTS §5.7).
+// more (a failed upgrade's package, cleaned up, or one removed outside the
+// core), so it cannot be reviewed, approved or run until it is uploaded
+// again (CONTRACTS §5.7).
 var ErrPackageGone = core.NewError(http.StatusGone, "package_gone", "the package of this version is no longer available; upload it again")
 
 // Deps are the collaborators of Service. Bus, Schemas and Accounts may be nil.
@@ -133,32 +135,20 @@ func (s *Service) HostVersion() string { return s.opt.HostVersion }
 // DB exposes the database handle to sibling packages (api, market).
 func (s *Service) DB() *store.DB { return s.d.DB }
 
-// Package loads and unpacks a stored plugin version (cached by sha256).
+// Package loads and unpacks a stored plugin version. The unpacked package
+// is cached by sha256 while the store still holds it: one removed since
+// (outside the core) is fetched again, which fails with ErrPackageGone
+// unless a market download serves it (CONTRACTS §5.7).
 func (s *Service) Package(ctx context.Context, key, version string) (*pkg.Package, error) {
-	var sha string
-	err := s.d.DB.Pool.QueryRow(ctx,
-		`SELECT package_sha256 FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&sha)
+	sha, url, err := packageRef(ctx, s.d.DB.Pool, key, version)
 	if store.IsNoRows(err) {
 		return nil, core.ErrNotFound.WithMessage("plugin version not found")
 	}
 	if err != nil {
 		return nil, err
 	}
-	s.cacheMu.Lock()
-	for i, c := range s.cache {
-		if c.key == key && c.version == version && c.sha == sha {
-			// move to front
-			s.cache = append([]cachedPkg{c}, append(s.cache[:i:i], s.cache[i+1:]...)...)
-			s.cacheMu.Unlock()
-			return c.p, nil
-		}
-	}
-	s.cacheMu.Unlock()
-
-	var url string
-	if err := s.d.DB.Pool.QueryRow(ctx,
-		`SELECT package_url FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&url); err != nil {
-		return nil, err
+	if p := s.cached(ctx, key, version, sha); p != nil {
+		return p, nil
 	}
 	raw, err := s.d.Packages.Fetch(ctx, sha, url)
 	if errors.Is(err, blobs.ErrNotFound) {
@@ -179,12 +169,72 @@ func (s *Service) Package(ctx context.Context, key, version string) (*pkg.Packag
 		return p, nil
 	}
 	s.cacheMu.Lock()
-	s.cache = append([]cachedPkg{{key: key, version: version, sha: sha, p: p}}, s.cache...)
+	s.cache = append([]cachedPkg{{key: key, version: version, sha: sha, p: p}}, s.uncache(key, version)...)
 	if len(s.cache) > pkgCacheSize {
 		s.cache = s.cache[:pkgCacheSize]
 	}
 	s.cacheMu.Unlock()
 	return p, nil
+}
+
+// checkPackage fails with ErrPackageGone when key@version's package can no
+// longer be had, as Package would: a consent must not approve a package no
+// node holds. A version that does not exist passes (the caller reports it).
+func (s *Service) checkPackage(ctx context.Context, key, version string) error {
+	sha, _, err := packageRef(ctx, s.d.DB.Pool, key, version)
+	if store.IsNoRows(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if ok, err := s.d.Packages.Has(ctx, sha); err == nil && ok {
+		return nil
+	}
+	_, err = s.Package(ctx, key, version) // a market version may download again
+	return err
+}
+
+// packageRef reads the sha256 and market URL of key@version's package.
+func packageRef(ctx context.Context, q store.Querier, key, version string) (sha, url string, err error) {
+	err = q.QueryRow(ctx, `SELECT package_sha256, package_url FROM plugin_versions WHERE plugin_key = $1 AND version = $2`,
+		key, version).Scan(&sha, &url)
+	return sha, url, err
+}
+
+// cached returns the package unpacked for key@version with sha while the
+// store still holds it; otherwise it drops it.
+func (s *Service) cached(ctx context.Context, key, version, sha string) *pkg.Package {
+	p := s.cacheGet(key, version, sha)
+	if p == nil {
+		return nil
+	}
+	if ok, err := s.d.Packages.Has(ctx, sha); err == nil && ok {
+		return p
+	}
+	s.cacheMu.Lock()
+	s.cache = s.uncache(key, version)
+	s.cacheMu.Unlock()
+	return nil
+}
+
+// cacheGet returns the package cached for key@version with sha, moved to
+// the front.
+func (s *Service) cacheGet(key, version, sha string) *pkg.Package {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	i := slices.IndexFunc(s.cache, func(c cachedPkg) bool { return c.key == key && c.version == version && c.sha == sha })
+	if i < 0 {
+		return nil
+	}
+	c := s.cache[i]
+	s.cache = append([]cachedPkg{c}, slices.Delete(s.cache, i, i+1)...)
+	return c.p
+}
+
+// uncache returns the cache without key@version (cacheMu held).
+func (s *Service) uncache(key, version string) []cachedPkg {
+	return slices.DeleteFunc(s.cache, func(c cachedPkg) bool { return c.key == key && c.version == version })
 }
 
 // CurrentVersion returns the version that represents the plugin today:

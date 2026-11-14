@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -69,6 +70,7 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		return nil, err
 	}
 	r := buildReview(p.Manifest, p.Files, rec.verification, s.opt.HostVersion, rec.current)
+	r.noteRevoked(rec.revoked)
 	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
 		return nil, err
 	}
@@ -83,6 +85,7 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 type uploadRecord struct {
 	verification *pkg.Verification
 	current      map[string]Grant
+	revoked      map[string]bool
 	consent      string
 	uploadedAt   time.Time
 	upgradeOf    string
@@ -198,7 +201,7 @@ func (s *Service) recordUpload(ctx context.Context, p *pkg.Package, actorID int6
 			return err
 		}
 		if status != StatusAwaitingConsent {
-			if rec.current, err = LoadGrants(ctx, tx, m.Key); err != nil {
+			if rec.current, rec.revoked, err = loadPriorGrants(ctx, tx, m.Key); err != nil {
 				return err
 			}
 			if rec.upgradeOf, err = s.runningVersion(ctx, tx, m.Key, m.Version); err != nil {
@@ -251,9 +254,11 @@ func insertVersionRow(ctx context.Context, tx pgx.Tx, p *pkg.Package, ver *pkg.V
 // permissions (ARCHITECTURE §5.5): every grant is carried over automatically,
 // unless a permission the version creates goes to a role in a way that needs
 // consent (RoleGrantsNeedConsent, checked again in the consent transaction),
-// which leaves the version awaiting consent like a first install.
+// which leaves the version awaiting consent like a first install, as does a
+// revoked host permission it asks for (only an operator restores one).
 func (s *Service) carryOverConsent(ctx context.Context, r *Review, key, version string, actorID int64) error {
-	if r.UpgradeFrom == "" || r.ConsentStatus != ConsentAwaiting || r.Diff == nil ||
+	revoked := slices.ContainsFunc(r.HostPermissions, func(hp ReviewHostPerm) bool { return hp.Revoked })
+	if r.UpgradeFrom == "" || r.ConsentStatus != ConsentAwaiting || r.Diff == nil || revoked ||
 		len(r.Diff.Added) != 0 || len(r.Diff.Widened) != 0 || (r.RoleGrantsNeedConsent && !isSystem(ctx)) {
 		return nil
 	}

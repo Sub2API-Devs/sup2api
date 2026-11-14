@@ -51,6 +51,7 @@ const descOf = (id: string) => tr(`plugins.hpDesc.${hpKey(id)}`, undefined, '')
             <SBadge v-if="row.diffTag === 'added'" tone="danger">{{ t('plugins.consent.diffAdded') }}</SBadge>
             <SBadge v-if="row.diffTag === 'widened'" tone="warning">{{ t('plugins.consent.diffWidened') }}</SBadge>
             <SBadge v-if="row.carried && !row.locked" tone="gray" data-testid="hp-carried">{{ t('plugins.consent.carried') }}</SBadge>
+            <SBadge v-if="row.revoked" tone="danger" data-testid="hp-revoked">{{ t('plugins.consent.revoked') }}</SBadge>
           </div>
           <SHint v-if="descOf(row.id)" size="xs" class="mt-0.5" :data-hp-desc="row.id">{{ descOf(row.id) }}</SHint>
           <p v-if="row.reason" class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">{{ lt(row.reason) }}</p>
