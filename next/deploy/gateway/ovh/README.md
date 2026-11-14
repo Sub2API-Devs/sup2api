@@ -4,6 +4,15 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-14 核心 **0.1.286**（release_id `v0.1.286-r4`，`951525943`，分支 `feat/authz-hardening`，尚未合入 develop；北京时间 19:39–19:41；计划 `2c9442a4cbafea04c1b41467b935bf71` primary-first-v1 completed，19:39:02→19:41:09；**停服**：ovh 3130 `/readyz` 503 19:40:13.9→19:40:29.0 约 15 秒，api.prophey.ai 19:40:16.1→19:40:29.5 约 13 秒；核心迁移 0097_authz_hardening、0098_plugin_staged_grants 于 19:40:20 应用，schema `a9befa8c…1e11` → `1f73f300…9d4f`；Host API 仍 9）：
+- 内容：权限加固（docs/DESIGN-2026-11-12-AUTHZ-HARDENING.md“发布说明”）：超管唯一、角色授权细分到可分配清单、二次验证、资源范围、访问密钥 = 用户权限 ∩ 密钥权限、五个内置角色（可修改、可恢复默认、无人持有的内置角色升级时直接写默认值）、`balance:adjust:any`、插件升级同意暂存到激活（0098）、版本包已删时 review 410；去兼容层（旧 own 键与 `role:manage` 由 0097 改写）。
+- 构建：`stage/0.1.286/`（全内置重建模板：7 个插件用 sup2api-plugins-2026 重签——anthropic 0.3.2、ccgateway 0.1.133（运行镜像 = 0.1.132 重打标签，`ccg-retag.sh`）、codex 0.1.4、dynweight 0.5.9、mailer 0.1.2、moderation 0.12.0、volcengine 0.12.7；openai/gemini/custom 沿用）。清单 `4025ff965979844056dc1d820e9e9ab91962b5af2101cfdd0ca4a26cf0ab0057`，核心 sha256 `93d2611481cd29f5b2d75acbc9d2db4d3ac366c4e27e267463a20e47e6e6ab7b`。`v0.1.286`（8139517d）、`-r2`（cdfcde60）、`-r3`（ea05819d）已导入网关但作废（release_id 唯一）。
+- 测试与验证：`test.sh` TEST-OK（server 59 包、-race 11 包、sdk、7 个插件、控制台 2340 条与三个原生界面）；本机生产快照验证；worker 在 11-14 生产快照上用 stage 产物独立验证 r3 全部 17 项（211 条）通过，r4 复验第 1–3 项与插件运行时授予一致性通过（其余项发布时仍在进行）。
+- 发布前只读确认：线上 0.1.285、schema 0096、超管 1 个、网关 revision 544、预检无 blocker；线上 10 个插件的宿主权限授予全部在新 manifest 声明内。按用户 11-12 的要求没有关闭 new-api 渠道。
+- 核验（`~/rel286/`，只读）：两节点 0.1.286；10 个插件 enabled 且两节点 ready（版本同上）；超管 1 个；内置角色等于默认值（admin 51 + 可分配 operator/supplier/user 与 assign_custom，operator 27 + 1 范围、可分配 supplier/user，supplier 1 + 8 范围，user 4），旧 own 键与 `role:manage` 为 0；`smoke286.py` 超管只读接口全部 200；`errs.sh` 19:39–19:42 共 80 次请求 0 个 5xx（sup2api-1 11 个 499 为停服窗口客户端断开），19:41 起 0 个 5xx；sup2api-1 日志只有停服时的 `local core unreachable` WARN。
+- 回滚：网关不允许跨 schema 回退（升级计划与 `sub2api-gateway rollback` 都会拒绝），线上出问题修复前进（0.1.287，新迁移接在 0098 之后）或从数据库自动备份恢复；`deploy/rollback/0.1.286-authz-down.sql/.md` 只用于不经网关的环境。
+- 上游同步 PR 未提，未合入 develop（等用户决定）。
+
 2026-11-14 核心 **0.1.285**（`b12c9aede`，develop 头，合并了 `fix/disconnect-wait-and-claude-max-tokens` `bdbb2875e`；北京时间 05:21–05:23；计划 `db8e5317a6b261e70cf08175c44864f4` rolling-v1 completed，05:21:39→05:23:39 约 120 秒，两节点轮流让出（先 ccp 后 ovh），`/readyz`（ovh 3130 与 api.prophey.ai）全程 200；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
 - 内容：① 计费设置删除 `client_disconnect_wait_seconds`，“读完再计费”的续读只受请求本身超时（`relay_timeout_seconds` / 流式空闲超时）约束，服务停止时仍中止（CONTRACTS §25.8）；② 网关设置 `claude_default_max_tokens` 改为 `claude_max_tokens {enabled, models}`，默认关闭的内置参数覆盖，开启时 keep_origin 写 `max_tokens`、在账号覆盖之前执行；关闭时转换到 Anthropic 的请求仍由转换器补 8192（CONTRACTS §84.1、CONVERT-MATRIX D5）。
 - 发布前只读确认（`settings` 表）：`gateway` 行没有 `claude_default_max_tokens`（一直是默认 `{"default":8192}`，关闭状态行为不变）；`billing` 行 `client_disconnect_wait_seconds=120`、`client_disconnect_policy=continue`（120 留在行里，新核心不读，回滚到 0.1.284 仍按它生效）。
