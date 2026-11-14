@@ -238,7 +238,7 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if !byKey[RoleSuperAdmin].Superuser || !byKey[RoleSuperAdmin].Builtin {
 		t.Fatalf("super_admin: %+v", byKey[RoleSuperAdmin])
 	}
-	// The admin holds every core permission but the five reserved for the
+	// The admin holds every core permission but those reserved for the
 	// super admin (decision D2).
 	superOnly := superOnlyKeys()
 	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
@@ -247,12 +247,12 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
 		t.Fatalf("user perms = %v", byKey[RoleUser].PermissionKeys)
 	}
-	// The supplier role: its own accounts and proxies, nothing of plugins,
-	// no group binding (decision 7), and nothing to assign.
+	// The supplier role: its own accounts, proxies and usage, nothing of
+	// plugins, no group binding (decision 7), and nothing to assign.
 	sup := byKey[RoleSupplier]
 	wantSup := []string{
 		"account:create:own", "account:credential:view:own", "account:delete:own", "account:read:own", "account:test:own", "account:update:own",
-		"proxy:manage:own", "proxy:read:own",
+		"proxy:manage:own", "proxy:read:own", "usage:self:read",
 	}
 	if sup == nil || !sup.Builtin || sup.Superuser || !slices.Equal(slices.Sorted(slices.Values(sup.PermissionKeys)), wantSup) ||
 		len(sup.AssignableRoleKeys) != 0 || sup.AssignCustom {

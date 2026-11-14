@@ -15,7 +15,7 @@ vi.mock('@/stores/auth', () => ({
     return {
       has,
       hasDynamic: has,
-      me: { id: 1, roles: ['lead'], superuser: mocks.superuser },
+      me: { id: 1, roles: ['admin', 'lead'], superuser: mocks.superuser },
       permissionsEpoch: mocks.epoch
     }
   }
@@ -79,7 +79,7 @@ describe('plugin consent page', () => {
     mocks.lacks = new Set()
     mocks.superuser = true
     mocks.epoch++
-    mocks.managed = [managed('admin', '管理员', true), managed('lead', 'Lead', false), managed('auditor', 'Auditor', false)]
+    mocks.managed = [managed('admin', '管理员', true), managed('lead', 'Lead', false), managed('auditor', 'Auditor', false), managed('operator', '运维', true)]
     i18n.global.locale.value = 'zh'
     mocks.post.mockResolvedValue({})
   })
@@ -139,12 +139,12 @@ describe('plugin consent page', () => {
     expect(mocks.post.mock.calls[0][1].new_permission_roles).toEqual({})
   })
 
-  it('a non-super admin names only custom roles it manages and does not hold', async () => {
+  it('a non-super admin names only roles it manages and does not hold, built-in ones included', async () => {
     mocks.superuser = false
     const w = render(review({ user_permissions: [perm('demo.read')], host_permissions: [{ id: 'storage.read', risk: 'low' }] }))
     await flushPromises()
     const roles = w.findAll('[data-permission="demo.read"] input[data-role]').map((b) => b.attributes('data-role'))
-    expect(roles).toEqual(['auditor'])
+    expect(roles).toEqual(['auditor', 'operator'])
     await roleBox(w, 'demo.read', 'auditor').setValue(true)
     // The built-in default cannot be named by this caller: it drops out.
     expect(w.text()).toContain(i18n.global.t('plugins.consent.replacesDefaults'))
@@ -205,12 +205,13 @@ describe('plugin consent page', () => {
     // Giving the permission a role it may name instead takes the default grants out.
     await roleBox(w, 'demo.read', 'auditor').setValue(true)
     expect(approve(w)).toBe(false)
-    // Or none: an empty choice differs from the defaults and is sent.
+    // Or only the built-in default it may name (operator, on its list): the
+    // choice differs from the defaults and is sent.
     await roleBox(w, 'demo.read', 'auditor').setValue(false)
     expect(approve(w)).toBe(false)
     await w.get('[data-testid="consent-approve"]').trigger('click')
     await flushPromises()
-    expect(mocks.post.mock.calls[0][1].new_permission_roles).toEqual({ 'demo.read': [] })
+    expect(mocks.post.mock.calls[0][1].new_permission_roles).toEqual({ 'demo.read': ['operator'] })
     // A first install is not held to it (the server checks upgrades only).
     const first = render({ ...upgrade, diff: null })
     await flushPromises()

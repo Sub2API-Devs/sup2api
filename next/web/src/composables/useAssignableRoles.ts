@@ -8,6 +8,15 @@ export const DEFAULT_ROLE = 'user'
 /** Supplier is an add-on role: a supplier is a user too. */
 export const SUPPLIER_ROLE = 'supplier'
 
+/**
+ * A plain user holds no role but the default one: balance:adjust reaches
+ * only these, balance:adjust:any the other users one manages too
+ * (CONTRACTS §43.6).
+ */
+export function isPlainUser(roles: string[] | undefined): boolean {
+  return (roles || []).every((k) => k === DEFAULT_ROLE)
+}
+
 /** Role keys with the default role added when supplier is among them. */
 export function withSupplierUser(keys: string[]): string[] {
   return keys.includes(SUPPLIER_ROLE) && !keys.includes(DEFAULT_ROLE) ? [...keys, DEFAULT_ROLE] : keys

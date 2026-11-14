@@ -157,8 +157,9 @@ func TestSyncPluginInheritsOnlyEarlierGrants(t *testing.T) {
 // Handing new plugin permissions to a role is a change of that role
 // (editableRole) on the actor's assignable list (T59): a custom role within
 // the actor and on its list only, never one it holds itself (wildcard or
-// listed by name) unless it is the super admin, built-in roles
-// the super admin alone, super admin roles never; unknown roles are invalid.
+// listed by name) unless it is the super admin, a built-in role within the
+// actor and on its list (role:define is the caller's check, install
+// consent), super admin roles never; unknown roles are invalid.
 func TestCanGrantToRoles(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -221,14 +222,15 @@ func TestCanGrantToRoles(t *testing.T) {
 		{"custom within and assignable", installer, []string{"small", "small"}, ""},
 		{"custom not assignable", installer, []string{"small", "other"}, "permission_denied"},
 		{"custom wider", installer, []string{"small", "big"}, "permission_denied"},
-		{"built-in assignable", installer, []string{RoleUser}, "permission_denied"},
+		{"built-in assignable but wider", installer, []string{RoleUser}, "permission_denied"},
 		{"own role", installer, []string{"installer"}, "permission_denied"},
 		{"every custom role but its own", crew, []string{"small", "other"}, ""},
 		{"own role under every custom role", crew, []string{"crew"}, "permission_denied"},
 		{"own role listed by name", lead, []string{"lead"}, "permission_denied"},
 		{"another held role listed by name", pair, []string{"held"}, "permission_denied"},
 		{"custom without assignable list", ops, []string{"small"}, "permission_denied"},
-		{"built-in", ops, []string{RoleUser}, "permission_denied"},
+		{"built-in within and assignable", ops, []string{RoleUser, RoleSupplier}, ""},
+		{"built-in not assignable", ops, []string{RoleOperator}, "permission_denied"},
 		{"super admin role", ops, []string{RoleSuperAdmin}, "permission_denied"},
 		{"unknown", ops, []string{"nope"}, "invalid_argument"},
 		{"none", ops, nil, ""},

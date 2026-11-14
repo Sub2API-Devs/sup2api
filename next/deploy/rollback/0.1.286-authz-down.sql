@@ -137,6 +137,7 @@ DROP FUNCTION IF EXISTS user_roles_one_superuser();
 DROP INDEX IF EXISTS roles_one_superuser;
 DROP TABLE IF EXISTS role_assignable_roles;
 ALTER TABLE roles DROP COLUMN IF EXISTS assign_custom;
+ALTER TABLE roles DROP COLUMN IF EXISTS defaults_rev;
 ALTER TABLE accounts DROP COLUMN IF EXISTS admin_locked;
 DROP TABLE IF EXISTS role_permission_scopes;
 ALTER TABLE permissions DROP COLUMN IF EXISTS scope_type;

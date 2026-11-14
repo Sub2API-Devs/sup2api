@@ -17,9 +17,12 @@ import (
 // longer in code as removed, seeds built-in roles (failing when a custom role
 // holds a built-in key, builtinKeyConflict) and grants newly created
 // core permissions and built-in roles (as assignable) to the built-in roles
-// whose defaults include them. Safe to run concurrently from several nodes;
-// set-based to keep round trips low. The version is only bumped when
-// something changed.
+// whose defaults include them. A built-in role whose defaults_rev is behind
+// its rev (an upgrade from a core without it, or defaults that changed) gets
+// every default it lacks, once: nothing it holds is taken away, and what an
+// administrator removes afterwards stays removed. Safe to run concurrently
+// from several nodes; set-based to keep round trips low. The version is only
+// bumped when something changed.
 func (s *Service) SyncCore(ctx context.Context) error {
 	defs := CorePermissions()
 	var (
@@ -46,6 +49,7 @@ func (s *Service) SyncCore(ctx context.Context) error {
 	}
 	var rKeys, rNames, rDescs []string
 	var rSuper, rCustom []bool
+	var rRevs []int32
 	for _, r := range builtinRoles {
 		n, _ := json.Marshal(r.name)
 		d, _ := json.Marshal(r.description)
@@ -54,6 +58,7 @@ func (s *Service) SyncCore(ctx context.Context) error {
 		rDescs = append(rDescs, string(d))
 		rSuper = append(rSuper, r.superuser)
 		rCustom = append(rCustom, r.assignCustom)
+		rRevs = append(rRevs, r.rev)
 	}
 
 	var changed bool
@@ -72,12 +77,26 @@ func (s *Service) SyncCore(ctx context.Context) error {
 			newRoles[k] = inserted
 			changed = true
 		}, `
-INSERT INTO roles (key, name, description, builtin, superuser, assign_custom)
-SELECT k, n::jsonb, d::jsonb, true, su, ac FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::bool[]) AS t(k, n, d, su, ac)
+INSERT INTO roles (key, name, description, builtin, superuser, assign_custom, defaults_rev)
+SELECT k, n::jsonb, d::jsonb, true, su, ac, rev FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::bool[], $6::int[]) AS t(k, n, d, su, ac, rev)
 ON CONFLICT (key) DO UPDATE SET superuser = EXCLUDED.superuser
     WHERE roles.superuser IS DISTINCT FROM EXCLUDED.superuser
-RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom)
+RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom, rRevs)
 		if err != nil {
+			return err
+		}
+		// The roles getting every default they lack, with what the audit
+		// says of why: created now, or behind their rev.
+		fills := map[string]map[string]any{}
+		for k, created := range newRoles {
+			if created {
+				fills[k] = map[string]any{"role_created": true}
+			}
+		}
+		if err := s.advanceDefaults(ctx, tx, rKeys, rRevs, rCustom, func(k string, rev int32) {
+			fills[k] = map[string]any{"defaults_rev": rev}
+			changed = true
+		}); err != nil {
 			return err
 		}
 
@@ -104,15 +123,15 @@ RETURNING key, (xmax = 0)`, keys, modules, labels, descs, sensitive, sorts, scop
 		// Built-in roles get their default permissions and assignable roles
 		// (grantDefaults).
 		for _, r := range builtinRoles {
-			// Scoped defaults are granted to a role created now only: the
-			// actions exist already, so none is new (migration 0097
-			// converted the existing roles' former own-level grants).
-			if newRoles[r.key] && len(r.scoped) > 0 {
-				if err := s.grantScopedDefaults(ctx, tx, r.key, r.scoped); err != nil {
+			fill := fills[r.key]
+			// Scoped defaults are granted on a fill only: the actions exist
+			// already, so none is new.
+			if fill != nil && len(r.scoped) > 0 {
+				if err := s.grantScopedDefaults(ctx, tx, r.key, r.scoped, fill); err != nil {
 					return err
 				}
 			}
-			if err := s.grantDefaults(ctx, tx, r.key, newRoles[r.key], r.unscopedDefaults(),
+			if err := s.grantDefaults(ctx, tx, r.key, fill, r.unscopedDefaults(),
 				func(k string) bool { return slices.Contains(inserted, k) }, "default", `
 WITH ins AS (
     INSERT INTO role_permissions (role_id, permission_id)
@@ -121,7 +140,7 @@ WITH ins AS (
 SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`); err != nil {
 				return err
 			}
-			if err := s.grantDefaults(ctx, tx, r.key, newRoles[r.key], r.assignable,
+			if err := s.grantDefaults(ctx, tx, r.key, fill, r.assignable,
 				func(k string) bool { return newRoles[k] }, "assignable", `
 WITH ins AS (
     INSERT INTO role_assignable_roles (role_id, assignable_role_id)
@@ -169,36 +188,86 @@ func builtinKeyConflict(ctx context.Context, q store.Querier, builtinKeys []stri
 	return errors.New(msg)
 }
 
+// advanceDefaults moves each built-in role of keys whose defaults_rev is
+// behind its rev (revs) up to it, turning assign_custom on where its
+// defaults have it (custom; audited), and calls behind with the role and
+// the rev reached: SyncCore then grants it the defaults it lacks.
+func (s *Service) advanceDefaults(ctx context.Context, tx pgx.Tx, keys []string, revs []int32, custom []bool, behind func(key string, rev int32)) error {
+	type moved struct {
+		id     int64
+		key    string
+		rev    int32
+		custom bool
+	}
+	rows, err := tx.Query(ctx, `
+WITH behind AS (
+    SELECT r.id, t.rev, t.ac AND NOT r.assign_custom AS custom
+    FROM roles r JOIN unnest($1::text[], $2::int[], $3::bool[]) AS t(k, rev, ac) ON t.k = r.key
+    WHERE r.builtin AND r.defaults_rev < t.rev)
+UPDATE roles r SET defaults_rev = b.rev, assign_custom = r.assign_custom OR b.custom
+FROM behind b WHERE r.id = b.id
+RETURNING r.id, r.key, b.rev, b.custom`, keys, revs, custom)
+	if err != nil {
+		return err
+	}
+	roles, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (moved, error) {
+		var m moved
+		return m, r.Scan(&m.id, &m.key, &m.rev, &m.custom)
+	})
+	if err != nil {
+		return err
+	}
+	for _, m := range roles {
+		behind(m.key, m.rev)
+		if !m.custom {
+			continue
+		}
+		if err := s.audit(ctx, tx, 0, "authz.sync.grant", "role", m.id, map[string]any{"via": "assignable", "assign_custom": true, "defaults_rev": m.rev}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // grantDefaults grants the built-in role roleKey its defaults through sql
-// ($1 the role key, $2 the defaults; returning what syncGrant reads). A role
-// created now (seed) gets all of them, an existing role only the defaults
-// created now; every grant is audited with via (and role_created for a
-// seed), so a role the sync creates on an upgrade (supplier) shows what it
-// was given.
-func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, seed bool, defaults []string, created func(string) bool, via, sql string) error {
-	detail := map[string]any{"via": via}
-	if seed {
-		detail["role_created"] = true
-	} else {
+// ($1 the role key, $2 the defaults; returning what syncGrant reads). On a
+// fill (a role created now, or behind its rev) it gets every one it lacks,
+// otherwise only the defaults created now; every grant is audited with via
+// and the fill's detail (role_created or defaults_rev), so a role the sync
+// creates or fills in on an upgrade shows what it was given.
+func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, fill map[string]any, defaults []string, created func(string) bool, via, sql string) error {
+	if fill == nil {
 		defaults = slices.DeleteFunc(slices.Clone(defaults), func(k string) bool { return !created(k) })
 	}
 	if len(defaults) == 0 {
 		return nil
 	}
-	return s.syncGrant(ctx, tx, detail, sql, roleKey, defaults)
+	return s.syncGrant(ctx, tx, withVia(fill, via), sql, roleKey, defaults)
 }
 
-// grantScopedDefaults grants the built-in role roleKey its scoped defaults
-// (canonical keys), each audited as authz.sync.grant (via default,
-// role_created).
-func (s *Service) grantScopedDefaults(ctx context.Context, tx pgx.Tx, roleKey string, keys []string) error {
-	return s.syncGrant(ctx, tx, map[string]any{"via": "default", "role_created": true}, `
+// withVia is the audit detail of a sync grant: via plus the fill's detail.
+func withVia(fill map[string]any, via string) map[string]any {
+	detail := maps.Clone(fill)
+	if detail == nil {
+		detail = map[string]any{}
+	}
+	detail["via"] = via
+	return detail
+}
+
+// grantScopedDefaults grants the built-in role roleKey the scoped defaults
+// (canonical keys) it lacks, each audited as authz.sync.grant (via default
+// and the fill's detail). One the role's unscoped grant of the same action
+// implies is left out, as migration 0097 leaves out a redundant own scope.
+func (s *Service) grantScopedDefaults(ctx context.Context, tx pgx.Tx, roleKey string, keys []string, fill map[string]any) error {
+	return s.syncGrant(ctx, tx, withVia(fill, "default"), `
 WITH ins AS (
     INSERT INTO role_permission_scopes (role_id, permission_id, scope)
     SELECT r.id, p.id, d.scope FROM roles r,
         (SELECT substring(k FROM '^(.*):[^:]*$') AS action, substring(k FROM '[^:]*$') AS scope FROM unnest($2::text[]) k) d
     JOIN permissions p ON p.key = d.action AND p.source = 'core'
     WHERE r.key = $1
+      AND NOT EXISTS (SELECT 1 FROM role_permissions f WHERE f.role_id = r.id AND f.permission_id = p.id)
     ON CONFLICT DO NOTHING RETURNING role_id, permission_id, scope)
 SELECT ins.role_id, p.key || ':' || ins.scope FROM ins JOIN permissions p ON p.id = ins.permission_id`, roleKey, keys)
 }

@@ -34,11 +34,12 @@
 | 3 | `accounts.admin_locked`（存量不加锁） | T63 | — |
 | 4 | `permissions.scope_type`（由启动同步填写）、`role_permission_scopes` 与 scope 索引 | R2a | — |
 | 5 | 收回内置 admin、operator 上的超管专属权限（只在 `role:manage` 仍存在、即库还没被本迁移改写过时执行） | T54 | `authz.reclaim.super_only` |
-| 6 | 旧键改写：角色的 `account:own:<x>`、`proxy:own:<x>` 授予改为 `<action>:own`（角色已有全量键时只记审计、标 `redundant`）；`role:manage` 改为 `role:define` + `role:assign`，内置 operator 只得 `role:assign`（D3）；`role:manage` 的持有者得到可分配清单（内置 operator 为 supplier、user，`assign_custom = false`；其余为全部内置角色中除超管与 admin 外的 + `assign_custom = true`）；访问密钥里的旧写法换成新写法；删除 9 个旧 permission 行 | R2a/R2b、T09、T13、T55、P4F1 | `authz.grant.migrate`、`role.assignable`、`user.access_key.migrate` |
+| 6 | 旧键改写：角色的 `account:own:<x>`、`proxy:own:<x>` 授予改为 `<action>:own`（角色已有全量键时只记审计、标 `redundant`）；`role:manage` 改为 `role:define` + `role:assign`，内置 operator 只得 `role:assign`（D3）；持有 `role:manage` 的**自定义**角色得到可分配清单（全部内置角色中除超管与 admin 外的 + `assign_custom = true`；内置角色的清单不在迁移里写，由启动同步按 `builtinRoles` 补，默认值只在代码里定义一处）；访问密钥里的旧写法换成新写法；删除 9 个旧 permission 行 | R2a/R2b、T09、T13、T55、P4F1、内置角色默认值 | `authz.grant.migrate`、`role.assignable`、`user.access_key.migrate` |
+| 7 | `roles.defaults_rev integer NOT NULL DEFAULT 0`：内置角色已应用的默认值版本，存量为 0，启动同步据此补缺一次 | 内置角色默认值（2026-11-13） | — |
 
 - **可重复执行**：表结构都是 `IF NOT EXISTS`；旧键删除后改写找不到可改的行；超管专属权限的收回以 `role:manage` 仍存在为前提，所以重跑不会再次收回超管事后设回的授权。重跑不写审计、不推进版本（`TestAuthzHardeningMigration`）。
-- **启动同步之后**：0.1.286 的 SyncCore 新建 supplier 角色（带 8 个 own 范围默认值）并加进 admin、operator 的可分配清单；不会再给出 `role:manage`、旧 own key，也不会给 operator `role:define`（`inherits` / `builtinsWithout` 已删除）。
-- **回滚**：`deploy/rollback/0.1.286-authz-down.sql` 与说明 `deploy/rollback/0.1.286-authz-down.md`。步骤：停掉所有 0.1.286 核心 → 跑反向脚本（单事务：范围授予改回旧 own 键，迁移审计里标 `redundant` 的按审计补回，`role:define`/`role:assign` 改回 `role:manage`，按审计恢复收回的超管专属权限，密钥同样改回，分组与 id 范围删除并写审计，删新表、新列、索引、触发器与函数，删 `schema_migrations` 记录）→ 启动 0.1.285 → 插件切回发布前的版本。`TestAuthzHardeningRollback` 验证表结构与只迁移到 0096 的库一致、旧键授予与升级前一致、再次升级结果相同；生产快照（av_prod）上实测：本分支核心迁移并同步 → 反向脚本 → 非托管 0.1.284 启动（当时的线上版本；0.1.285 的 schema 与它相同，仍是 0096），表结构与升级前逐字一致，角色授予只多出 supplier 的 8 个旧 own 键，再升级结果与第一次相同。**这些步骤只适用于非托管部署**：托管部署（线上网关）在迁移提交后不能经升级计划回到 0.1.285——网关要求目标清单的 `schema_before` 等于当前基线的 `schema_after`（`control.Compatibility`），0.1.285 核心也不接受以 0.1.286 的 schema 为源的迁移许可（`validateMigrationPermit`），`sub2api-gateway rollback` 跨 schema 一律拒绝（`rollbackCompatibility`）。线上出问题时修复前进（下一个核心版本接在 0097 之后），确实要回 0.1.285 只能按网关 README 从数据库备份恢复或先改网关；详见回滚说明。
+- **启动同步之后**：0.1.286 的 SyncCore 新建 supplier 角色（8 个 own 范围默认值 + `usage:self:read`），并对 `defaults_rev` 落后的已有内置角色（存量全部为 0）**只补缺一次**：把 `builtinRoles` 默认值里缺的权限（已有同动作全量 key 时不补 own 范围）、可分配角色和 `assign_custom` 补上，不删除角色上已有的其他授予，每项写 `authz.sync.grant`（`detail.defaults_rev = 1`），再把 `defaults_rev` 置为 1；之后重启不再补（管理员删掉的默认权限不会被加回来）。不会再给出 `role:manage`、旧 own key，也不会给 operator `role:define`（`inherits` / `builtinsWithout` 已删除）；超管专属权限不在任何默认值里，补缺不会把第 5 步收回的再给回去。第 5、6 步（超管专属权限收回、`role:manage` 改写且内置 operator 只得 `role:assign`）是安全规则，照常执行，不属于“只补缺不覆盖”。
+- **回滚**：`deploy/rollback/0.1.286-authz-down.sql` 与说明 `deploy/rollback/0.1.286-authz-down.md`。反向脚本删除 `roles.defaults_rev`；启动同步首次补缺补上的授予保留（都是 0.1.285 默认值里本来就有的权限，审计 `authz.sync.grant` 带 `defaults_rev` 可查；再升级时重新补缺，结果相同）。步骤：停掉所有 0.1.286 核心 → 跑反向脚本（单事务：范围授予改回旧 own 键，迁移审计里标 `redundant` 的按审计补回，`role:define`/`role:assign` 改回 `role:manage`，按审计恢复收回的超管专属权限，密钥同样改回，分组与 id 范围删除并写审计，删新表、新列、索引、触发器与函数，删 `schema_migrations` 记录）→ 启动 0.1.285 → 插件切回发布前的版本。`TestAuthzHardeningRollback` 验证表结构与只迁移到 0096 的库一致、旧键授予与升级前一致、再次升级结果相同；生产快照（av_prod）上实测：本分支核心迁移并同步 → 反向脚本 → 非托管 0.1.284 启动（当时的线上版本；0.1.285 的 schema 与它相同，仍是 0096），表结构与升级前逐字一致，角色授予只多出 supplier 的 8 个旧 own 键，再升级结果与第一次相同。**这些步骤只适用于非托管部署**：托管部署（线上网关）在迁移提交后不能经升级计划回到 0.1.285——网关要求目标清单的 `schema_before` 等于当前基线的 `schema_after`（`control.Compatibility`），0.1.285 核心也不接受以 0.1.286 的 schema 为源的迁移许可（`validateMigrationPermit`），`sub2api-gateway rollback` 跨 schema 一律拒绝（`rollbackCompatibility`）。线上出问题时修复前进（下一个核心版本接在 0097 之后），确实要回 0.1.285 只能按网关 README 从数据库备份恢复或先改网关；详见回滚说明。
 - **迁移失败时**（例如超管数量检查报错）：事务整体回滚，库仍是 0.1.285 的形态，不要跑反向脚本；处理后 `resume` 恢复同一计划（`sub2api-gateway rollback` 比较签名清单的 schema，对本版本一律拒绝）。
 - **自定义角色的 role:manage 持有者**：首次升级时 supplier 角色还不存在，迁移给它们的可分配清单是 operator、user；随后 SyncCore 新建 supplier 时只加进内置 admin、operator 的清单。回滚后再升级时 supplier 已存在，清单会多出 supplier（0097 注释“the core sync adds the supplier role”指内置角色）。线上没有自定义角色，不受影响；需要时由超管补加。
 - **插件要一起切回**：内置插件里本版本升级的 6 个（anthropic、ccgateway、codex、dynweight、moderation、volcengine）新版本 `hostCompat` 都是 `>=0.1.286`（mailer 0.1.2 是 `>=0.1.222`，openai、gemini、custom 未变，在 0.1.285 上照常运行），在 0.1.285 上启动失败（`incompatible with host 0.1.285`），`/healthz` 一直 503，旧核心的内置安装器约每 20 秒重试一次上传（每分钟约 24 条 `plugin.upload` 审计）。发布前记下 `SELECT key, active_version FROM plugins ORDER BY key;`，回滚后用 0.1.285 的 `POST /api/v1/plugins/:key/upgrade {"version": "<发布前的版本>"}` 逐个切回（超管会话）。生产备份验证（av_prod 快照）时需要切回的是这 6 个：anthropic 0.3.1、ccgateway 0.1.132、codex 0.1.3、dynweight 0.5.7、moderation 0.11.1、volcengine 0.12.6（11-13 快照，与线上一致），以发布当天的记录为准。
@@ -55,14 +56,14 @@
 | 4 | `role:manage` 拆为 `role:define` + `role:assign`（迁移改写存量授予后删除 `role:manage`）；内置 operator 只有 `role:assign` | 角色管理者 | T09（934b1c5b23）、P4F1（f9632c2896）、发布前去兼容层 |
 | 5 | 超管全局唯一、角色冻结、只能本人移交（密码 + 第二因素）；服务器 CLI 恢复超管 | 超管 | T12、T16、T17、T18（2e03d308fb） |
 | 6 | 分配角色受“可管理角色”清单约束，撤销同样；作用于用户 = 操作权限 + 目标的非默认角色都在清单内且权限 ⊆ 操作者（含本人；不能禁用、删除自己，不能撤销自己的超管） | 用户管理者 | T13–T15、T56、FU6（fec1698e1b）、期 3 整合审查（ec3b6de722） |
-| 7 | 内置角色（含新增的 supplier）声明化，名称、权限、清单只允许超管改；admin 默认不含超管专属权限（存量收回）；operator 按白名单 | admin、operator | T50–T55 |
+| 7 | 内置角色（super_admin、admin、operator、supplier、user）声明化，默认值只在 `builtinRoles` 一处；除超管角色外可修改、可恢复默认：有 `role:define`、角色在操作者可分配清单内且不超出操作者（admin 能改 operator、supplier、user，不能改 admin），不能删除、不能改 key；admin 默认不含超管专属权限（存量收回）；operator 按白名单；升级时只补缺一次（`defaults_rev`） | admin、operator、角色管理者 | T50–T55、内置角色默认值（2026-11-13） |
 | 8 | 访问密钥 = 用户实时权限 ∩ 密钥权限，可勾任何权限（含插件权限、`self:*`）；只有管理访问密钥本身与登录会话只允许会话 | 访问密钥 | S2（826eab1049）、S3（9bde44b7f2）、S4（5835a65248） |
 | 9 | 高危操作每次二次验证（通行密钥 / 2FA / 无强方式时密码，proof 5 分钟一次性，绑定用户、会话或密钥、scope、`METHOD path`）：明文回显、超管移交、本人改密码/邮箱/2FA/通行密钥（含开启 2FA）、改他人密码、清他人 2FA、删用户、插件上传/安装/同意/确认暂缓授予、发布者、核心升级与更新源、ccgateway 装码与拨号、ccgateway 镜像上传（创建时验证一次，同一上传的分片、续传、取消与装载凭上传 id 延续）；改密码等接口不再收当前密码字段 | 控制台用户、脚本 | S1（dd8f66cbb9）、S3、S5（5626d84d91）、R0（8927849f66）、p4-review、发布前待定项 |
 | 10 | 插件代理：访问密钥按插件权限放行；空权限路由拒绝；按账号操作的插件路由要求调用者对这些账号有范围（只有插件权限的角色由 200 变 403） | 插件路由调用者 | T22、T24、T25、S4 |
 | 11 | own（受限档）规则：只在变化时校验分组、解绑也要权限、掩码回填改地址须重新输入、不能恢复被管理员禁用的账号、草稿与预备容器每人 3 个 | 供应商 | T28、T29、T63、T64 |
 | 12 | 代理拨号守卫（内网地址在拨号时拒绝）；他人账号在用的 own 代理不能改连接字段 | 代理属主 | T30、T31、FU1 |
 | 13 | WebSocket 每轮重新鉴权（撤销 1008、分组变化 1012） | API Key 客户端 | T32 |
-| 14 | 调余额、用户组成员、个人专属价走“作用于用户”口径；segment:manage 不能改自己所在组的定价与授权 | 财务、定价管理者 | T33、FU2、FU6 |
+| 14 | 调余额、用户组成员、个人专属价走“作用于用户”口径；segment:manage 不能改自己所在组的定价与授权；调余额的目标持有 `user` 以外的角色时还要 `balance:adjust:any`（超管专属），admin 默认只能给普通用户调 | 财务、定价管理者 | T33、FU2、FU6、内置角色默认值 |
 | 15 | 用量详情对本人视图与无 `account:read` 的视图不返回账号字段；ccgateway 请求日志按白名单投影 | 只读者 | T34、T43、FU3 |
 | 16 | payment webhook 未接验签器时 501 | payment | T35 |
 | 17 | 账号运行时只认 `account:*`；`/system/ccgateway/connect` 删除；请求日志设置不接受受限档 | settings 管理者、供应商 | T36–T39 |
@@ -73,12 +74,14 @@
 | 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`）；8 个旧 own key 由迁移改写为 `<action>:own` 后删除，不再作为别名接受，`/me` 只输出规范 key | 角色管理者、供应商、脚本 | R1–R8、发布前去兼容层 |
 | 23 | 启动时自检路由表与菜单（不一致拒绝启动）；控制台权限目录由服务端生成 | 运维、开发 | T68（7698df4d65）、T69（bb27dc839f） |
 | 24 | 控制台：X-Authz-Version 与 403 触发重新取权限；用户页、角色页、同意页只给可管理的对象；仪表盘账号状态卡片；财务区“余额流水”菜单；iframe 插件可查本插件权限 | 控制台用户 | T74–T83 |
-| 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级。已授予且范围覆盖的宿主权限沿用，不按风险要 `plugin:grant:*`（非超管 admin 不再被已有的 `ui.native` 等挡住） | 插件管理者 | 期 4 收尾 F1、发布前待定项 |
+| 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色须在操作者可分配清单内且不超出操作者，2026-11-13 前只有超管）；非超管 admin 不能批给 admin 角色的这类授予（给 operator、supplier、user 的可以）。已授予且范围覆盖的宿主权限沿用，不按风险要 `plugin:grant:*`（非超管 admin 不再被已有的 `ui.native` 等挡住） | 插件管理者 | 期 4 收尾 F1、发布前待定项 |
 | 26 | 目录 `apikey:self:manage` 带 `stepUp`、`sensitive` 标记（明文回显本来就每次二次验证，访问密钥选择器现在会提示）；启动自检要求挂 StepUp 的路由引用带 stepUp 标记的权限或在豁免表中 | 访问密钥、开发 | 期 4 收尾 F2 |
 | 27 | 新建、修改访问密钥每次二次验证 `self.access_key.write`（取代只要密码），删除不要 | 控制台用户、脚本 | 期 4 收尾 F3 |
 | 28 | 超管去掉自己最后一个强因素（清自己的安全设置、无通行密钥时关 2FA、无 2FA 时删唯一通行密钥）要密码 + 第二因素 | 超管 | 期 4 收尾 F4 |
 
-被后续任务取代、不再成立的中间口径：T10/T57 的 sessionOnly（S3 删除，改为二次验证）；T11 的明文回显拒绝访问密钥（S3 改为二次验证）；T33/FU5 的“不能作用于自己 / 超管自作用豁免”（FU6 改为可管理角色口径）；T41 的带密钥 schema 一律拒绝 `$ref`（FU4 支持本地引用）；own/all 成对 key（R1–R7 改为范围）。
+| 29 | 新增 `balance:adjust:any`🔐👑；supplier 默认加 `usage:self:read`；控制台角色页对可管理的内置角色开放编辑并加“恢复默认”按钮（危险确认，不要二次验证，与其他角色写入一致），用户页对非普通用户的调余额入口按 `balance:adjust:any` 显示，同意页可给可管理的内置角色指定插件权限 | admin、财务、控制台用户 | 内置角色默认值（2026-11-13） |
+
+被后续任务取代、不再成立的中间口径：T51 决策 6“内置角色只允许超管改”（2026-11-13 改为可分配清单口径）；T10/T57 的 sessionOnly（S3 删除，改为二次验证）；T11 的明文回显拒绝访问密钥（S3 改为二次验证）；T33/FU5 的“不能作用于自己 / 超管自作用豁免”（FU6 改为可管理角色口径）；T41 的带密钥 schema 一律拒绝 `$ref`（FU4 支持本地引用）；own/all 成对 key（R1–R7 改为范围）。
 
 ### 4. 运维清单（只读 SQL，执行需用户授权登录生产）
 
@@ -127,6 +130,12 @@ JOIN roles r ON r.key = d.role
 WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id)
 ORDER BY 1, 2, 3;
 
+-- 9. 内置角色现有授予（升级后补缺只加不删；与 builtinRoles 默认值对照，超出的部分保留，需要时在角色页“恢复默认”）
+SELECT r.key AS role, p.key, p.source
+FROM roles r JOIN role_permissions rp ON rp.role_id = r.id JOIN permissions p ON p.id = rp.permission_id
+WHERE r.builtin AND NOT r.superuser
+ORDER BY 1, 2;
+
 -- 8. claude-oauth 的发布者（见发布约束 6）
 SELECT pl.key, pl.publisher_id, pub.name, pub.trust_level, pl.active_version
 FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.key = 'claude_oauth';
@@ -134,6 +143,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 - 第 6 条只列差异。决定回填时（用户授权、写库），在一个事务里按结果逐行授予并推进版本：`INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = '<role>' AND p.key = '<permission>' ON CONFLICT DO NOTHING;`，每行另写一条 `audit_logs`（`action = 'authz.sync.grant'`，`detail = {"via": "manual backfill", "role", "key"}`），最后 `UPDATE authz_meta SET version = version + 1 WHERE id = 1;`。内置角色的授予只应由超管决定。
 - 第 7 条（gateway tokenless 开关）已删除：开关随 0.1.286 删除（发布约束 10）。
+- 第 9 条在 0.1.285 上跑（`role_permission_scopes` 还不存在，所以只看 `role_permissions`）。按 0.1.285 的默认值推算，生产内置角色升级后的变化见文末“内置角色默认值、修改与恢复默认”的表：admin、user 不补任何权限（admin 的可分配清单与 `assign_custom` 由补缺写入），operator 只补可分配清单，0.1.285 默认给 operator 而 0.1.286 白名单之外的权限（`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage`、`system:update:read`）保留不动。operator 0 人，发布后建议超管（或 admin）在角色页对 operator 点“恢复默认”收敛到白名单。
 - 只读核查的已知结果（2026-11-12，DECISIONS）：超管 1 个；无 supplier 同名角色、无自定义角色；codex/dynweight/volcengine 的 6 个插件权限只授给内置 admin（0 用户）；operator 0 人；发布者只有 official 的 sub2api。发布前按当日数据重跑。
 
 ### 5. wontfix 与延后（含期 3、期 4 的取舍）
@@ -563,6 +573,8 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 回滚：revert 这个提交即可，无迁移、无数据变化（按提示改过的角色 key 保留）。
 
 ## T51 决策 6：内置角色的名称、权限、可分配清单只允许超管修改（产品性收紧）
+
+> 后续：2026-11-13 改为可分配清单口径（admin 能改 operator、supplier、user），见文末“内置角色默认值、修改与恢复默认”。
 
 - 改动：`authz.editableRole` 在超管角色冻结、系统（actor 0）放行之后加内置角色分支：角色是内置的，操作者就必须是超管（`covers` 比较超管标志），否则 403 `only the super admin can change built-in roles`，`details.superuser = true`。经它的五个写操作一起生效：PATCH `/roles/:id`、PUT `/roles/:id/permissions`、PUT `/roles/:id/assignable`、POST `/roles/:id/reset`、DELETE `/roles/:id`（内置角色对超管仍是 409）。自定义角色照旧按“角色在操作者之内”判断。CONTRACTS §4、§15.7、§43.6 同步。无迁移。
 - 影响对象：
@@ -1490,3 +1502,37 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 测试：install `TestDecideCarriesCoveredGrants`（列出或不列都沿用、扩大的不沿用、首次安装不沿用）、`TestInstallConsentUpgradeUninstall`（只有 `plugin:grant:high` 的操作者在升级同意里显式列出已授予的 `ui.native` 通过）；web `ConsentView.spec`（缺 `plugin:grant:critical` 时沿用 `ui.native` 可提交，只提交扩大的 `http.client`，拒绝未授予的可选项）。
 - 影响对象：只有 `plugin:install`（+ `plugin:grant:high`）的非超管管理员可以批准不新增关键宿主权限的升级。
 - 回滚：revert 该提交（前后端同一提交）。无迁移。
+
+## 内置角色默认值、修改与恢复默认（2026-11-13，用户要求）
+
+用户原话：“做完之后，默认帮我配置超级管理员 管理员 用户 运维 供应商。”“这个是新系统自带的角色 可以进行修改 重置”；此前：“只有超管能给任意人改余额，管理员只能给普通用户改余额，普通用户不能改余额，这个应该是可以通过权限标记来控制的吧？”
+
+- 改动：
+  - **默认值一处**：五个内置角色的默认权限、可分配清单只在 `authz/catalog.go` `builtinRoles` 定义；新库 `SyncCore` 直接写入，升级补缺与 `ResetRole` 共用它。迁移 0097 不再给内置 admin、operator 写可分配清单（只给持有 `role:manage` 的自定义角色写），内置角色的清单由补缺写入。supplier 默认加 `usage:self:read`（看自己的用量），改为 `oneOf` + `scopedOf` 与 operator 同一写法。
+  - **只补缺一次**（`roles.defaults_rev`，0097 第 7 步加列，存量为 0；`builtinRole.rev` 每个角色一个，现为 1）：`SyncCore` 的 `advanceDefaults` 把落后的内置角色推进到 `rev`（`assign_custom` 默认为真而角色上为假时打开，写审计），这些角色按 `grantDefaults`/`grantScopedDefaults` 补上默认值里缺的每一项（`ON CONFLICT DO NOTHING`，已有同动作全量 key 时不补 own 范围），审计 `authz.sync.grant` 带 `defaults_rev`；没有落后的角色照旧只拿本次新建的权限与内置角色。以后某个**已有**权限或角色加入默认值时提升该角色的 `rev`（新建的权限、角色不需要）。`ResetRole` 同时把 `defaults_rev` 置为 `rev`，审计 `role.reset` 带恢复后的权限、清单与 `assign_custom`。
+  - **内置角色可修改**：`editableRole` 去掉“内置角色只有超管”分支，内置角色与有持有者的自定义角色同一口径：在操作者的可分配清单内（不论有没有持有者）且当前授予不超出操作者；超管角色仍对所有人冻结，内置角色仍不能删（409），key 没有修改接口。`builtinRoleSuperOnly` 删除。插件同意页、内置插件暂缓授予确认经 `CanGrantToRoles` 走同一判断。
+  - **余额只到普通用户**：新权限 `balance:adjust:any`（🔐、`superOnly`，requires `balance:adjust`）。`core.ActOnBalance`（余额调整用，用户组仍是 `ActOnData`）：`CanActOnUsers` 在可管理判断之外，目标持有 `user` 以外的角色时要求操作者的角色有 `balance:adjust:any`，否则 403 `not_plain_user`（`details.role`、`details.missing`）。用权限标记表达：超管恒有；admin 默认没有（超管专属不进任何默认值），所以只能给只持有 `user` 或没有角色的用户调；超管可以把它授给某个角色。
+  - 控制台：角色页对超管或可分配清单里有该内置角色（且 grantable）的定义者开放编辑；“恢复默认”从下拉菜单改为编辑区按钮（`role-restore`），先弹危险确认框，不要二次验证（角色写入都不要，`role:define` 不带 stepUp）；下拉菜单只剩自定义角色的删除。用户页的“调余额”对持有其他角色的用户只在有 `balance:adjust:any`（或超管）时显示（`isPlainUser`）。同意页可给可管理、grantable、自己不持有的内置角色指定插件权限（与服务端一致）。mock 同步。
+- 默认值与升级后的生产现状（生产 0.1.285：内置 super_admin/admin/operator/user，operator 0 人，1 个超管，无自定义角色；按 0.1.285 默认值、角色未被改过推算）：
+
+| 角色 | 默认权限（范围） | 可分配清单 | 改 / 删 / 恢复默认 | 升级后生产现状 |
+|---|---|---|---|---|
+| super_admin 超级管理员 | superuser，全部权限（含以后新增），含 👑 | 全部（不进清单；只能本人移交） | 任何人不能改、不能删、不能重置（409） | 不变（迁移删除软删除用户的超管行，要求恰好一个） |
+| admin 管理员 | 除 👑 外的全部核心权限（👑：`balance:adjust:any`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`） | operator、supplier、user + 全部自定义角色 | 超管能改、能重置；admin 自己不能（不在自己清单里）；不能删 | 收回 5 个旧 👑（安全规则）；`role:manage` → `role:define` + `role:assign`；补缺：可分配清单 operator、supplier、user 与 `assign_custom`，权限无缺；其余保留 |
+| operator 运维 | `user:read/create/update`、`role:read`、`role:assign`、`group:read/manage`、`segment:read/manage`、`account:read/create/update/delete/test`、`account:credential:view:own`、`proxy:read/manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read/run` + user 的 4 个 | supplier、user | 超管、admin 能改和重置；operator 没有 `role:define`；不能删 | 收回 `system:update:execute/recover`（安全规则）；`role:manage` → 只得 `role:assign`（D3，安全规则）；补缺：可分配清单 supplier、user，权限无缺（`account:credential:view:own` 被全量 key 蕴含，不补）；**保留**白名单外的 `balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage`、`system:update:read`（建议发布后点“恢复默认”） |
+| supplier 供应商 | `account:read/create/update/delete/test/credential:view` 的 `:own`、`proxy:read/manage:own`、`usage:self:read` | 空 | 超管、admin 能改和重置（operator 无 `role:define`）；不能删 | 新建，直接写入默认值，并加进 admin、operator 的清单 |
+| user 用户 | `apikey:self:manage`、`balance:self:read`、`usage:self:read`、`gateway:use` | 空 | 超管、admin 能改和重置；不能删 | 不变（权限无缺） |
+
+- 与协调者建议的不同：
+  - operator 可分配清单保持 supplier、user（已定的“运维给供应商开户”，D3 + 决策 5），不改为空或仅 user：operator 0 人，无安全差异；改掉要同时改 0097 的口径说明和已写的测试，而且运维给供应商开户是此前用户确认过的用途。
+  - operator 不加 `settings:read`、`plugin:read`、`system:update:read`（“系统状态”）：`node:read`、`audit:read`、`task:read` 已覆盖节点、审计、任务；设置页与插件页属于 admin 的职责，按白名单原样保留。
+  - 余额用新权限 `balance:adjust:any` 而不是在 `balance:adjust` 上硬编码“超管例外”：用户要的是“通过权限标记控制”，新 key 可以由超管委派给财务类角色，判断仍在 `CanActOnUsers` 一处。
+  - “不能改模型映射”：模型映射是账号类型的通用控件（`account/common_controls.go`），没有对应的权限 key，本次不加；供应商只有 own 范围的账号权限，受限档规则照旧。
+- 测试：
+  - authz：`TestSyncCoreFillsDefaultsOnce`（落后的角色补缺一次、审计带 rev、保留额外授予、不补被全量蕴含的 own 范围、不补 👑；之后重启不补、版本不动；提升某个角色的 rev 只补它）、`TestBuiltinRolesEditable`（admin 改、重置 operator/supplier/user，不能动 admin；operator 不能动 operator；不能删；key 不变；授出超出自己 403；超管密钥 403；角色超出 admin 后 admin 不能改；超管与系统都能改）、`TestResetNeedsEveryDefault`（能改但缺默认权限的定义者重置 403 `missing`）、`TestRoleWritesAudited`（`role.reset` 审计内容）、`TestCanGrantToRoles`（内置角色在清单内且不超出时可指定）、`TestCatalogFlaggedSets`、`TestSyncCoreSeedsCatalogAndRoles`、`TestSuperuserRoleFrozen`（不变）。
+  - billing：`TestAdjustBalanceManagedUsers`（admin 给普通用户、无角色用户可以，给 supplier、operator 403 `not_plain_user`，密钥同；带 `balance:adjust:any` 的 admin 可以给 supplier、operator，仍不能给 admin；超管任何人）。
+  - migrations：`TestAuthzHardeningMigration`（0.1.285 形态库：迁移只给自定义角色写清单、`defaults_rev` 为 0；同步后补缺 admin 清单与 `assign_custom`、operator 清单、user 被删掉的 `balance:self:read`，保留 operator 白名单外的授予，不给回 👑 与 `role:define`；再同步不补）、`TestAuthzHardeningRollback`（反向脚本删列，表结构一致；补缺补上的授予保留）。
+  - web：`RolesView.spec`（可管理的内置角色可编辑并有“恢复默认”，不可管理的锁定；确认框取消不提交、确认后 POST reset；自定义角色只有删除）、`UsersView.spec`（无 `balance:adjust:any` 时只对普通用户显示调余额）、`ConsentView.spec`（可指定可管理的内置角色）。
+- 影响对象：admin（能改、重置 operator/supplier/user，不能再给 supplier、operator 调余额）、财务类角色（需要超管授 `balance:adjust:any`）、脚本（调余额的 403 多一种 `not_plain_user`）。
+- 回滚：revert 本组提交（0097 的第 7 步与第 6 步口径随之还原；测试库重建即可，生产未跑过 0097）。已发布后回滚走反向脚本（删 `defaults_rev`，补缺的授予保留）。
+

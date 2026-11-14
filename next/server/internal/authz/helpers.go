@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -140,20 +141,21 @@ func cannotActOnPeer(ctx context.Context, roleKey string) *core.Error {
 		"你不能修改持有你无权分配的角色的用户")).WithDetails(map[string]any{"role": roleKey, "reason": "not_manageable"})
 }
 
+// notPlainUser is the denial of a balance adjustment for a target holding
+// roleKey, a role besides the default one, by an actor without
+// balance:adjust:any (canActOnUsers, core.ActOnBalance).
+func notPlainUser(ctx context.Context, roleKey string) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you can only adjust the balance of users holding no role but user",
+		"你只能给只持有普通用户角色的用户调余额")).WithDetails(map[string]any{"role": roleKey, "reason": "not_plain_user", "missing": []string{string(perm.BalanceAdjustAny)}})
+}
+
 // cannotActOnRole is the denial of a change to a role granting more than the
 // actor holds (editableRole).
 func cannotActOnRole(ctx context.Context) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx,
 		"you cannot change a role with permissions you don't have",
 		"你不能修改含有你所没有权限的角色"))
-}
-
-// builtinRoleSuperOnly is the denial of a change to a built-in role by anyone
-// but the super admin (editableRole).
-func builtinRoleSuperOnly(ctx context.Context) *core.Error {
-	return core.ErrPermissionDenied.WithMessage(t(ctx,
-		"only the super admin can change built-in roles",
-		"只有超级管理员可以修改内置角色"))
 }
 
 // audit records one audit_logs row of an authz change through q, the
@@ -188,7 +190,8 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.U
 // the account over. The actor's side is its roles too: an access key narrows
 // what the caller may do (the route's permission), not whom. ActOnIdentity
 // on a superuser through an access key needs a step-up proof (期 4 S3, in
-// place of decision 1's session-only rule).
+// place of decision 1's session-only rule); ActOnBalance on a target holding
+// a role besides user needs balance:adjust:any in the actor's roles.
 // An action on oneself that passes (only a superuser's, with the default
 // lists; also a custom role whose list names itself: assign_custom never
 // covers the holder's own roles, RolesPermissions) is audited here, the one
@@ -217,8 +220,12 @@ func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID in
 		return err
 	}
 	for _, key := range roles {
-		if key != RoleUser && !actor.CanAssign(key) {
+		switch {
+		case key == RoleUser:
+		case !actor.CanAssign(key):
 			return cannotActOnPeer(ctx, key)
+		case action == core.ActOnBalance && !actor.Has(string(perm.BalanceAdjustAny)):
+			return notPlainUser(ctx, key)
 		}
 	}
 	// Only an actor that manages the superuser gets this far with one: the

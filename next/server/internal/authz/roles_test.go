@@ -52,10 +52,14 @@ func TestSuperuserRoleFrozen(t *testing.T) {
 	}
 }
 
-// Decision 6: a built-in role's name, permissions and assignable list are
-// the super admin's alone to change, whatever the actor holds; custom roles
-// follow the actor's own permissions as before.
-func TestBuiltinRolesSuperAdminOnly(t *testing.T) {
+// A built-in role other than the super admin's is changed (renamed, its
+// permissions or assignable list replaced, reset) by whoever has it on the
+// assignable list and holds what it grants, as with a custom role holding
+// users (editableRole): with the default lists the admin changes operator,
+// supplier and user, never admin; nobody deletes one or changes its key.
+// What is added must still be held (cannotGrant). An access key has no
+// assignable list, the super admin's included.
+func TestBuiltinRolesEditable(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
 	s := newService(t, db, newMemBus(), nil)
@@ -63,79 +67,130 @@ func TestBuiltinRolesSuperAdminOnly(t *testing.T) {
 	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
 	admin := addUser(t, s, "admin@x.com", RoleAdmin)
 	operator := addUser(t, s, "op@x.com", RoleOperator)
-	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "helper", Name: lt("Helper", "助手"), PermissionKeys: []string{"user:read"}}); err != nil {
-		t.Fatal(err)
-	}
-	helperID := roleID(t, s, "helper")
 
-	writes := func(actor, id int64) map[string]error {
+	writes := func(actor, id int64, perms []string) map[string]error {
 		out := map[string]error{}
 		_, out["rename"] = s.UpdateRole(ctx, actor, id, UpdateRoleInput{Name: lt("x", "x")})
-		_, out["permissions"] = s.SetRolePermissions(ctx, actor, id, []string{"user:read"})
+		_, out["permissions"] = s.SetRolePermissions(ctx, actor, id, perms)
 		_, out["assignable"] = s.SetRoleAssignable(ctx, actor, id, AssignableInput{})
+		_, out["reset"] = s.ResetRole(ctx, actor, id)
 		return out
 	}
-	// The admin holds everything each of these roles grants and may assign,
-	// and is refused all the same.
-	for _, key := range []string{RoleAdmin, RoleOperator, RoleUser} {
-		id := roleID(t, s, key)
+	// Not on the actor's list: the admin's own role, the operator's own.
+	for _, c := range []struct {
+		actor int64
+		key   string
+	}{{admin, RoleAdmin}, {operator, RoleOperator}, {operator, RoleAdmin}} {
+		id := roleID(t, s, c.key)
 		before, err := s.GetRole(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, actor := range []int64{admin, operator} {
-			denied := writes(actor, id)
-			_, denied["reset"] = s.ResetRole(ctx, actor, id)
-			denied["delete"] = s.DeleteRole(ctx, actor, id)
-			for op, err := range denied {
-				if !isCode(err, "permission_denied") || detail(err, "superuser") != true {
-					t.Errorf("actor %d %s %s: %v", actor, op, key, err)
-				}
+		denied := writes(c.actor, id, []string{"user:read"})
+		denied["delete"] = s.DeleteRole(ctx, c.actor, id)
+		for op, err := range denied {
+			if !isCode(err, "permission_denied") {
+				t.Errorf("actor %d %s %s: %v", c.actor, op, c.key, err)
 			}
 		}
 		after, err := s.GetRole(ctx, id)
-		if err != nil || !slices.Equal(after.PermissionKeys, before.PermissionKeys) || !slices.Equal(after.AssignableRoleKeys, before.AssignableRoleKeys) ||
-			after.AssignCustom != before.AssignCustom || after.Name.Get("en") != before.Name.Get("en") {
-			t.Fatalf("%s changed by a non-super admin: %+v, %v", key, after, err)
+		if err != nil || !slices.Equal(after.PermissionKeys, before.PermissionKeys) || after.Name.Get("en") != before.Name.Get("en") {
+			t.Fatalf("%s changed: %+v, %v", c.key, after, err)
 		}
 	}
 
-	// Neither does the super admin's access key, which is no superuser.
-	opID := roleID(t, s, RoleOperator)
-	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"role:define", "user:read"}})
-	if _, err := s.SetRolePermissions(keyed, root, opID, []string{"user:read"}); !isCode(err, "permission_denied") || detail(err, "superuser") != true {
-		t.Fatalf("super admin's access key changes operator: %v", err)
+	// On the admin's list and within it: changed, reset; never deleted, the
+	// key unchanged.
+	for _, key := range []string{RoleOperator, RoleSupplier, RoleUser} {
+		id := roleID(t, s, key)
+		def, err := s.GetRole(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for op, err := range writes(admin, id, []string{"user:read", "balance:adjust"}) {
+			if err != nil {
+				t.Errorf("admin %s %s: %v", op, key, err)
+			}
+		}
+		if _, err := s.SetRolePermissions(ctx, admin, id, []string{"user:read"}); err != nil {
+			t.Fatal(err)
+		}
+		r, err := s.ResetRole(ctx, admin, id)
+		if err != nil || r.Key != key || !slices.Equal(r.PermissionKeys, def.PermissionKeys) || !slices.Equal(r.AssignableRoleKeys, def.AssignableRoleKeys) ||
+			r.Name.Get("en") != def.Name.Get("en") {
+			t.Fatalf("admin resets %s: %+v %v\nwant %+v", key, r, err, def)
+		}
+		if err := s.DeleteRole(ctx, admin, id); !isCode(err, "conflict") {
+			t.Fatalf("admin deletes %s: %v", key, err)
+		}
 	}
 
-	// The super admin and the system change and reset them; deleting stays
-	// refused for everyone (built-in).
+	opID := roleID(t, s, RoleOperator)
+	// Adding what the admin lacks is a grant beyond it.
+	cur := rolePermissionKeys(t, s, opID)
+	if _, err := s.SetRolePermissions(ctx, admin, opID, append(cur, "publisher:manage")); !isCode(err, "permission_denied") || detail(err, "missing") == nil {
+		t.Fatalf("admin grants publisher:manage to operator: %v", err)
+	}
+	// The super admin's access key is refused: it has no assignable list.
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"role:define", "user:read"}})
+	if _, err := s.SetRolePermissions(keyed, root, opID, []string{"user:read"}); !isCode(err, "permission_denied") || detail(err, "missing_assignable") == nil {
+		t.Fatalf("super admin's access key changes operator: %v", err)
+	}
+	// Once the super admin grants the operator more than the admin holds,
+	// the admin can no longer change or reset it (M5).
+	if _, err := s.SetRolePermissions(ctx, root, opID, append(cur, "publisher:manage")); err != nil {
+		t.Fatal(err)
+	}
+	for op, err := range writes(admin, opID, cur) {
+		if !isCode(err, "permission_denied") {
+			t.Errorf("admin %s an operator above it: %v", op, err)
+		}
+	}
+
+	// The super admin and the system change and reset every one of them,
+	// admin included; deleting stays refused for everyone (built-in).
 	for _, actor := range []int64{root, 0} {
-		for _, key := range []string{RoleAdmin, RoleOperator, RoleUser} {
-			for op, err := range writes(actor, roleID(t, s, key)) {
+		for _, key := range []string{RoleAdmin, RoleOperator, RoleSupplier, RoleUser} {
+			for op, err := range writes(actor, roleID(t, s, key), []string{"user:read"}) {
 				if err != nil {
 					t.Errorf("actor %d %s %s: %v", actor, op, key, err)
 				}
 			}
 		}
 	}
-	if got := rolePermissionKeys(t, s, opID); !slices.Equal(got, []string{"user:read"}) {
-		t.Fatalf("operator after the super admin's write: %v", got)
-	}
-	if _, err := s.ResetRole(ctx, root, opID); err != nil {
-		t.Fatalf("super admin resets operator: %v", err)
-	}
 	if err := s.DeleteRole(ctx, root, opID); !isCode(err, "conflict") {
 		t.Fatalf("super admin deletes operator: %v", err)
 	}
+}
 
-	// Custom roles are unchanged: the admin edits and deletes one within it.
-	for op, err := range writes(admin, helperID) {
-		if err != nil {
-			t.Errorf("admin %s helper: %v", op, err)
-		}
+// A reset hands out every default again, so the actor must hold them all:
+// a definer that may change the user role (within it, on its list) but
+// lacks a default of it is refused with what it misses.
+func TestResetNeedsEveryDefault(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "keeper", Name: lt("Keeper", "管家"),
+		PermissionKeys: []string{"role:define", "gateway:use"}, AssignableRoleKeys: []string{RoleUser}}); err != nil {
+		t.Fatal(err)
 	}
-	if err := s.DeleteRole(ctx, admin, helperID); err != nil {
-		t.Fatalf("admin deletes helper: %v", err)
+	keeper := addUser(t, s, "keeper@x.com", "keeper")
+	userID := roleID(t, s, RoleUser)
+	if _, err := s.SetRolePermissions(ctx, root, userID, []string{"gateway:use"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateRole(ctx, keeper, userID, UpdateRoleInput{Description: lt("Gateway only", "只能调网关")}); err != nil {
+		t.Fatalf("keeper edits the user role: %v", err)
+	}
+	_, err := s.ResetRole(ctx, keeper, userID)
+	missing, _ := detail(err, "missing").([]string)
+	if !isCode(err, "permission_denied") || !slices.Contains(missing, "apikey:self:manage") {
+		t.Fatalf("keeper resets the user role: %v (missing %v)", err, detail(err, "missing"))
+	}
+	if got := rolePermissionKeys(t, s, userID); !slices.Equal(got, []string{"gateway:use"}) {
+		t.Fatalf("user role after a refused reset: %v", got)
 	}
 }
 
@@ -420,5 +475,11 @@ WHERE target_type = 'role' AND action LIKE 'role.%' AND user_id = $1 ORDER BY id
 	want := []string{"role.create", "role.update", "role.permissions", "role.delete", "role.reset"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("audit actions = %v, want %v", got, want)
+	}
+	// The reset says what the role now has.
+	var assign string
+	if err := db.Pool.QueryRow(ctx, `SELECT detail->>'assignable_role_keys' FROM audit_logs WHERE action = 'role.reset' AND detail->>'key' = 'operator'
+  AND detail->'permission_keys' ? 'task:run'`).Scan(&assign); err != nil || assign != `["supplier", "user"]` {
+		t.Fatalf("role.reset detail: %q %v", assign, err)
 	}
 }

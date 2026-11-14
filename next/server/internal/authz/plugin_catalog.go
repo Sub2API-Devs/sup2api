@@ -104,8 +104,8 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 
 // CanGrantToRoles implements core.PermissionCatalog: actorID may hand new
 // plugin permissions to each role of roleKeys, which is a change of that
-// role (editableRole: built-in roles are the super admin's alone, a custom
-// role must be within the actor's grantSet) to a role the actor may assign
+// role (editableRole: within the actor's grantSet and, built-in or held,
+// on its assignable list) to a role the actor may assign
 // and does not hold itself (pluginGrantee, T59): the new permissions need
 // not be held, so an actor naming its own role would get what
 // PUT /roles/:id/permissions refuses. Super admin roles already hold every

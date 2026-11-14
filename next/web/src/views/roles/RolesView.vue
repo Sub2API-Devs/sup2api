@@ -8,6 +8,7 @@ import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
 import { fetchFirstPage } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
+import { useAssignableRoles } from '@/composables/useAssignableRoles'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
@@ -17,6 +18,7 @@ import { ROLE_KEY_PATTERN } from '@/generated/permissions'
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const managed = useAssignableRoles()
 const canDefine = computed(() => auth.has('role:define'))
 
 const roles = ref<RoleRow[]>([])
@@ -56,8 +58,13 @@ const saving = ref(false)
 /** What the last save lacked (403 details.missing / missing_assignable). */
 const saveMissing = ref('')
 
-/** Built-in roles only the super admin may change (decision 6); the super admin role nobody. */
-const builtinLocked = computed(() => !!selected.value?.builtin && !selected.value.superuser && !auth.me?.superuser)
+/**
+ * A built-in role is changed by whoever manages it: on the caller's assignable list and within the
+ * caller (CONTRACTS §43.6; the server decides); the super admin role by nobody.
+ */
+const builtinLocked = computed(
+  () => !!selected.value?.builtin && !selected.value.superuser && !auth.me?.superuser && !managed.assignable(selected.value.key)
+)
 const readOnly = computed(() => !canDefine.value || !!selected.value?.superuser || builtinLocked.value)
 const permsMissing = computed(() => !!selected.value && !selected.value.superuser && !Array.isArray(selected.value.permission_keys))
 
@@ -236,21 +243,14 @@ function removeRole() {
   })
 }
 
-const roleActions = computed(() =>
-  selected.value?.builtin ? [{ key: 'restore', label: t('roles.restoreDefaults') }] : [{ key: 'delete', label: t('common.delete'), danger: true }]
-)
+const roleActions = computed(() => [{ key: 'delete', label: t('common.delete'), danger: true }])
 
-function onRoleAction(key: string) {
-  if (key === 'restore') return restoreDefaults()
-  return removeRole()
-}
-
-// POST /roles/:id/reset: name, description and core permissions back to the
-// built-in defaults; plugin permissions stay.
+// POST /roles/:id/reset: name, description, core permissions and managed
+// roles back to the built-in defaults; plugin permissions stay.
 async function restoreDefaults() {
   const r = selected.value
   if (!r?.builtin || r.superuser) return
-  if (!(await confirm({ message: t('roles.restoreConfirm', { name: lt(r.name) || r.key }) }))) return
+  if (!(await confirm({ message: t('roles.restoreConfirm', { name: lt(r.name) || r.key }), danger: true }))) return
   saving.value = true
   try {
     await api.post(`/roles/${r.id}/reset`)
@@ -313,9 +313,10 @@ async function restoreDefaults() {
           </div>
         </template>
         <template v-if="!readOnly" #actions>
+          <SButton v-if="selected.builtin" size="sm" icon="refresh" :disabled="saving" data-testid="role-restore" @click="restoreDefaults">{{ t('roles.restoreDefaults') }}</SButton>
           <SButton size="sm" :disabled="!dirty || saving" @click="resetEditor">{{ t('common.reset') }}</SButton>
           <SButton variant="primary" size="sm" :disabled="!dirty" :loading="saving" data-testid="role-save" @click="save">{{ t('common.save') }}</SButton>
-          <SDropdown :actions="roleActions" data-testid="role-menu" @select="onRoleAction" />
+          <SDropdown v-if="!selected.builtin" :actions="roleActions" data-testid="role-menu" @select="removeRole" />
         </template>
 
         <div class="space-y-5">

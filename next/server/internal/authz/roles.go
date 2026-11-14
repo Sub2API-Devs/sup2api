@@ -105,14 +105,15 @@ func (s *Service) getRole(ctx context.Context, q store.Querier, id int64) (*Role
 
 // editableRole locks role id inside tx, which has called Bump, and returns
 // it when actorID may change it: the super admin role is frozen for everyone
-// (name, description, permissions, assignable list, reset, delete), any other
-// built-in role is the super admin's alone to change (decision 6), and a
-// custom role must be within the actor's grantSet (cannotActOnRole, M5: an
+// (name, description, permissions, assignable list, reset, delete); any
+// other role must be within the actor's grantSet (cannotActOnRole, M5: an
 // actor who could weaken a role above it could then act on that role's
-// holders) and, while it has holders, on the actor's assignable list: a
-// change to the role is a change to them, so it takes the role the actor
-// manages them by (§43.6; assign_custom never covers the actor's own
-// roles). The system (actor 0) passes. Every role write goes through it.
+// holders) and, when it is built-in or has holders, on the actor's
+// assignable list: a change to the role is a change to the users holding
+// it, now or later, so it takes the role the actor manages them by (§43.6;
+// assign_custom never covers the actor's own roles). With the default lists
+// an admin thus changes operator, supplier and user but not admin. The
+// system (actor 0) passes. Every role write goes through it.
 func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64) (*Role, error) {
 	r, err := scanRole(tx.QueryRow(ctx, roleSelect+` WHERE r.id = $1 FOR UPDATE OF r`, id))
 	switch {
@@ -124,8 +125,6 @@ func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64
 		return nil, errSuperuserRoleFrozen
 	case actorID == 0:
 		return r, nil
-	case r.Builtin:
-		return r, s.covers(ctx, tx, actorID, core.PermissionSet{Superuser: true}, builtinRoleSuperOnly(ctx))
 	}
 	actor, err := s.grantSet(ctx, tx, actorID)
 	if err != nil {
@@ -138,7 +137,7 @@ func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64
 	if err := within(actor, cur, cannotActOnRole(ctx)); err != nil {
 		return nil, err
 	}
-	if r.UserCount > 0 && !actor.CanAssign(r.Key) {
+	if (r.Builtin || r.UserCount > 0) && !actor.CanAssign(r.Key) {
 		return nil, notAssignable(ctx, r.Key)
 	}
 	return r, nil
@@ -224,7 +223,7 @@ type UpdateRoleInput struct {
 }
 
 // UpdateRole changes name/description of a role actorID may edit
-// (editableRole; built-in roles included, by the super admin).
+// (editableRole; built-in roles included). A role's key never changes.
 func (s *Service) UpdateRole(ctx context.Context, actorID, id int64, in UpdateRoleInput) (*Role, error) {
 	if in.Name != nil && in.Name.Get("en") == "" {
 		return nil, core.InvalidFields(core.FieldError{Field: "name", Code: "required", Message: "name is required"})
@@ -272,12 +271,12 @@ func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 }
 
 // ResetRole restores a built-in role actorID may edit (editableRole) to its
-// defaults: name, description, core permissions and assignable list. Plugin
-// permissions on the role are left alone, since they are granted per plugin
-// at consent time. The actor must hold every default, as for
-// SetRolePermissions and SetRoleAssignable; what the reset drops is within
-// the actor already (editableRole), so it cannot weaken a role above the
-// actor (C-L2).
+// defaults (builtinRoles): name, description, core permissions and
+// assignable list, marking them applied (defaults_rev). Plugin permissions
+// on the role are left alone, since they are granted per plugin at consent
+// time. The actor must hold every default, as for SetRolePermissions and
+// SetRoleAssignable; what the reset drops is within the actor already
+// (editableRole), so it cannot weaken a role above the actor (C-L2).
 func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, error) {
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
 		r, err := s.editableRole(ctx, tx, actorID, id)
@@ -308,14 +307,15 @@ func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, erro
 		if err := setRoleAssignable(ctx, tx, id, assign, def.assignCustom); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3, updated_at = now() WHERE id = $1`,
-			id, def.name, def.description); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3, defaults_rev = $4, updated_at = now() WHERE id = $1`,
+			id, def.name, def.description, def.rev); err != nil {
 			return err
 		}
 		if err := writeGrants(ctx, tx, id, grants, true); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actorID, "role.reset", "role", id, map[string]any{"key": r.Key})
+		return s.audit(ctx, tx, actorID, "role.reset", "role", id, map[string]any{"key": r.Key, "permission_keys": keys,
+			"assignable_role_keys": roleKeysOf(assign), "assign_custom": def.assignCustom})
 	})
 	if err != nil {
 		return nil, err

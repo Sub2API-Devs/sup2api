@@ -5,14 +5,17 @@ import { i18n } from '@/i18n'
 import { ApiError } from '@sub2api/host'
 import RolesView from './RolesView.vue'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(async () => []), post: vi.fn(async () => ({ id: 1 })), put: vi.fn(async () => ({})), patch: vi.fn(async () => ({})), list: vi.fn(async () => ({ items: [], page: { total: 0 } })) }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(async (_path: string): Promise<unknown> => []), post: vi.fn(async (_path: string) => ({ id: 1 })), put: vi.fn(async () => ({})), patch: vi.fn(async () => ({})), list: vi.fn(async () => ({ items: [], page: { total: 0 } })) }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: mocks }))
+const ui = vi.hoisted(() => ({ confirm: vi.fn(async (_o: object) => true) }))
+vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), confirm: (o: object) => ui.confirm(o) }))
 const lookups = vi.hoisted(() => ({ roles: [] as object[] }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), fetchFirstPage: async () => lookups.roles }))
 const auth = vi.hoisted(() => ({ me: null as object | null, perms: null as string[] | null }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     get me() { return auth.me },
+    get permissionsEpoch() { return 0 },
     has: (p: string | string[]) => !auth.perms || [p].flat().some(k => auth.perms!.includes(k)),
     refreshPermissions: async () => undefined
   })
@@ -73,8 +76,12 @@ describe('RolesView permissions (T77)', () => {
     role({ id: 3, key: 'super_admin', name: 'Super', builtin: true, superuser: true })
   ]
 
-  async function open(id: number, { superuser = false, perms = ['role:define'] } = {}) {
-    auth.me = { roles: [], superuser }
+  let meID = 100
+  async function open(id: number, { superuser = false, perms = ['role:define'], manages = [] as string[] } = {}) {
+    // A new identity each time: the managed-roles list is cached per user.
+    auth.me = { id: ++meID, roles: [], superuser }
+    mocks.get.mockImplementation(async (path: string) =>
+      path === '/me/assignable-roles' ? manages.map(key => ({ key, name: key, builtin: true, grantable: true, missing: [], missing_assignable: [], missing_assign_custom: false })) : [])
     auth.perms = perms
     lookups.roles = roles
     const w = mount(RolesView, { global: { plugins: [i18n, createPinia()], stubs: { SFormModal, teleport: true } } })
@@ -89,6 +96,7 @@ describe('RolesView permissions (T77)', () => {
     const w = await open(1)
     expect(w.find('[data-testid="role-save"]').exists()).toBe(false)
     expect(w.find('[data-testid="role-menu"]').exists()).toBe(false)
+    expect(w.find('[data-testid="role-restore"]').exists()).toBe(false)
     expect(w.find('[data-testid="role-builtin-locked"]').exists()).toBe(true)
     expect(w.get('[data-testid="role-assignable"] input[data-role="admin"]').attributes('disabled')).toBeDefined()
   })
@@ -96,7 +104,28 @@ describe('RolesView permissions (T77)', () => {
   it('lets the super admin edit a built-in role', async () => {
     const w = await open(1, { superuser: true })
     expect(w.find('[data-testid="role-save"]').exists()).toBe(true)
+    expect(w.find('[data-testid="role-restore"]').exists()).toBe(true)
     expect(w.find('[data-testid="role-builtin-locked"]').exists()).toBe(false)
+  })
+
+  it('lets a definer edit and restore a built-in role it manages, not one it does not', async () => {
+    expect((await open(1, { manages: ['admin'] })).find('[data-testid="role-restore"]').exists()).toBe(true)
+    const locked = await open(1, { manages: ['operator'] })
+    expect(locked.find('[data-testid="role-save"]').exists()).toBe(false)
+    expect(locked.find('[data-testid="role-builtin-locked"]').exists()).toBe(true)
+  })
+
+  it('restores defaults only after a confirmation', async () => {
+    const w = await open(1, { superuser: true })
+    mocks.post.mockClear()
+    ui.confirm.mockResolvedValueOnce(false)
+    await w.get('[data-testid="role-restore"]').trigger('click')
+    await flushPromises()
+    expect(ui.confirm).toHaveBeenLastCalledWith(expect.objectContaining({ danger: true, message: expect.stringContaining('Admin') }))
+    expect(mocks.post).not.toHaveBeenCalled()
+    await w.get('[data-testid="role-restore"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post).toHaveBeenCalledWith('/roles/1/reset')
   })
 
   it('saves the managed roles with PUT /roles/:id/assignable including assign_custom', async () => {
@@ -147,9 +176,15 @@ describe('RolesView permissions (T77)', () => {
     expect(w.get('[data-testid="role-assign-custom"]').attributes('aria-checked')).toBe('false')
   })
 
-  it('offers delete on a custom role and restore on a built-in role to the super admin', async () => {
-    expect((await open(2)).find('[data-testid="role-menu"]').exists()).toBe(true)
-    expect((await open(1, { superuser: true })).find('[data-testid="role-menu"]').exists()).toBe(true)
-    expect((await open(3, { superuser: true })).find('[data-testid="role-assignable"]').exists()).toBe(false)
+  it('offers delete on a custom role and restore on a built-in role, neither on the super admin role', async () => {
+    const custom = await open(2)
+    expect(custom.find('[data-testid="role-menu"]').exists()).toBe(true)
+    expect(custom.find('[data-testid="role-restore"]').exists()).toBe(false)
+    const builtin = await open(1, { superuser: true })
+    expect(builtin.find('[data-testid="role-menu"]').exists()).toBe(false)
+    expect(builtin.find('[data-testid="role-restore"]').exists()).toBe(true)
+    const su = await open(3, { superuser: true })
+    expect(su.find('[data-testid="role-assignable"]').exists()).toBe(false)
+    expect(su.find('[data-testid="role-restore"]').exists()).toBe(false)
   })
 })

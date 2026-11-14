@@ -164,6 +164,105 @@ WHERE action = 'authz.sync.grant' AND user_id IS NULL AND target_type = 'role' A
 	}
 }
 
+// Not parallel: it raises a built-in role's rev while it runs. A built-in
+// role behind its rev (an upgrade: migration 0097 adds defaults_rev at 0)
+// gets the defaults it lacks once, each grant audited with the rev, and
+// keeps what it holds beyond them; an own scope next to the full key is not
+// added, nor is a super-only permission. Later syncs bring back nothing an
+// administrator removed, until the rev is raised again.
+func TestSyncCoreFillsDefaultsOnce(t *testing.T) {
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	opID, adminID := roleID(t, s, RoleOperator), roleID(t, s, RoleAdmin)
+	// An operator short of task:run and the supplier on its list, beyond
+	// its defaults with settings:read and the full account:credential:view;
+	// an admin short of role:define and assign_custom; none filled yet.
+	held := slices.DeleteFunc(slices.Clone(operatorDefaults), func(k string) bool { return k == "task:run" || k == "account:credential:view:own" })
+	if _, err := s.SetRolePermissions(ctx, root, opID, append(held, "settings:read", "account:credential:view")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetRoleAssignable(ctx, root, opID, AssignableInput{RoleKeys: []string{RoleUser}}); err != nil {
+		t.Fatal(err)
+	}
+	adminHeld := slices.DeleteFunc(rolePermissionKeys(t, s, adminID), func(k string) bool { return k == "role:define" })
+	if _, err := s.SetRolePermissions(ctx, root, adminID, adminHeld); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetRoleAssignable(ctx, root, adminID, AssignableInput{RoleKeys: []string{RoleOperator, RoleSupplier, RoleUser}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE roles SET defaults_rev = 0 WHERE builtin; DELETE FROM audit_logs`); err != nil {
+		t.Fatal(err)
+	}
+	sync := func() {
+		t.Helper()
+		if err := s.SyncCore(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	filled := func(id int64) []string {
+		t.Helper()
+		var keys []string
+		if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(array_agg(COALESCE(detail->>'key', 'assign_custom') ORDER BY COALESCE(detail->>'key', 'assign_custom')), '{}') FROM audit_logs
+WHERE action = 'authz.sync.grant' AND user_id IS NULL AND target_id = $1 AND detail ? 'defaults_rev'`, strconv.FormatInt(id, 10)).Scan(&keys); err != nil {
+			t.Fatal(err)
+		}
+		return keys
+	}
+
+	sync()
+	op, err := s.GetRole(ctx, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(op.PermissionKeys, "task:run") || !slices.Contains(op.PermissionKeys, "settings:read") ||
+		!slices.Contains(op.PermissionKeys, "account:credential:view") || !slices.Equal(op.AssignableRoleKeys, []string{RoleSupplier, RoleUser}) {
+		t.Fatalf("operator after the fill: %+v", op)
+	}
+	if got := filled(opID); !slices.Equal(got, []string{RoleSupplier, "task:run"}) {
+		t.Fatalf("operator filled with %v", got)
+	}
+	if got := filled(adminID); !slices.Equal(got, []string{"assign_custom", "role:define"}) {
+		t.Fatalf("admin filled with %v", got)
+	}
+	if got := rolePermissionKeys(t, s, adminID); slices.ContainsFunc(superOnlyKeys(), func(k string) bool { return slices.Contains(got, k) }) {
+		t.Fatalf("admin filled with a super-only permission: %v", got)
+	}
+	var behind int
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM roles WHERE builtin AND defaults_rev <> 1`).Scan(&behind); err != nil || behind != 0 {
+		t.Fatalf("built-in roles left behind: %d %v", behind, err)
+	}
+
+	// What is removed afterwards stays removed, and the version stays.
+	if _, err := s.SetRolePermissions(ctx, root, opID, held); err != nil {
+		t.Fatal(err)
+	}
+	v, _ := s.currentVersion(ctx)
+	sync()
+	if got, _ := s.currentVersion(ctx); got != v || slices.Contains(rolePermissionKeys(t, s, opID), "task:run") {
+		t.Fatalf("a later sync: version %d -> %d, operator %v", v, got, rolePermissionKeys(t, s, opID))
+	}
+
+	// A raised rev fills that role in again, and only that one.
+	saved := builtinRoles
+	defer func() { builtinRoles = saved }()
+	builtinRoles = slices.Clone(builtinRoles)
+	for i, r := range builtinRoles {
+		if r.key == RoleOperator {
+			builtinRoles[i].rev = 2
+		}
+	}
+	if _, err := s.SetRolePermissions(ctx, root, adminID, adminHeld); err != nil {
+		t.Fatal(err)
+	}
+	sync()
+	if !slices.Contains(rolePermissionKeys(t, s, opID), "task:run") || slices.Contains(rolePermissionKeys(t, s, adminID), "role:define") {
+		t.Fatalf("rev 2: operator %v, admin %v", rolePermissionKeys(t, s, opID), rolePermissionKeys(t, s, adminID))
+	}
+}
+
 // The target's side of SEC-H2 includes the roles it may assign: admin, who
 // cannot assign admin, cannot act on a holder of a custom role that can.
 func TestCanActOnUsersComparesAssignable(t *testing.T) {

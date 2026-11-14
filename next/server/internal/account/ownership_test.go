@@ -979,7 +979,7 @@ func TestOwnCustomUpstream(t *testing.T) {
 // account is created, a custom-upstream one needs account:relay, groups
 // cannot be bound (no account:group:bind for now), and other users' accounts
 // do not exist for it. The key set the other tests call supplierKeys is the
-// role's default.
+// role's default on accounts and proxies (it also reads its own usage).
 func TestBuiltinSupplierRole(t *testing.T) {
 	fake := fakeAuthz{keys: map[int64][]string{}}
 	e, _, _, _ := preparationFixtureWith(t, fake)
@@ -996,7 +996,7 @@ func TestBuiltinSupplierRole(t *testing.T) {
 		}
 		return set.KeyList()
 	}
-	if got := keysOf(authz.RoleSupplier); !slices.Equal(got, slices.Sorted(slices.Values(supplierKeys))) {
+	if got := keysOf(authz.RoleSupplier); !slices.Equal(got, slices.Sorted(slices.Values(append(slices.Clone(supplierKeys), "usage:self:read")))) {
 		t.Fatalf("supplier role grants %v, want %v", got, supplierKeys)
 	}
 	alice := e.addUser("alice@x.com")

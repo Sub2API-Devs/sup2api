@@ -113,7 +113,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 	}
 	wantSensitive := []string{
 		"account:credential:view", "account:delete", "account:relay",
-		"apikey:self:manage", "balance:adjust", "group:manage",
+		"apikey:self:manage", "balance:adjust", "balance:adjust:any", "group:manage",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
 		"plugin:install", "plugin:manage", "plugin:uninstall",
 		"price:manage", "proxy:manage", "publisher:manage",
@@ -128,7 +128,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"system:update:execute", "system:update:recover", "user:delete", "user:password:reset",
 	}
 	// Decision D2: what only the super admin holds by default.
-	wantSuper := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
+	wantSuper := []string{"balance:adjust:any", "plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
 	slices.Sort(sensitive)
 	slices.Sort(stepUp)
 	if super := superOnlyKeys(); !slices.Equal(super, wantSuper) {

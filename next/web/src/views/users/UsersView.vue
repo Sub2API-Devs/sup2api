@@ -30,7 +30,7 @@ import type { Role, User } from '@/api/types'
 import { deleteWithConfirm, useStatusOptions } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useSelection } from '@/composables/useSelection'
-import { SUPPLIER_ROLE, useAssignableRoles, withSupplierUser } from '@/composables/useAssignableRoles'
+import { SUPPLIER_ROLE, isPlainUser, useAssignableRoles, withSupplierUser } from '@/composables/useAssignableRoles'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -139,7 +139,8 @@ function rowActions(u: User): MenuAction[] {
     { key: 'password', label: t('users.resetPassword.action'), hidden: !may('user:update') || !auth.has('user:password:reset') || self },
     // One's own second factor is reset under /me with a verification.
     { key: 'security', label: t('users.resetSecurity'), hidden: !may('user:password:reset') || self },
-    { key: 'balance', label: t('users.adjustBalance'), hidden: !may('balance:adjust') },
+    // balance:adjust reaches plain users; users holding other roles also take balance:adjust:any.
+    { key: 'balance', label: t('users.adjustBalance'), hidden: !may('balance:adjust') || !(isPlainUser(u.roles) || auth.has('balance:adjust:any')) },
     // Nobody disables or deletes themselves (a lock-out guard, not a permission).
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !may('user:delete') || self }
   ]

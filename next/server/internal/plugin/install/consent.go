@@ -458,9 +458,9 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 // checkRoleGrantRights verifies the operator may hand the permissions this
 // version adds to the roles the request names (SEC-H2): role:define, and
 // every such role must be one the operator may change (CanGrantToRoles:
-// built-in roles only for the super admin, custom roles within the
-// operator's own rights, on its assignable list and not held by it unless
-// it is the super admin, never a super admin role). The new permissions
+// within the operator's own rights, on its assignable list and not held by
+// it unless it is the super admin, never a super admin role; built-in roles
+// alike). The new permissions
 // themselves need not be held. Manifest defaultRoles are the catalog's own
 // defaults and need nothing here (an upgrade's grants that need consent are
 // checked by upgradeRoleGrants). Only permissions the catalog does not have yet

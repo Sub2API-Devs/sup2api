@@ -33,6 +33,7 @@ export const P = {
   BalanceSelfRead: 'balance:self:read',
   BalanceAllRead: 'balance:all:read',
   BalanceAdjust: 'balance:adjust',
+  BalanceAdjustAny: 'balance:adjust:any',
   UsageSelfRead: 'usage:self:read',
   UsageAllRead: 'usage:all:read',
   UsageSettle: 'usage:settle',
@@ -386,8 +387,18 @@ export const PERMISSIONS: Record<PermKey, PermMeta> = {
     stepUp: false,
     requires: ['balance:all:read', 'user:read'],
     description: {
-      en: 'Add to or deduct from the balance of users you may manage.',
-      zh: '给可管理的用户加减余额。'
+      en: 'Add to or deduct from the balance of users you may manage that hold no role but user.',
+      zh: '给可管理、且只持有普通用户角色的用户加减余额。'
+    }
+  },
+  'balance:adjust:any': {
+    module: 'balance',
+    sensitive: true,
+    stepUp: false,
+    requires: ['balance:adjust'],
+    description: {
+      en: 'With balance:adjust, also adjust the balance of users you may manage that hold other roles (operators, suppliers, custom roles).',
+      zh: '配合 balance:adjust，也能给持有其他角色（运维、供应商、自定义角色）的可管理用户调余额。'
     }
   },
   'usage:self:read': {

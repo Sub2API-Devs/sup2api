@@ -14,7 +14,12 @@
 --   6. Retired keys are rewritten in roles and access keys and dropped:
 --      account:own:<x> and proxy:own:<x> become <action>:own, role:manage
 --      becomes role:define + role:assign (the built-in operator gets
---      role:assign only, D3) and gives its holders an assignable list.
+--      role:assign only, D3) and gives the custom roles holding it an
+--      assignable list.
+--   7. roles.defaults_rev: which revision of its defaults a built-in role
+--      has had. Existing roles start at 0, so the core sync grants each
+--      built-in role the defaults it lacks once (the defaults live in code
+--      only, authz builtinRoles; nothing is taken away there).
 --
 -- Safe to run again: schema changes are IF NOT EXISTS, the rewrites find
 -- nothing left to rewrite (the retired keys are gone), and the super-only
@@ -154,22 +159,22 @@ FROM (VALUES ('role:define', '{"en": "Define roles", "zh": "定义角色"}'),
 WHERE EXISTS (SELECT 1 FROM permissions m WHERE m.key = 'role:manage' AND m.source = 'core')
 ON CONFLICT (key) DO NOTHING;
 
--- A role:manage holder may assign what role:manage allowed: every custom
--- role and every built-in one but the superuser role and admin; the
--- built-in operator only the supplier and user roles (decision 5; the core
--- sync adds the supplier role when it creates it).
+-- A custom role holding role:manage may assign what role:manage allowed:
+-- every custom role and every built-in one but the superuser role and admin
+-- (decision 5). The built-in roles get their default lists from the core
+-- sync (step 7).
 WITH holders AS (
-    SELECT r.id, r.builtin AND r.key = 'operator' AS operator
+    SELECT r.id
     FROM role_permissions rp
     JOIN permissions p ON p.id = rp.permission_id AND p.key = 'role:manage' AND p.source = 'core'
-    JOIN roles r ON r.id = rp.role_id AND NOT r.superuser
+    JOIN roles r ON r.id = rp.role_id AND NOT r.builtin
 ), flagged AS (
-    UPDATE roles r SET assign_custom = NOT h.operator FROM holders h WHERE r.id = h.id
+    UPDATE roles r SET assign_custom = true FROM holders h WHERE r.id = h.id
     RETURNING r.id, r.assign_custom
 ), listed AS (
     INSERT INTO role_assignable_roles (role_id, assignable_role_id)
     SELECT h.id, b.id FROM holders h
-    JOIN roles b ON b.builtin AND NOT b.superuser AND b.key <> 'admin' AND (NOT h.operator OR b.key IN ('supplier', 'user'))
+    JOIN roles b ON b.builtin AND NOT b.superuser AND b.key <> 'admin'
     ON CONFLICT DO NOTHING
     RETURNING role_id, assignable_role_id
 )
@@ -224,6 +229,10 @@ FROM rekeyed;
 
 -- The retired keys go, their grants with them.
 DELETE FROM permissions WHERE source = 'core' AND key IN (SELECT old_key FROM authz_retired);
+
+-- 7. The revision of its defaults a built-in role has had (authz
+-- builtinRoles); 0 until the core sync fills it in.
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS defaults_rev integer NOT NULL DEFAULT 0;
 
 -- The version moves when this run wrote something: every write above left
 -- an audit row stamped with the transaction's start time.

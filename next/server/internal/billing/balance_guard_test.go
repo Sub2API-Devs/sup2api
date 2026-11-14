@@ -30,10 +30,12 @@ func (k keyTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.Acces
 // Who may adjust whose balance (M7, FU6): balance:adjust decides whether
 // (the route, narrowed by an access key), and the roles the caller manages
 // decide whom (authz's CanActOnUsers, by the caller's roles, itself
-// included). The super admin manages everyone; an admin users, suppliers
-// and operators but no admin, itself included; an operator given
-// balance:adjust only suppliers and users. Each action on oneself leaves one
-// audit row.
+// included), plain users only (no role but user) unless those roles also
+// grant balance:adjust:any (core.ActOnBalance). The super admin adjusts
+// everyone's; an admin plain users', and with balance:adjust:any those of
+// suppliers and operators too, never an admin's, itself included; an
+// operator given balance:adjust plain users'. Each action on oneself leaves
+// one audit row.
 func TestAdjustBalanceManagedUsers(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -52,6 +54,7 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 	admin, admin2 := withRoles("admin@example.com", authz.RoleUser, authz.RoleAdmin), withRoles("admin2@example.com", authz.RoleUser, authz.RoleAdmin)
 	operator, operator2 := withRoles("op@example.com", authz.RoleUser, authz.RoleOperator), withRoles("op2@example.com", authz.RoleUser, authz.RoleOperator)
 	supplier, user := withRoles("supplier@example.com", authz.RoleUser, authz.RoleSupplier), withRoles("user@example.com", authz.RoleUser)
+	roleless := withRoles("roleless@example.com")
 	// adjusting holds only balance:adjust: an operator holding it too keeps
 	// the operator's assignable list.
 	if _, err := az.CreateRole(ctx, super, authz.CreateRoleInput{Key: "adjusting", Name: core.LocalizedText{"en": "Adjusting"},
@@ -59,6 +62,12 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	adjusting := withRoles("op-adjusting@example.com", authz.RoleUser, authz.RoleOperator, "adjusting")
+	// The super admin hands balance:adjust:any (super-only) to a role.
+	if _, err := az.CreateRole(ctx, super, authz.CreateRoleInput{Key: "adjusting_any", Name: core.LocalizedText{"en": "Adjusting any"},
+		PermissionKeys: []string{"balance:adjust", "balance:adjust:any"}}); err != nil {
+		t.Fatal(err)
+	}
+	adminAny := withRoles("admin-any@example.com", authz.RoleUser, authz.RoleAdmin, "adjusting_any")
 	e.svc.Users = az
 	engine := gin.New()
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, keyTokens{keys: map[string]core.AccessKeyIdentity{
@@ -75,7 +84,7 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 		}
 		return e.call(actor, "POST", "/users/"+itoa(target)+"/balance/adjust", map[string]any{"amount": "1", "credit": true}, auth...)
 	}
-	const allowed, noPermission, notManaged = "allowed", "permission", "not managed"
+	const allowed, noPermission, notManaged, notPlain = "allowed", "permission", "not managed", "not plain"
 	adjusted := 0
 	for _, tc := range []struct {
 		name   string
@@ -91,17 +100,22 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 		{"super admin's key with balance:adjust a user", super, "super_adjust", user, allowed},
 		{"super admin's key without it", super, "super_read", super, noPermission},
 		{"admin a user", admin, "", user, allowed},
-		{"admin a supplier", admin, "", supplier, allowed},
-		{"admin an operator", admin, "", operator, allowed},
+		{"admin a user without roles", admin, "", roleless, allowed},
+		{"admin a supplier", admin, "", supplier, notPlain},
+		{"admin an operator", admin, "", operator, notPlain},
 		{"admin another admin", admin, "", admin2, notManaged},
 		{"admin the super admin", admin, "", super, notManaged},
 		{"admin itself", admin, "", admin, notManaged},
-		{"admin's key with balance:adjust a supplier", admin, "admin_adjust", supplier, allowed},
+		{"admin's key with balance:adjust a user", admin, "admin_adjust", user, allowed},
+		{"admin's key with balance:adjust a supplier", admin, "admin_adjust", supplier, notPlain},
 		{"admin's key with balance:adjust another admin", admin, "admin_adjust", admin2, notManaged},
 		{"admin's key with balance:adjust itself", admin, "admin_adjust", admin, notManaged},
 		{"admin's key without it", admin, "admin_read", user, noPermission},
+		{"admin with balance:adjust:any a supplier", adminAny, "", supplier, allowed},
+		{"admin with balance:adjust:any an operator", adminAny, "", operator, allowed},
+		{"admin with balance:adjust:any another admin", adminAny, "", admin, notManaged},
 		{"operator by default", operator, "", user, noPermission},
-		{"operator with balance:adjust a supplier", adjusting, "", supplier, allowed},
+		{"operator with balance:adjust a supplier", adjusting, "", supplier, notPlain},
 		{"operator with balance:adjust a user", adjusting, "", user, allowed},
 		{"operator with balance:adjust another operator", adjusting, "", operator2, notManaged},
 		{"operator with balance:adjust an admin", adjusting, "", admin, notManaged},
@@ -126,6 +140,10 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 		case notManaged:
 			if status != 403 || details["reason"] != "not_manageable" {
 				t.Errorf("%s: %d %v, want 403 not manageable", tc.name, status, resp)
+			}
+		case notPlain:
+			if status != 403 || details["reason"] != "not_plain_user" {
+				t.Errorf("%s: %d %v, want 403 not a plain user", tc.name, status, resp)
 			}
 		}
 	}

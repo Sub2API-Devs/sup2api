@@ -64,7 +64,8 @@ const MODULES: ModuleDef[] = [
     { key: 'price:read', label: L('View', '查看') }, { key: 'price:manage', label: L('Manage', '管理') }] },
   { module: 'balance', label: L('Balance', '余额'), source: 'core', status: 'active', permissions: [
     { key: 'balance:self:read', label: L('View own', '查看自己的') }, { key: 'balance:all:read', label: L('View all', '查看全部') },
-    { key: 'balance:adjust', label: L('Adjust', '调整'), sensitive: true }] },
+    { key: 'balance:adjust', label: L('Adjust plain users', '调整普通用户'), sensitive: true },
+    { key: 'balance:adjust:any', label: L('Adjust any managed user', '调整任意可管理用户'), sensitive: true }] },
   { module: 'usage', label: L('Usage', '使用记录'), source: 'core', status: 'active', permissions: [
     { key: 'usage:self:read', label: L('View own', '查看自己的') }, { key: 'usage:all:read', label: L('View all', '查看全部') },
     { key: 'usage:settle', label: L('Settle usage', '结算用量'), sensitive: true }] },
@@ -125,19 +126,19 @@ interface MockRole {
 const CORE_KEYS = ALL_PERMISSIONS.filter((k) => !k.startsWith('plugin.'))
 // Built-in defaults (CONTRACTS §4, authz/catalog.go): admin has every core
 // permission but the super-only ones; operator and supplier are explicit lists.
-const SUPER_ONLY = ['plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'publisher:manage', 'system:update:execute', 'system:update:recover']
+const SUPER_ONLY = ['balance:adjust:any', 'plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'publisher:manage', 'system:update:execute', 'system:update:recover']
 const USER_KEYS = ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use']
-const SUPPLIER_KEYS = ['account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own', 'proxy:read:own', 'proxy:manage:own']
+const SUPPLIER_KEYS = ['account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own', 'proxy:read:own', 'proxy:manage:own', 'usage:self:read']
 const OPERATOR_KEYS = [
   'user:read', 'user:create', 'user:update', 'role:read', 'role:assign', 'group:read', 'group:manage', 'segment:read', 'segment:manage',
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'proxy:read', 'proxy:manage', 'price:read',
-  'balance:all:read', 'usage:all:read', 'node:read', 'audit:read', 'task:read', 'task:run', ...SUPPLIER_KEYS, ...USER_KEYS
+  'balance:all:read', 'usage:all:read', 'node:read', 'audit:read', 'task:read', 'task:run', ...SUPPLIER_KEYS.filter((k) => !USER_KEYS.includes(k)), ...USER_KEYS
 ]
 const ADMIN_KEYS = CORE_KEYS.filter((k) => !SUPER_ONLY.includes(k))
 const BUILTIN_DEFAULTS: Record<string, { name: L; description: string; keys: string[]; assignable: string[]; assignCustom: boolean }> = {
   admin: { name: L('Admin', '管理员'), description: 'Every core permission except the super-only ones', keys: ADMIN_KEYS, assignable: ['operator', 'supplier', 'user'], assignCustom: true },
   operator: { name: L('Operator', '运维'), description: 'Users, accounts, proxies and operations', keys: OPERATOR_KEYS, assignable: ['supplier', 'user'], assignCustom: false },
-  supplier: { name: L('Supplier', '供应商'), description: 'Own accounts and proxies (an add-on to user)', keys: SUPPLIER_KEYS, assignable: [], assignCustom: false },
+  supplier: { name: L('Supplier', '供应商'), description: 'Own accounts, proxies and usage (an add-on to user)', keys: SUPPLIER_KEYS, assignable: [], assignCustom: false },
   user: { name: L('User', '普通用户'), description: 'Own API keys, usage and balance; gateway access', keys: USER_KEYS, assignable: [], assignCustom: false }
 }
 const at = (days: number) => now(-86400 * days)

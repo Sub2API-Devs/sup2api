@@ -323,6 +323,10 @@ const (
 	// account changes through an access key only with a step-up proof
 	// (期 4 S3, replacing decision 1's session-only rule).
 	ActOnIdentity
+	// ActOnBalance adjusts balances: ActOnData, and a target holding a role
+	// besides the default one also takes balance:adjust:any (plain users
+	// only with balance:adjust alone).
+	ActOnBalance
 )
 
 // UserGuard decides whom a caller may act on (authz implements it); what the

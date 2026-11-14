@@ -215,8 +215,9 @@ func (s *Service) adjustBalance(c *gin.Context) {
 		return
 	}
 	operator, _ := core.UserID(ctx)
-	// Only users the operator manages, itself only as a superuser (M7, FU6).
-	if err := core.GuardOrDeny(s.Users).CanActOnUsers(ctx, operator, core.ActOnData, id); err != nil {
+	// Only users the operator manages, itself only as a superuser (M7, FU6);
+	// beyond plain users only with balance:adjust:any.
+	if err := core.GuardOrDeny(s.Users).CanActOnUsers(ctx, operator, core.ActOnBalance, id); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

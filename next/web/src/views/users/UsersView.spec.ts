@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   assignable: [] as object[],
   put: vi.fn(async () => ({})),
   epoch: 0,
-  superuser: false
+  superuser: false,
+  perms: null as string[] | null
 }))
 vi.mock('@sub2api/host', async (original) => {
   const real = await original<typeof import('@sub2api/host')>()
@@ -25,7 +26,7 @@ vi.mock('@/composables/lookups', async (original) => ({
   fetchFirstPage: async () => ['admin', 'operator', 'supplier', 'user', 'super_admin'].map((key) => ({ key, name: key, superuser: key === 'super_admin' }))
 }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ has: () => true, me: { id: 1, superuser: mocks.superuser }, permissionsEpoch: mocks.epoch })
+  useAuthStore: () => ({ has: (p: string) => mocks.superuser || !mocks.perms || mocks.perms.includes(p), me: { id: 1, superuser: mocks.superuser }, permissionsEpoch: mocks.epoch })
 }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }))
 enableAutoUnmount(afterEach)
@@ -55,6 +56,7 @@ beforeEach(() => {
   i18n.global.locale.value = 'zh'
   mocks.epoch++
   mocks.superuser = false
+  mocks.perms = null
   mocks.put.mockClear()
   mocks.assignable = [managed('operator'), managed('supplier'), managed('user')]
 })
@@ -67,6 +69,16 @@ describe('UsersView managed users (T78)', () => {
     // An admin peer and the caller itself (admin is not on admin's list): read-only actions.
     expect(actions(w, 3)).toEqual(['pricing', 'ledger'])
     expect(actions(w, 1)).toEqual(['pricing', 'ledger'])
+  })
+
+  it('without balance:adjust:any, offers the balance adjustment on plain users only', async () => {
+    mocks.perms = ['user:update', 'balance:adjust']
+    mocks.users = [user(2, ['operator', 'user']), user(4, ['supplier', 'user']), user(5, ['user']), user(6, [])]
+    const w = await render()
+    expect(actions(w, 2)).not.toContain('balance')
+    expect(actions(w, 4)).not.toContain('balance')
+    expect(actions(w, 5)).toContain('balance')
+    expect(actions(w, 6)).toContain('balance')
   })
 
   it('a role the caller may not grant makes its holders unmanaged', async () => {

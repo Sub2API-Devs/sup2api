@@ -35,7 +35,7 @@ func TestConsentRoleGrantRights(t *testing.T) {
 	}
 
 	e.authz.perms[e.admin]["role:define"] = true
-	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("only the super admin can change built-in roles")
+	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("you cannot assign or revoke this role")
 	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", explicit, e.admin); core.AsError(err).Code != "permission_denied" {
 		t.Fatalf("role the operator may not change: %v", err)
 	}

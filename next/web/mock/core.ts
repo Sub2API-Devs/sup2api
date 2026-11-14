@@ -14,7 +14,7 @@ export const ALL_PERMISSIONS = [
   'account:settings:custom', 'account:group:bind', 'account:relay',
   'proxy:read', 'proxy:manage',
   'price:read', 'price:manage',
-  'balance:self:read', 'balance:all:read', 'balance:adjust',
+  'balance:self:read', 'balance:all:read', 'balance:adjust', 'balance:adjust:any',
   'usage:self:read', 'usage:all:read', 'usage:settle',
   'sticky:read', 'sticky:manage',
   'plugin:read', 'plugin:install', 'plugin:manage', 'plugin:uninstall', 'plugin:grant:high', 'plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'plugin:egress:read', 'plugin:market:read',

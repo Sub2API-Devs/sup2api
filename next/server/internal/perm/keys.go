@@ -32,6 +32,7 @@ const (
 	BalanceSelfRead               Key = "balance:self:read"
 	BalanceAllRead                Key = "balance:all:read"
 	BalanceAdjust                 Key = "balance:adjust"
+	BalanceAdjustAny              Key = "balance:adjust:any"
 	UsageSelfRead                 Key = "usage:self:read"
 	UsageAllRead                  Key = "usage:all:read"
 	UsageSettle                   Key = "usage:settle"

@@ -9,8 +9,9 @@ const same = (a: string[], b: string[]) => a.length === b.length && a.every((k) 
 /**
  * The roles the caller may hand plugin permissions to (install
  * checkRolesGrantable: role:define, then CanGrantToRoles): the super admin
- * any role, others only custom roles on their managed list that they do not
- * hold themselves. The consent page and the review of held-back grants share it.
+ * any role, others only roles on their managed list, within them, that they
+ * do not hold themselves (built-in roles alike). The consent page and the
+ * review of held-back grants share it.
  */
 export function useNameableRoles() {
   const auth = useAuthStore()
@@ -18,7 +19,7 @@ export function useNameableRoles() {
   const choices = computed<AssignableRole[]>(() => {
     if (!auth.has('role:define')) return []
     if (auth.me?.superuser) return managed.roles.value
-    return managed.roles.value.filter((r) => !r.builtin && r.grantable && !auth.me?.roles.includes(r.key))
+    return managed.roles.value.filter((r) => r.grantable && !auth.me?.roles.includes(r.key))
   })
   const canName = (role: string) => choices.value.some((c) => c.key === role)
   return { choices, canName }
@@ -27,8 +28,8 @@ export function useNameableRoles() {
 /**
  * The roles the consent page lets the caller give each permission the
  * consent creates (CONTRACTS: new_permission_roles). Only with role:define;
- * the super admin may name any role, others only custom roles on their
- * managed list that they do not hold themselves (the server's rule). Each
+ * the super admin may name any role, others only roles on their managed
+ * list, within them, that they do not hold themselves (the server's rule). Each
  * permission starts at its manifest default roles; only a permission whose
  * choice differs is sent, so an untouched one keeps the default, built-in
  * roles included.

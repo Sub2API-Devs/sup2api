@@ -134,8 +134,13 @@ var coreModules = []coreModule{
 			desc: lt("View your own balance and ledger.", "查看自己的余额与流水。")},
 		{key: perm.BalanceAllRead, en: "View all balances", zh: "查看全部余额",
 			desc: lt("View every user's balance and the site-wide ledger.", "查看所有用户的余额与全站流水。")},
-		{key: perm.BalanceAdjust, en: "Adjust balances", zh: "调整余额", sensitive: true,
-			desc: lt("Add to or deduct from the balance of users you may manage.", "给可管理的用户加减余额。"), requires: req(perm.BalanceAllRead, perm.UserRead)},
+		// balance:adjust reaches the plain users among those the caller
+		// manages (holding no role but user); balance:adjust:any the rest
+		// of them too (canActOnUsers, core.ActOnBalance).
+		{key: perm.BalanceAdjust, en: "Adjust balances of plain users", zh: "调整普通用户的余额", sensitive: true,
+			desc: lt("Add to or deduct from the balance of users you may manage that hold no role but user.", "给可管理、且只持有普通用户角色的用户加减余额。"), requires: req(perm.BalanceAllRead, perm.UserRead)},
+		{key: perm.BalanceAdjustAny, en: "Adjust balances of any managed user", zh: "调整任意可管理用户的余额", sensitive: true, superOnly: true,
+			desc: lt("With balance:adjust, also adjust the balance of users you may manage that hold other roles (operators, suppliers, custom roles).", "配合 balance:adjust，也能给持有其他角色（运维、供应商、自定义角色）的可管理用户调余额。"), requires: req(perm.BalanceAdjust)},
 	}},
 	{"usage", lt("Usage", "使用记录"), []corePerm{
 		{key: perm.UsageSelfRead, en: "View own usage", zh: "查看自己的用量",
@@ -220,11 +225,12 @@ var coreModules = []coreModule{
 var userRolePermissions = []string{"apikey:self:manage", "balance:self:read", "usage:self:read", "gateway:use"}
 
 // supplierPermissions are granted to the built-in "supplier" role: its own
-// accounts and proxies and nothing else. account:group:bind is left out for
-// now (decision D27), so a supplier binds no groups.
+// accounts and proxies and its own usage, nothing else. account:group:bind
+// is left out for now (decision D27), so a supplier binds no groups.
 var supplierPermissions = []string{
 	"account:read:own", "account:create:own", "account:update:own", "account:delete:own", "account:test:own", "account:credential:view:own",
 	"proxy:read:own", "proxy:manage:own",
+	"usage:self:read",
 }
 
 // operatorPermissions are granted to the built-in "operator" role, an
@@ -262,6 +268,13 @@ type builtinRole struct {
 	name        core.LocalizedText
 	description core.LocalizedText
 	superuser   bool
+	// rev is the revision of the defaults below: a database whose role
+	// has an older roles.defaults_rev gets the defaults it lacks once
+	// (SyncCore), nothing taken away, so later restarts never bring back
+	// what an administrator removed. Raise it when an existing permission
+	// or role joins the defaults; a newly created one reaches the role
+	// without it.
+	rev int32
 	// grants reports whether a core permission is in the role's defaults,
 	// superOnly ones aside (accepts); nil means none. New core permissions
 	// are granted to the role when it accepts them, and a reset restores
@@ -290,17 +303,19 @@ func scopedOf(keys []string) []string {
 	})
 }
 
+// builtinRoles are the roles every database has, with their defaults: the
+// one definition SyncCore seeds and fills in and ResetRole restores.
 var builtinRoles = []builtinRole{
-	{key: RoleSuperAdmin, name: lt("Super admin", "超级管理员"), description: lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), superuser: true},
-	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default, except those reserved for the super admin", "默认拥有除超级管理员专属权限以外的全部核心权限"),
+	{key: RoleSuperAdmin, name: lt("Super admin", "超级管理员"), description: lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), superuser: true, rev: 1},
+	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default, except those reserved for the super admin", "默认拥有除超级管理员专属权限以外的全部核心权限"), rev: 1,
 		grants:     func(corePerm) bool { return true },
 		assignable: []string{RoleOperator, RoleSupplier, RoleUser}, assignCustom: true},
-	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Day-to-day users, groups, accounts and proxies; read-only billing and monitoring", "日常管理用户、分组、账号和代理，查看余额、用量、节点、审计和定时任务"),
+	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Day-to-day users, groups, accounts and proxies; read-only billing and monitoring", "日常管理用户、分组、账号和代理，查看余额、用量、节点、审计和定时任务"), rev: 1,
 		grants: oneOf(operatorPermissions), scoped: scopedOf(operatorPermissions),
 		assignable: []string{RoleSupplier, RoleUser}},
-	{key: RoleSupplier, name: lt("Supplier", "供应商"), description: lt("Add-on role: own accounts and proxies", "附加角色：管理自己创建的账号和代理"),
-		scoped: supplierPermissions},
-	{key: RoleUser, name: lt("User", "普通用户"), description: lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"),
+	{key: RoleSupplier, name: lt("Supplier", "供应商"), description: lt("Add-on role: own accounts and proxies, own usage", "附加角色：管理自己创建的账号和代理，查看自己的用量"), rev: 1,
+		grants: oneOf(supplierPermissions), scoped: scopedOf(supplierPermissions)},
+	{key: RoleUser, name: lt("User", "普通用户"), description: lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"), rev: 1,
 		grants: oneOf(userRolePermissions)},
 }
 

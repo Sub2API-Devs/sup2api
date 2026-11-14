@@ -122,7 +122,7 @@ func TestUpgradeRoleGrantsNeedConsent(t *testing.T) {
 		t.Fatalf("consent without role:define: %v", err)
 	}
 	e.authz.perms[e.admin]["role:define"] = true
-	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("only the super admin can change built-in roles")
+	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("you cannot assign or revoke this role")
 	if _, err := e.svc.Consent(ctx, "guard", "0.1.2", consent, e.admin); core.AsError(err).Code != "permission_denied" {
 		t.Fatalf("consent naming a role the operator may not change: %v", err)
 	}
@@ -197,7 +197,7 @@ SELECT 'plugin.guard:' || k, 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'a
 		t.Fatalf("confirm without role:define: %v", err)
 	}
 	e.authz.perms[e.admin]["role:define"] = true
-	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("only the super admin can change built-in roles")
+	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("you cannot assign or revoke this role")
 	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.1", true, e.admin); core.AsError(err).Code != "permission_denied" || len(e.perms.granted) != 0 {
 		t.Fatalf("confirm a role the operator may not change: %v, granted %v", err, e.perms.granted)
 	}
