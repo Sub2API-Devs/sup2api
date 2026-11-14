@@ -247,6 +247,17 @@ describe('RolesView permissions (T77)', () => {
     i18n.global.locale.value = prev
   })
 
+  it('does not count stray spaces as a change', async () => {
+    mocks.patch.mockClear()
+    const w = await open(2)
+    await w.get('[data-testid="role-name"]').setValue('Lead ')
+    expect(w.get('[data-testid="role-save"]').attributes('disabled')).toBeDefined()
+    await w.get('[data-testid="role-description"]').setValue('Leads')
+    await w.get('[data-testid="role-save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/roles/2', { description: { zh: 'Leads', en: 'Leads' } })
+  })
+
   it('requires a name before saving', async () => {
     mocks.patch.mockClear()
     const w = await open(2)

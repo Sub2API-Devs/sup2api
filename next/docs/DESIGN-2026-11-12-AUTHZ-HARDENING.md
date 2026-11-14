@@ -1572,7 +1572,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 - 问题（用户 2026-11-14）：角色编辑页看不到角色标识（key），名称分“名称（英文）”“名称（中文）”两栏，用户只想要一个名称。
 - 改动（无迁移，数据结构不变：`name`、`description` 仍是 LocalizedText jsonb）：
-  - 服务端：`UpdateRoleInput` 加可选 `key`；在 `editableRole` 之后比较，与现有 key 不同返回 400 `invalid_argument`（`fields[{field:"key", code:"immutable"}]`，message `a role's key cannot be changed after creation`），相同则忽略（CONTRACTS §15.7）。
-  - 控制台 `RolesView`：编辑页第一项“标识”，置灰禁用，提示“创建后不可修改”；名称只一个输入框（`common.name`），初值取当前界面语言的显示值（`lt`）；新建对话框的标识可填，旁注“创建后不可修改”并照旧按 `ROLE_KEY_PATTERN` 校验，名称一个输入框且必填。保存时把同一个值写进每种语言（`inAllLocales`，`@/i18n`，`lt` 的反向），PATCH 只带改动过的字段，所以只改描述不会把内置角色的默认中/英名称覆盖成一种语言；“恢复默认”照旧恢复默认中英名称。PATCH 的 `key`/`name` 字段错误显示在对应输入框下（`immutable` 译为“角色标识创建后不可修改”），其他错误照旧 toast。
-- 测试：authz `TestUpdateRoleKeyImmutable`（自定义角色与内置角色带不同 key 都 400 `immutable` 且名称不变；相同 key 正常改名）；web `RolesView.spec`（标识置灰禁用并显示提示、单一名称保存写两份且不带未改字段、内置角色按界面语言显示名称且只改描述时不发名称、名称必填、PATCH 400 `immutable` 在标识下显示中文且保留编辑、新建对话框提示与单一名称）。
+  - 服务端：`UpdateRoleInput` 加可选 `key`；在 `editableRole` 之后比较，与现有 key 不同返回 400 `invalid_argument`（`fields[{field:"key", code:"immutable"}]`，message 按请求语言：`a role's key cannot be changed after creation` / `角色标识创建后不可修改`），相同则忽略（CONTRACTS §15.7）。
+  - 控制台 `RolesView`：编辑页第一项“标识”，置灰禁用，提示“创建后不可修改”；名称只一个输入框（`common.name`），初值取当前界面语言的显示值（`lt`）；新建对话框的标识可填，旁注“创建后不可修改”并照旧按 `ROLE_KEY_PATTERN` 校验，名称一个输入框且必填。保存时把同一个值写进每种语言（`inAllLocales`，`@/i18n`，`lt` 的反向），PATCH 只带改动过的字段（按去掉首尾空格后比较，只多打空格不算改动），所以只改描述不会把内置角色的默认中/英名称覆盖成一种语言；“恢复默认”照旧恢复默认中英名称。PATCH 的 `key`/`name` 字段错误显示在对应输入框下（`immutable` 译为“角色标识创建后不可修改”），其他错误照旧 toast。
+- 测试：authz `TestUpdateRoleKeyImmutable`（自定义角色与内置角色带不同 key 都 400 `immutable` 且名称不变；中文请求的 message 为中文；相同 key 正常改名）；web `RolesView.spec`（标识置灰禁用并显示提示、单一名称保存写两份且不带未改字段、内置角色按界面语言显示名称且只改描述时不发名称、名称必填、PATCH 400 `immutable` 在标识下显示中文且保留编辑、新建对话框提示与单一名称）。
 - 回滚：revert 本组提交；旧核心忽略请求体里的 `key`，控制台从不发送它。

@@ -72,8 +72,9 @@ const builtinLocked = computed(
 const readOnly = computed(() => !canDefine.value || !!selected.value?.superuser || builtinLocked.value)
 const permsMissing = computed(() => !!selected.value && !selected.value.superuser && !Array.isArray(selected.value.permission_keys))
 
-const nameDirty = computed(() => form.name !== original.value.name)
-const descriptionDirty = computed(() => form.description !== original.value.description)
+// Compared trimmed, as saved: stray spaces alone do not rewrite a text in every locale.
+const nameDirty = computed(() => form.name.trim() !== original.value.name)
+const descriptionDirty = computed(() => form.description.trim() !== original.value.description)
 const metaDirty = computed(() => nameDirty.value || descriptionDirty.value)
 const permsDirty = computed(() => [...perms.value].sort().join() !== original.value.perms.join())
 const assignableDirty = computed(

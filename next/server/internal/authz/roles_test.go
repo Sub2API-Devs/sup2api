@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -506,6 +507,12 @@ func TestUpdateRoleKeyImmutable(t *testing.T) {
 		if got, _ := s.GetRole(ctx, id); got.Name.Get("en") == "Renamed" {
 			t.Fatalf("role %d renamed by a refused update", id)
 		}
+	}
+
+	// The refusal speaks the request's language.
+	_, err = s.UpdateRole(core.WithLocale(ctx, "zh"), root, r.ID, UpdateRoleInput{Key: key("renamed")})
+	if !isCode(err, "invalid_argument") || !strings.Contains(err.Error(), "角色标识创建后不可修改") {
+		t.Fatalf("zh refusal: %v", err)
 	}
 
 	got, err := s.UpdateRole(ctx, root, r.ID, UpdateRoleInput{Key: key("ops"), Name: lt("Ops 2", "运营 2")})

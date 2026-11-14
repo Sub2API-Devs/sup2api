@@ -34,17 +34,20 @@ type Role struct {
 
 var roleKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
 
-// roleKeyImmutable is why PATCH /roles/:id refuses a different key.
-const roleKeyImmutable = "a role's key cannot be changed after creation"
-
 var (
 	errRoleNotFound        = core.ErrNotFound.WithMessage("role not found")
 	errBuiltinRole         = core.ErrConflict.WithMessage("built-in roles cannot be deleted")
 	errNotBuiltinRole      = core.ErrConflict.WithMessage("only built-in roles can be reset")
 	errSuperuserRoleFrozen = core.ErrConflict.WithMessage("the super admin role cannot be changed")
-	errRoleKeyImmutable    = core.InvalidFields(core.FieldError{Field: "key", Code: "immutable", Message: roleKeyImmutable}).WithMessage(roleKeyImmutable)
 	errLastSuperAdmin      = core.ErrConflict.WithMessage("the last super admin cannot be removed")
 )
+
+// errRoleKeyImmutable is why PATCH /roles/:id refuses a different key, in the
+// request's language.
+func errRoleKeyImmutable(ctx context.Context) error {
+	msg := t(ctx, "a role's key cannot be changed after creation", "角色标识创建后不可修改")
+	return core.InvalidFields(core.FieldError{Field: "key", Code: "immutable", Message: msg}).WithMessage(msg)
+}
 
 var roleSelect = `
 SELECT r.id, r.key, r.name, r.description, r.builtin, r.superuser, r.created_at, r.updated_at,
@@ -247,7 +250,7 @@ func (s *Service) UpdateRole(ctx context.Context, actorID, id int64, in UpdateRo
 			return err
 		}
 		if in.Key != nil && *in.Key != r.Key {
-			return errRoleKeyImmutable
+			return errRoleKeyImmutable(ctx)
 		}
 		if _, err := tx.Exec(ctx, `UPDATE roles SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = now() WHERE id = $1`,
 			id, nilIfEmpty(in.Name), nilIfEmpty(in.Description)); err != nil {
