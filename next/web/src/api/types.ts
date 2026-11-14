@@ -1426,6 +1426,8 @@ export interface HostPermissionReview {
   /** The current grant (upgrades only). */
   current_status?: string
   current_scope?: Record<string, unknown> | null
+  /** Revoked by an administrator and not granted since: the consent grants it (low risk included) only when it names it (consent.go decide). */
+  revoked?: boolean
 }
 
 /** One host permission of an upgrade's diff (review.go DiffItem). */

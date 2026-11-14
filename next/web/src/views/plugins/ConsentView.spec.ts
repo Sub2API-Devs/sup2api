@@ -258,6 +258,31 @@ describe('plugin consent page', () => {
     expect(mocks.post.mock.calls[0][1]).toMatchObject({ grants: [{ permission: 'http.client' }], denied: ['db.core_views'] })
   })
 
+  it('on an upgrade, grants a revoked permission only when ticked, low risk included', async () => {
+    const w = render(review({
+      host_permissions: [
+        { id: 'kv', risk: 'low', current_status: 'revoked', revoked: true },
+        { id: 'log', risk: 'low', optional: true, current_status: 'revoked', revoked: true },
+        { id: 'config', risk: 'low' }
+      ] as never,
+      diff: { added: [{ id: 'kv', risk: 'low' }, { id: 'log', risk: 'low' }], widened: [], removed: [] } as never
+    }))
+    await flushPromises()
+    expect(w.findAll('[data-testid="hp-revoked"]')).toHaveLength(2)
+    expect(w.text()).toContain('已撤销，勾选才重新授予')
+    // kv is required: left unticked it blocks the approval.
+    await w.get('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post).not.toHaveBeenCalled()
+    const boxes = w.findAll('[data-testid="host-permissions"] input[type="checkbox"]')
+    expect(boxes).toHaveLength(2)
+    expect(boxes.every((b) => !(b.element as HTMLInputElement).checked)).toBe(true)
+    await boxes[0].setValue(true) // kv
+    await w.get('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post.mock.calls[0][1]).toMatchObject({ grants: [{ permission: 'config' }, { permission: 'kv' }], denied: ['log'] })
+  })
+
   it('asks for the missing required permissions instead of submitting', async () => {
     const w = render(review({ host_permissions: [{ id: 'http.client', risk: 'high' }] }))
     await flushPromises()

@@ -635,7 +635,7 @@ stateDiagram-v2
 
 ### 5.5 授权确认
 
-- `hostPermissions` 按风险分级（以 `sdk/manifest/manifest.go` 的 `HostPermissionRisk` 为准；低风险在确认授权时自动授予，见 `plugin/install/consent.go`）：
+- `hostPermissions` 按风险分级（以 `sdk/manifest/manifest.go` 的 `HostPermissionRisk` 为准；低风险在确认授权时自动授予，见 `plugin/install/consent.go`；管理员撤销过的不再自动授予，只有同意里显式授予才恢复，CONTRACTS §5.7）：
 
 | 等级 | 权限 |
 |---|---|

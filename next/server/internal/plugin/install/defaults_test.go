@@ -79,7 +79,7 @@ func TestRoleGrantsPriority(t *testing.T) {
 // NewPermissionRoles names declared permissions only.
 func TestDecideRejectsUnknownNewPermissionRoles(t *testing.T) {
 	m := &manifest.Manifest{Key: "growth", UserPermissions: []manifest.UserPermission{{Key: "growth:use"}}}
-	_, errs := decide(m, ConsentRequest{NewPermissionRoles: map[string][]string{"growth:use": nil, "growth:nope": {"admin"}}}, nil, false)
+	_, errs := decide(m, ConsentRequest{NewPermissionRoles: map[string][]string{"growth:use": nil, "growth:nope": {"admin"}}}, nil, nil, false)
 	if len(errs) != 1 || errs[0].Field != "new_permission_roles.growth:nope" || errs[0].Code != "unknown" {
 		t.Fatalf("errs = %+v", errs)
 	}
@@ -105,12 +105,12 @@ func TestDecideCarriesCoveredGrants(t *testing.T) {
 		}
 		return out
 	}
-	ds, errs := decide(m, req, current, true)
+	ds, errs := decide(m, req, current, nil, true)
 	if len(errs) != 0 || fmt.Sprint(carried(ds)) != "map[accounts.credentials:true events:false ui.native:true]" {
 		t.Fatalf("upgrade: %v %+v", carried(ds), errs)
 	}
 	req.Grants = append(req.Grants, GrantInput{Permission: "accounts.credentials"})
-	if ds, _ := decide(m, req, current, false); fmt.Sprint(carried(ds)) != "map[accounts.credentials:false events:false ui.native:false]" {
+	if ds, _ := decide(m, req, current, nil, false); fmt.Sprint(carried(ds)) != "map[accounts.credentials:false events:false ui.native:false]" {
 		t.Fatalf("first install: %v", carried(ds))
 	}
 }
