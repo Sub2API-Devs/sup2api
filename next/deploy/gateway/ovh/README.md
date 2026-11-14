@@ -4,6 +4,14 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-14 核心 **0.1.287**（`14d52d2ec`，分支 `fix/plugin-grant-revoke-cache`，基于 develop `52c8eb343`；北京时间 22:41–22:47；计划 `7c1e98c6c30b64fc284e3c5a42c4cd7c` rolling-v1 completed，22:41:26→22:47:52，先 ccp 后 ovh；无核心迁移，schema 仍 `1f73f300…9d4f`；Host API 仍 9；内置插件与 0.1.286 逐字节相同）：
+- 内容：① 管理员撤销过的低风险插件宿主权限不再被之后同意的“低风险默认授予”给回，只有显式授予才恢复（`grants.Revoked`，CONTRACTS §5.7）；② review 与同意读包前确认包仍在存储（Dir 看文件、外壳 Range 0-0），不在则 410 `package_gone` 并丢弃缓存；③ 角色页标识（key）置灰只读、只保留一个名称与描述（同值写入中英两份），`PATCH /roles/:id` 带不同 key 返回 400 `immutable`。
+- 构建：`stage/0.1.287/`（无插件重建模板，内置集合 = `stage/0.1.286` 逐字节，`diff -r`）。清单 `d4522e88dd81609cb1a7f4de847fa55cab0e1264c49819fb096d50b4f793ab7b`，核心 sha256 `6c5d83dcab8964fe2e0a3e1657597877671b08370d1f0290bcb0c6b95bbc62b5`。`test.sh` TEST-OK（server 59 包、-race 16 包、sdk、控制台 2350 条与三个原生界面）。
+- 发布中：22:45:27→22:46:05 约 38 秒 `/readyz` 503（ovh 3130 与 api.prophey.ai）。原因不是本版本：sup2api-1 正在让出排空（不就绪），同时 clicodeplus 上 sup2api-ccp 的容器内 DNS（127.0.0.11）解析 Supabase 主机超时，连不上库而不就绪；该 DNS 超时在发布前（北京 20 点、21 点、22:34）和发布后都出现过，是 clicodeplus 网络问题，待查。`errs.sh` 22:41–22:48 共 81 次请求、0 个 5xx。
+- 核验（`~/rel287/`）：两节点 0.1.287；10 个插件两节点 active；`smoke287.py` 超管只读接口全部 200，`PATCH /roles/user {"key":"user_renamed"}` 返回 400 immutable、key 仍为 user；22:47 起 0 个 5xx。
+- 回滚：滚动版本，可用 0.1.286 清单 `4025ff96…0057` 建计划回退（schema 相同）。
+- 未合上游（上游同步 PR 需用户原话）。
+
 2026-11-14 核心 **0.1.286**（release_id `v0.1.286-r4`，`951525943`，分支 `feat/authz-hardening`，尚未合入 develop；北京时间 19:39–19:41；计划 `2c9442a4cbafea04c1b41467b935bf71` primary-first-v1 completed，19:39:02→19:41:09；**停服**：ovh 3130 `/readyz` 503 19:40:13.9→19:40:29.0 约 15 秒，api.prophey.ai 19:40:16.1→19:40:29.5 约 13 秒；核心迁移 0097_authz_hardening、0098_plugin_staged_grants 于 19:40:20 应用，schema `a9befa8c…1e11` → `1f73f300…9d4f`；Host API 仍 9）：
 - 内容：权限加固（docs/DESIGN-2026-11-12-AUTHZ-HARDENING.md“发布说明”）：超管唯一、角色授权细分到可分配清单、二次验证、资源范围、访问密钥 = 用户权限 ∩ 密钥权限、五个内置角色（可修改、可恢复默认、无人持有的内置角色升级时直接写默认值）、`balance:adjust:any`、插件升级同意暂存到激活（0098）、版本包已删时 review 410；去兼容层（旧 own 键与 `role:manage` 由 0097 改写）。
 - 构建：`stage/0.1.286/`（全内置重建模板：7 个插件用 sup2api-plugins-2026 重签——anthropic 0.3.2、ccgateway 0.1.133（运行镜像 = 0.1.132 重打标签，`ccg-retag.sh`）、codex 0.1.4、dynweight 0.5.9、mailer 0.1.2、moderation 0.12.0、volcengine 0.12.7；openai/gemini/custom 沿用）。清单 `4025ff965979844056dc1d820e9e9ab91962b5af2101cfdd0ca4a26cf0ab0057`，核心 sha256 `93d2611481cd29f5b2d75acbc9d2db4d3ac366c4e27e267463a20e47e6e6ab7b`。`v0.1.286`（8139517d）、`-r2`（cdfcde60）、`-r3`（ea05819d）已导入网关但作废（release_id 唯一）。
