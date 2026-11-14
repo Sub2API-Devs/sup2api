@@ -20,7 +20,7 @@ const retries = computed(() => retryCount(props.row))
   <SCard v-if="retries" variant="flat" data-testid="usage-attempts">
     <SDisclosure variant="section" :label="t('usage.attempts.title')" default-open>
       <template #actions>
-        <SBadge size="xs" tone="warning">{{ t('usage.attempts.retried', { n: retries }) }}</SBadge>
+        <SBadge size="xs" tone="warning">{{ t('usage.attempts.retried', { n: retries }, retries) }}</SBadge>
       </template>
       <UsageAttemptSteps v-if="trail" :trail="trail" layout="flow" :accounts="!mine" />
       <SHint v-else size="xs" data-testid="attempt-legacy">{{ t('usage.attempts.legacy') }}</SHint>

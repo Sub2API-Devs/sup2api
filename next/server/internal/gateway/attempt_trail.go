@@ -8,9 +8,10 @@ import (
 )
 
 // Bounds of an AttemptTrail (CONTRACTS §98): max_attempts and a failure
-// policy's 1 + max_retries both stop at 10.
+// policy's 1 + max_retries both stop at maxMaxAttempts, so omitted only
+// guards a future higher limit.
 const (
-	maxTrailSteps   = 10
+	maxTrailSteps   = maxMaxAttempts
 	maxTrailMessage = 160
 )
 
@@ -27,9 +28,9 @@ type trailState struct {
 
 // noteAttempt notes an attempt on account id that began at begun and ended
 // with e (nil: it went through). A failure keeps the reason the attempt
-// recorded (the account effect, the transport error) over the client text. The step before it learns whether the
-// request stayed on its account: what the next pick did, whichever rule
-// (failure policy, failover) made it.
+// recorded (the account effect, the transport error) over the client text.
+// The step before it learns whether the request stayed on its account from
+// what the next pick did, whichever rule (failure policy, failover) made it.
 func (c *call) noteAttempt(id int64, e *gwError, begun time.Time) {
 	t := &c.trail
 	if n := len(t.steps); n > 0 && t.omitted == 0 {

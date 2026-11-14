@@ -55,14 +55,21 @@ describe('UsageAttemptChain', () => {
     expect(texts(w, 'attempt-account')).toEqual(['#16', '#16', '#12'])
   })
 
-  it('keeps the first and the last of more than three earlier accounts, with the count of the others between', () => {
+  it('keeps the first of more than two earlier accounts and counts the others, the card listing them all', () => {
     const w = mountWith(
       UsageAttemptChain,
       rowWith([12, 13, 16, 13, 19].map(id => failed({ account_id: id })).concat(served({ account_id: 12 })))
     )
-    expect(texts(w, 'attempt-link')).toEqual(['#12', '#19'])
-    expect(w.get('[data-testid="usage-attempt-chain"]').text()).toBe('#12→+3→#19→')
+    expect(w.get('[data-testid="usage-attempt-chain"]').text()).toBe('#12→+4→')
     expect(texts(w, 'attempt-step')).toHaveLength(6)
+  })
+
+  it('keeps the last recorded attempt when attempts past the recorded ones followed it, counting those', () => {
+    const row = rowWith([failed({ account_id: 16 }), failed({ account_id: 13 })], 5)
+    ;(row.attempt_trail as { omitted: number }).omitted = 3
+    const w = mountWith(UsageAttemptChain, row)
+    expect(w.get('[data-testid="usage-attempt-chain"]').text()).toBe('#16→#13→+3→')
+    expect(w.get('[data-testid="card"]').text()).toContain('另有 3 次尝试未列出')
   })
 
   it('is not drawn for a request sent once, nor for a row from before the trail', () => {
@@ -77,6 +84,18 @@ describe('UsageRetryBadge', () => {
     const steps = texts(w, 'attempt-step')
     expect(steps[0]).toMatch(/第 1 次\s*#16\s*502 上游错误\s*0\.64 s/)
     expect(steps[1]).toMatch(/第 2 次\s*#12\s*200 成功\s*2\.95 s/)
+  })
+
+  it('counts in English plurals', () => {
+    i18n.global.locale.value = 'en'
+    for (const [attempts, short, long] of [
+      [2, '1 retry', 'Retried once'],
+      [3, '2 retries', 'Retried 2 times']
+    ] as const) {
+      const w = mount(UsageRetryBadge, { props: { row: rowWith(null, attempts) }, global })
+      expect(w.get('[data-testid="usage-retry-badge"]').text()).toBe(short)
+      expect(w.get('[data-testid="usage-retry-badge"]').attributes('aria-label')).toBe(long)
+    }
   })
 
   it('names an account hidden from an operator without account:read by its number in the request', () => {

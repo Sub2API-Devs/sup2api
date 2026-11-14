@@ -71,10 +71,17 @@ export default {
   },
   showDetails: '查看详情',
   hideDetails: '收起详情',
+  // 请求或单次尝试的 error_type；控制台不认识的类型按记录原样显示。
   errors: {
     model_not_allowed: '模型不可用',
     no_available_account: '暂无可用账号',
-    rate_limit_exceeded: '超过速率限制'
+    rate_limit_exceeded: '超过速率限制',
+    upstream_error: '上游错误',
+    client_canceled: '客户端取消',
+    internal: '内部错误',
+    rate_limited: '限流',
+    invalid_request: '请求无效',
+    model_availability: '模型暂不可用'
   },
   cols: {
     timing: '计时',
@@ -199,16 +206,7 @@ export default {
     hint: '失败的尝试不计费，只有最后一次的用量计入本条记录。',
     mineHint: '本请求在上游失败后被自动重试；失败的尝试不计费。',
     filterYes: '重试过',
-    filterNo: '未重试',
-    // 一次尝试可能以这些网关错误类型结束；其它类型按记录原样显示。
-    errorTypes: {
-      upstream_error: '上游错误',
-      client_canceled: '客户端取消',
-      internal: '内部错误',
-      rate_limited: '限流',
-      invalid_request: '请求无效',
-      model_availability: '模型不可用'
-    }
+    filterNo: '未重试'
   },
   scheduling: {
     title: '账号调度记录',

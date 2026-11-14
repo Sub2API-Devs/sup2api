@@ -209,7 +209,7 @@ func trailViewFor(self *int64, accounts bool) trailView {
 // retry on one account still reads as one.
 func (r *Record) shapeTrail(view trailView) *core.AttemptTrail {
 	var tr core.AttemptTrail
-	if len(r.AttemptTrail) == 0 || json.Unmarshal(r.AttemptTrail, &tr) != nil {
+	if len(r.AttemptTrail) == 0 || json.Unmarshal(r.AttemptTrail, &tr) != nil || len(tr.Steps) == 0 {
 		r.AttemptTrail = nil
 		return nil
 	}
@@ -223,7 +223,7 @@ func (r *Record) shapeTrail(view trailView) *core.AttemptTrail {
 			if _, ok := refs[st.AccountID]; !ok {
 				refs[st.AccountID] = len(refs) + 1
 			}
-			st.AccountID, st.AccountRef = 0, refs[st.AccountID]
+			st.AccountRef, st.AccountID, st.AccountName = refs[st.AccountID], 0, ""
 		}
 	}
 	r.AttemptTrail, _ = json.Marshal(&tr)

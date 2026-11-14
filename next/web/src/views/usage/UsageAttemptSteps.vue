@@ -8,8 +8,7 @@
 import { useI18n } from 'vue-i18n'
 import { SBadge, SHint, SIcon } from '@sub2api/ui'
 import { useOptionalT } from '@/composables/optionalText'
-import { formatNumber } from '@/utils/format'
-import { attemptAccountLabel, attemptOk, type AttemptStep, type AttemptTrail } from './usage'
+import { attemptAccountLabel, attemptOk, seconds, type AttemptStep, type AttemptTrail } from './usage'
 
 const props = withDefaults(defineProps<{ trail: AttemptTrail; layout?: 'list' | 'flow'; accounts?: boolean }>(), {
   layout: 'list',
@@ -21,9 +20,8 @@ const tr = useOptionalT()
 const account = (s: AttemptStep) => (props.accounts ? attemptAccountLabel(tr, s) : '')
 function outcome(s: AttemptStep): string {
   if (attemptOk(s)) return t('usage.attempts.ok')
-  return s.error_type ? tr(`usage.attempts.errorTypes.${s.error_type}`, undefined, s.error_type) : t('usage.attempts.failed')
+  return s.error_type ? tr(`usage.errors.${s.error_type}`, undefined, s.error_type) : t('usage.attempts.failed')
 }
-const seconds = (ms: number) => `${formatNumber(ms / 1000, 2)} s`
 </script>
 
 <template>

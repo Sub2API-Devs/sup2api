@@ -72,10 +72,17 @@ export default {
   },
   showDetails: 'View details',
   hideDetails: 'Hide details',
+  // A request's or an attempt's error_type; a type the console does not know shows as recorded.
   errors: {
     model_not_allowed: 'Model unavailable',
     no_available_account: 'No available account',
-    rate_limit_exceeded: 'Rate limit exceeded'
+    rate_limit_exceeded: 'Rate limit exceeded',
+    upstream_error: 'Upstream error',
+    client_canceled: 'Client canceled',
+    internal: 'Internal error',
+    rate_limited: 'Rate limited',
+    invalid_request: 'Invalid request',
+    model_availability: 'Model temporarily unavailable'
   },
   cols: {
     timing: 'Timing',
@@ -188,8 +195,8 @@ export default {
   },
   attempts: {
     title: 'Call chain',
-    retried: 'Retried {n}×',
-    retriedShort: 'Retry {n}',
+    retried: 'Retried once | Retried {n} times',
+    retriedShort: '{n} retry | {n} retries',
     step: 'Attempt {n}',
     accountRef: 'Account {n}',
     ok: 'Succeeded',
@@ -200,16 +207,7 @@ export default {
     hint: 'Failed attempts are not billed; only the last attempt\'s usage is in this record.',
     mineHint: 'The request failed upstream and was retried automatically; failed attempts are not billed.',
     filterYes: 'Retried',
-    filterNo: 'Not retried',
-    // The gateway's error types an attempt can end in; others show as recorded.
-    errorTypes: {
-      upstream_error: 'Upstream error',
-      client_canceled: 'Client canceled',
-      internal: 'Internal error',
-      rate_limited: 'Rate limited',
-      invalid_request: 'Invalid request',
-      model_availability: 'Model unavailable'
-    }
+    filterNo: 'Not retried'
   },
   scheduling: {
     title: 'Account scheduling',

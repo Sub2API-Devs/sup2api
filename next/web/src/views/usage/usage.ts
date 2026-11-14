@@ -1,5 +1,6 @@
 import type { UsageLog } from '@/api/types'
 import { isConvertedGrade } from '@/utils/conversion'
+import { formatNumber } from '@/utils/format'
 
 /** Usage row/detail with the extra fields the billing module returns. */
 export type UsageRow = UsageLog & {
@@ -90,6 +91,16 @@ export interface AvailabilityTrace {
 const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0)
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '')
 
+/** A trace the core records as JSON: anomalies hold it as a string, the API may send it parsed.
+ *  null for anything but a JSON object, so a malformed record shows nothing rather than failing. */
+function recordedObject(raw: unknown): Record<string, unknown> | null {
+  let value = raw
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw) } catch { return null }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
 function availabilitySamples(value: unknown, max: number): AvailabilitySample[] {
   if (!Array.isArray(value)) return []
   const out: AvailabilitySample[] = []
@@ -114,13 +125,8 @@ function availabilitySamples(value: unknown, max: number): AvailabilitySample[] 
 /** The recorded availability trace of a request, or null when absent or malformed.
  *  Defensive: the record is free-form JSON, so every field is type-checked and lists are capped. */
 export function availabilityTrace(u: Pick<UsageLog, 'anomalies'>): AvailabilityTrace | null {
-  const raw: unknown = u.anomalies?.availability
-  let value: unknown = raw
-  if (typeof raw === 'string') {
-    try { value = JSON.parse(raw) } catch { return null }
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const o = value as Record<string, unknown>
+  const o = recordedObject(u.anomalies?.availability)
+  if (!o) return null
   const outcome = text(o.outcome, 32)
   if (!outcome) return null
   const counts: Record<string, number> = {}
@@ -203,13 +209,8 @@ export interface SchedulingTrace {
 /** The recorded scheduling trace of a request, or null when absent or malformed.
  *  Defensive like availabilityTrace: every field is type-checked and lists are capped. */
 export function schedulingTrace(u: Pick<UsageLog, 'anomalies'>): SchedulingTrace | null {
-  const raw: unknown = u.anomalies?.scheduling
-  let value: unknown = raw
-  if (typeof raw === 'string') {
-    try { value = JSON.parse(raw) } catch { return null }
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const o = value as Record<string, unknown>
+  const o = recordedObject(u.anomalies?.scheduling)
+  if (!o) return null
   const outcome = text(o.outcome, 32)
   if (!outcome) return null
   const counts: Record<string, number> = {}
@@ -258,6 +259,9 @@ export function convertedGrade(u: Pick<UsageLog, 'conversion'>): string {
   const g = u.conversion?.grade
   return isConvertedGrade(g) ? g : ''
 }
+
+/** A duration of a request or an attempt as the usage views show it: "2.95 s". */
+export const seconds = (ms: number) => `${formatNumber(ms / 1000, 2)} s`
 
 export type SpeedTone = 'success' | 'warning' | 'danger'
 
@@ -373,12 +377,8 @@ export const retryCount = (u: Pick<UsageLog, 'attempts'>) => Math.max(0, (u.atte
  *  before the trail existed, or a malformed trail. Defensive like schedulingTrace;
  *  the API sends an object, a JSON string is read too. */
 export function attemptTrail(u: Pick<UsageLog, 'attempt_trail'>): AttemptTrail | null {
-  let value: unknown = u.attempt_trail
-  if (typeof value === 'string') {
-    try { value = JSON.parse(value) } catch { return null }
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const o = value as Record<string, unknown>
+  const o = recordedObject(u.attempt_trail)
+  if (!o) return null
   const steps: AttemptStep[] = []
   for (const item of Array.isArray(o.steps) ? o.steps.slice(0, MAX_ATTEMPT_STEPS) : []) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue

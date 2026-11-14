@@ -1297,7 +1297,8 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.conversion && !conversionMatch(u.conversion, q.conversion)) return false
     if (q.model && u.model !== q.model) return false
     if (q.retried === 'true' && !((u.attempts ?? 1) > 1)) return false
-    if (q.retried === 'false' && (u.attempts ?? 1) > 1) return false
+    // Like the server: a request that never reached an account (attempts 0) is in neither.
+    if (q.retried === 'false' && (u.attempts ?? 1) !== 1) return false
     if (q.success === 'true' && !u.success) return false
     if (q.success === 'false' && u.success) return false
     return true
@@ -1439,7 +1440,8 @@ function callChain(u: any, self: boolean, zh: boolean): string {
     if (last?.id === s.account_id) last.times++
     else runs.push({ id: s.account_id, times: 1 })
   }
-  return runs.map((r) => `#${r.id}${r.times > 1 ? `×${r.times}` : ''}`).join(' → ')
+  const omitted = u.attempt_trail.omitted ? [`+${u.attempt_trail.omitted}`] : []
+  return [...runs.map((r) => `#${r.id}${r.times > 1 ? `×${r.times}` : ''}`), ...omitted].join(' → ')
 }
 
 /** GET …/usage/export (CONTRACTS §66.5): a short CSV with the BOM, like the server. */
