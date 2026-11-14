@@ -165,6 +165,7 @@ async function exportCsv() {
       :show-account="showAccount"
       :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
       show-client-request-id
+      :mine="!admin"
       :detail-path="(id: number) => `${listPath}/${id}`"
       @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
       @filter-client-ip="(ip: string) => (filters.client_ip = ip)"

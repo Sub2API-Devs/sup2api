@@ -208,7 +208,10 @@ type UsageRecord struct {
 	// (AnomalyScheduling): always set when no account could be picked, and
 	// when an account was passed over for a passing reason (rate limit, full
 	// concurrency, a failed attempt) on the way to the one that served.
-	Scheduling     *SchedulingTrace
+	Scheduling *SchedulingTrace
+	// AttemptTrail is each upstream attempt of the request in order
+	// (AnomalyAttempts): set only when there was more than one.
+	AttemptTrail   *AttemptTrail
 	UsageSemantics string // exclusive | inclusive
 	Tokens         UsageTokens
 	Metrics        map[string]any // plugin usage facts for u("key")
@@ -387,6 +390,42 @@ const (
 	// the group the scheduler did not use for this request, and why. A trace
 	// like the two above: summaries do not count it.
 	AnomalyScheduling = "scheduling"
+	// AnomalyAttempts: the JSON of an AttemptTrail - the accounts a request
+	// that took more than one attempt was sent to, in order, and how each
+	// attempt ended. A trace like the three above: summaries do not count it.
+	AnomalyAttempts = "attempts"
+)
+
+// AttemptTrail is the attempts of one request (one WebSocket connection's
+// handshake) in the order they went upstream (CONTRACTS §98): one step per
+// UsageRecord.Attempts, bounded at 10 steps.
+type AttemptTrail struct {
+	V       int           `json:"v"` // 1
+	Steps   []AttemptStep `json:"steps"`
+	Omitted int           `json:"omitted"`
+}
+
+// AttemptStep is one attempt of an AttemptTrail.
+type AttemptStep struct {
+	AccountID int64 `json:"account_id,omitempty"`
+	// AccountRef stands in for AccountID where the caller may not see
+	// accounts: the same number is the same account. AccountName is filled
+	// where it may. The usage API sets both; neither is stored.
+	AccountRef  int    `json:"account_ref,omitempty"`
+	AccountName string `json:"account_name,omitempty"`
+	Status      int    `json:"status"`
+	ErrorType   string `json:"error_type,omitempty"` // empty when the attempt succeeded
+	Ms          int64  `json:"ms"`
+	Message     string `json:"message,omitempty"`
+	// Next is what the core did after the attempt: AttemptSame or
+	// AttemptSwitch; empty on the last step.
+	Next string `json:"next,omitempty"`
+}
+
+// Values of AttemptStep.Next.
+const (
+	AttemptSame   = "same"   // the next attempt went to the same account
+	AttemptSwitch = "switch" // the next attempt went to another account
 )
 
 // SchedulingTrace is the scheduler's account of one request (one WebSocket
@@ -560,6 +599,11 @@ func (r *UsageRecord) Anomalies() map[string]string {
 	if r.Scheduling != nil {
 		if raw, err := json.Marshal(r.Scheduling); err == nil {
 			put(AnomalyScheduling, string(raw))
+		}
+	}
+	if r.AttemptTrail != nil {
+		if raw, err := json.Marshal(r.AttemptTrail); err == nil {
+			put(AnomalyAttempts, string(raw))
 		}
 	}
 	if r.ReservationDropped != "" {

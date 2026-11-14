@@ -5,15 +5,16 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SCode, SCopyButton, SDescItem, SDescriptions, SDisclosure, SGrid, SHint, SIcon, SIPAddress, SSpinner } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_ACTIONS } from '@/composables/useScope'
-import { formatMoney, formatNumber } from '@/utils/format'
+import { formatMoney } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PlatformBadge from '@/components/platform/PlatformBadge.vue'
-import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, schedulingTrace, type UsageRow } from './usage'
+import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, schedulingTrace, seconds, type UsageRow } from './usage'
 import UsageAccountMark from './UsageAccountMark.vue'
 import UsageAvailabilityTrace from './UsageAvailabilityTrace.vue'
 import UsageSchedulingTrace from './UsageSchedulingTrace.vue'
+import UsageAttemptTrace from './UsageAttemptTrace.vue'
 import UsageConversionBadges from './UsageConversionBadges.vue'
 import UsageConversionTrace from './UsageConversionTrace.vue'
 import UsageBillingFacts from './UsageBillingFacts.vue'
@@ -26,7 +27,8 @@ import type { FailureDecision } from '@/views/settings/failurePolicy'
 import RequestLogViewer from '@/views/ccgateway/RequestLogViewer.vue'
 
 // Expanded usage record: billing detail (A.14), request info, tokens, hooks, sticky.
-const props = defineProps<{ row: UsageRow; path?: string }>()
+// `mine`: the caller's own records, whose attempts show no accounts.
+const props = defineProps<{ row: UsageRow; path?: string; mine?: boolean }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const accountTypes = useAccountTypes()
@@ -51,9 +53,9 @@ onMounted(async () => {
 const u = computed<UsageRow>(() => ({ ...props.row, ...(detail.value || {}) }))
 const summary = computed(() => [
   { label: t('usage.cols.cost'), value: u.value.billing_status === 'free' ? t('usage.free') : formatMoney(u.value.total_cost, 8) },
-  { label: t('usage.request.latency'), value: `${formatNumber(u.value.latency_ms / 1000, 2)} s` },
-  { label: t('usage.request.firstToken'), value: u.value.stream && u.value.first_token_ms != null ? `${formatNumber(u.value.first_token_ms / 1000, 2)} s` : '—' },
-  { label: t('usage.request.upload'), value: u.value.upload_ms ? `${formatNumber(u.value.upload_ms / 1000, 2)} s` : '—' }
+  { label: t('usage.request.latency'), value: seconds(u.value.latency_ms) },
+  { label: t('usage.request.firstToken'), value: u.value.stream && u.value.first_token_ms != null ? seconds(u.value.first_token_ms) : '—' },
+  { label: t('usage.request.upload'), value: u.value.upload_ms ? seconds(u.value.upload_ms) : '—' }
 ])
 const knownRounds = computed(() => knownUsageRounds(u.value))
 const otherMetrics = computed(() => otherUsageMetrics(u.value.metrics))
@@ -216,6 +218,7 @@ const schedulingHint = computed(() => u.value.error_type === 'no_account' && !!s
         </SDisclosure>
       </SCard>
     </SGrid>
+    <UsageAttemptTrace :row="u" :mine="mine" />
     <UsageSchedulingTrace :row="u" />
     <UsageAvailabilityTrace :row="u" />
     <UsageConversionTrace :row="u" />

@@ -13,6 +13,8 @@ import UsageStatus from './UsageStatus.vue'
 import UsageTiming from './UsageTiming.vue'
 import UsageTokens from './UsageTokens.vue'
 import UsageConversionBadges from './UsageConversionBadges.vue'
+import UsageAttemptChain from './UsageAttemptChain.vue'
+import UsageRetryBadge from './UsageRetryBadge.vue'
 import { accountLabel, accountPlatform, billingTone, hashColor, type UsageRow } from './usage'
 
 // The usage list: one row per request, its detail (billing trace, request
@@ -26,12 +28,14 @@ const props = withDefaults(
     showUser?: boolean
     showAccount?: boolean
     showClientRequestId?: boolean
+    /** The caller's own records: the attempts of a retried request show no accounts. */
+    mine?: boolean
     detailPath?: (id: number) => string
     columnSettingsKey?: string
     /** false when the page draws the column settings itself (from the exposed columnState), e.g. in its toolbar. */
     columnSettings?: boolean
   }>(),
-  { showUser: true, showAccount: true, showClientRequestId: false, columnSettings: true }
+  { showUser: true, showAccount: true, showClientRequestId: false, mine: false, columnSettings: true }
 )
 const emit = defineEmits<{
   (e: 'filter-client-request-id', id: string): void
@@ -45,7 +49,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'api_key', label: t('usage.request.apiKey'), width: '140px' },
   { key: 'client_ip', label: t('usage.request.clientIP'), width: '170px', format: 'ip', filterable: true },
   { key: 'model', label: t('common.model'), width: '190px' },
-  ...(props.showAccount ? [{ key: 'account', label: t('common.account'), width: '170px' }] : []),
+  ...(props.showAccount ? [{ key: 'account', label: t('common.account'), width: '230px' }] : []),
   { key: 'tokens', label: t('usage.tokens.title'), width: '125px' },
   { key: 'total_cost', label: t('usage.cols.cost'), width: '95px' },
   { key: 'latency', label: t('usage.cols.timing'), width: '140px' },
@@ -91,7 +95,11 @@ function rate(row: UsageRow) {
       <template v-if="$slots.footer" #footer><slot name="footer" /></template>
       <template #cell-created_at="{ row }">
         <div class="flex min-w-0 flex-col items-start gap-1">
-          <SDateTime :value="row.created_at" mode="time" class="font-mono text-xs tabular-nums" />
+          <!-- The retry badge shares the time's line: beside the outcome it would not fit the column. -->
+          <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <SDateTime :value="row.created_at" mode="time" class="font-mono text-xs tabular-nums" />
+            <UsageRetryBadge :row="row" :mine="mine" />
+          </span>
           <UsageStatus :row="row" />
           <UsageError v-if="!row.success" :row="row" class="max-w-full" data-testid="usage-error-summary" />
         </div>
@@ -132,21 +140,24 @@ function rate(row: UsageRow) {
         </div>
       </template>
       <template #cell-account="{ row }">
-        <button
-          v-if="row.account_id"
-          type="button"
-          class="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-2 text-left text-xs ring-inset hover:ring-1 hover:ring-current"
-          :class="accountVars(row) ? 'brand-tint' : 'border border-line bg-surface-2/60'"
-          :style="accountVars(row)"
-          :title="t('usage.filterByAccount', { account: accountLabel(row) })"
-          data-testid="usage-account"
-          @click.stop="emit('filter-account-id', row.account_id)"
-        >
-          <UsageAccountMark :row="row" />
-          <span class="shrink-0 font-mono opacity-75">#{{ row.account_id }}</span>
-          <span v-if="row.account_name" class="truncate">{{ row.account_name }}</span>
-        </button>
-        <span v-else class="text-xs text-fg-subtle" :title="t('usage.noAccount')">—</span>
+        <div class="flex min-w-0 items-center gap-1">
+          <UsageAttemptChain :row="row" />
+          <button
+            v-if="row.account_id"
+            type="button"
+            class="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-left text-xs ring-inset hover:ring-1 hover:ring-current"
+            :class="accountVars(row) ? 'brand-tint' : 'border border-line bg-surface-2/60'"
+            :style="accountVars(row)"
+            :title="t('usage.filterByAccount', { account: accountLabel(row) })"
+            data-testid="usage-account"
+            @click.stop="emit('filter-account-id', row.account_id)"
+          >
+            <UsageAccountMark :row="row" />
+            <span class="shrink-0 font-mono opacity-75">#{{ row.account_id }}</span>
+            <span v-if="row.account_name" class="truncate">{{ row.account_name }}</span>
+          </button>
+          <span v-else class="text-xs text-fg-subtle" :title="t('usage.noAccount')">—</span>
+        </div>
       </template>
       <template #cell-tokens="{ row }"><UsageTokens :row="row" /></template>
       <template #cell-total_cost="{ row }">
@@ -176,7 +187,7 @@ function rate(row: UsageRow) {
           </button>
         </div>
       </template>
-      <template #expand="{ row }"><UsageDetail :row="row" :path="detailPath?.(row.id)" /></template>
+      <template #expand="{ row }"><UsageDetail :row="row" :path="detailPath?.(row.id)" :mine="mine" /></template>
       <template #card="{ row, expanded, toggleExpand }">
         <div data-testid="mobile-usage-record">
           <div class="flex items-start justify-between gap-3">
@@ -186,7 +197,7 @@ function rate(row: UsageRow) {
                 <SDateTime muted :value="row.created_at" mode="time" class="tabular-nums" />
               </p>
             </div>
-            <UsageStatus :row="row" />
+            <span class="inline-flex items-center gap-1.5"><UsageRetryBadge :row="row" :mine="mine" /><UsageStatus :row="row" /></span>
           </div>
           <template v-if="!row.success">
             <UsageError :row="row" class="mt-2" />
@@ -217,11 +228,12 @@ function rate(row: UsageRow) {
             </template>
             <template v-if="showAccount && isVisible('account')">
               <dt class="text-fg-subtle">{{ t('common.account') }}</dt>
-              <dd class="min-w-0">
+              <dd class="flex min-w-0 items-center gap-1">
+                <UsageAttemptChain :row="row" />
                 <button
                   v-if="row.account_id"
                   type="button"
-                  class="inline-flex max-w-full items-center gap-1 text-left text-primary-600"
+                  class="inline-flex min-w-0 max-w-full items-center gap-1 text-left text-primary-600"
                   :title="t('usage.filterByAccount', { account: accountLabel(row) })"
                   @click="emit('filter-account-id', row.account_id)"
                 >
@@ -253,7 +265,7 @@ function rate(row: UsageRow) {
           <button type="button" class="mt-3 text-xs font-medium text-primary-600" :aria-expanded="expanded" @click.stop="toggleExpand()">
             {{ expanded ? t('usage.hideDetails') : t('usage.showDetails') }}
           </button>
-          <UsageDetail v-if="expanded" :row="row" :path="detailPath?.(row.id)" class="-mx-4 -mb-4 mt-3 border-t border-line" />
+          <UsageDetail v-if="expanded" :row="row" :path="detailPath?.(row.id)" :mine="mine" class="-mx-4 -mb-4 mt-3 border-t border-line" />
         </div>
       </template>
     </STable>

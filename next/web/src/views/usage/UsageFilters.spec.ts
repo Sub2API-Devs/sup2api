@@ -236,6 +236,24 @@ describe('shared usage search', () => {
     i18n.global.locale.value = locale
   })
 
+  it('filters operators and users alike by whether the request was retried (CONTRACTS §98)', async () => {
+    const locale = i18n.global.locale.value
+    i18n.global.locale.value = 'zh'
+    for (const admin of [true, false]) {
+      const w = mount(UsageFilters, { props: { modelValue: { retried: 'true' }, admin }, global })
+      expect(inAdvanced(w, 'retried')).toBe(true)
+      const select = w.get('[data-testid="filter-retried"]')
+      expect(select.findAll('option').map(option => option.text())).toEqual(['重试', '重试过', '未重试'])
+      expect(w.get('[data-testid="filter-advanced-count"]').text()).toBe('1')
+      expect(w.get('[data-filter-key="retried"]').text()).toContain('重试：重试过')
+      await select.setValue('2')
+      expect(applied(w)).toMatchObject({ retried: 'false' })
+      await w.get('[data-filter-key="retried"] button').trigger('click')
+      expect(applied(w)).toEqual({ retried: '' })
+    }
+    i18n.global.locale.value = locale
+  })
+
   it('selects the request type behind More filters from the types under the search, keeping a preset one', async () => {
     const w = mount(UsageFilters, { props: { modelValue: { protocol: 'vid.gen' }, protocolOptions: ['anthropic.messages', 'openai.chat'] }, global })
     expect(inAdvanced(w, 'protocol')).toBe(true)

@@ -645,7 +645,10 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 		cl.rec.Attempts++
 		cl.startObservationAttempt(ref)
 		cl.beginFailureAttempt(ref)
+		begun := cl.g.now()
+		cl.rec.ErrorMessage = "" // each attempt states its own failure (noteAttempt)
 		res := s.dial(ctx, cl, ref)
+		cl.noteAttempt(ref.ID, res.err, begun)
 		if res.kind == attemptDone {
 			s.ref = ref
 			s.routes = cl.routes

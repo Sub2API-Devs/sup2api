@@ -39,7 +39,7 @@ const row = {
 } as UsageRow
 const global = {
   plugins: [i18n],
-  stubs: { UsageDetail: { props: ['row', 'path'], template: '<div data-testid="usage-detail">{{ path }}</div>' } }
+  stubs: { UsageDetail: { props: ['row', 'path', 'mine'], template: '<div data-testid="usage-detail" :data-mine="mine">{{ path }}</div>' } }
 }
 
 describe('usage records layout', () => {
@@ -153,8 +153,28 @@ describe('usage records layout', () => {
     await expand.trigger('click')
     expect(expand.attributes('aria-expanded')).toBe('true')
     expect(w.get('[data-testid="usage-detail"]').text()).toBe('/me/usage/1')
+    expect(w.get('[data-testid="usage-detail"]').attributes('data-mine')).toBe('false')
     await expand.trigger('click')
     expect(w.find('[data-testid="usage-detail"]').exists()).toBe(false)
+  })
+  it('marks a retried request beside its outcome and leads its account with the accounts tried before (CONTRACTS §98)', async () => {
+    const retried = { ...row, id: 2, success: true, status_code: 200, attempts: 3, attempt_trail: { v: 1, steps: [
+      { account_id: 16, status: 502, error_type: 'upstream_error', ms: 640, next: 'same' },
+      { account_id: 16, status: 502, error_type: 'upstream_error', ms: 702, next: 'switch' },
+      { account_id: 9, status: 200, ms: 2950 }
+    ] } } as UsageRow
+    const [once, again] = mount(UsageTable, { props: { rows: [row, retried] }, global }).findAll('tbody tr')
+    expect(once.find('[data-testid="usage-retry-badge"]').exists()).toBe(false)
+    expect(once.find('[data-testid="usage-attempt-chain"]').exists()).toBe(false)
+    expect(again.get('[data-testid="usage-retry-badge"]').element.closest('td')?.querySelector('time')).not.toBeNull()
+    const cell = again.get('[data-testid="usage-account"]').element.closest('td')!
+    expect(cell.querySelector('[data-testid="usage-attempt-chain"]')?.textContent?.replace(/\s+/g, '')).toBe('#16×2→')
+    // a user's own records: the badge, but no account column for the chain, and the detail told so
+    const mine = mountPinned(UsageTable, { props: { rows: [retried], showAccount: false, mine: true }, global })
+    expect(mine.find('[data-testid="usage-retry-badge"]').exists()).toBe(true)
+    expect(mine.find('[data-testid="usage-attempt-chain"]').exists()).toBe(false)
+    await mine.get('[data-testid="mobile-usage-record"] button[aria-expanded]').trigger('click')
+    expect(mine.get('[data-testid="usage-detail"]').attributes('data-mine')).toBe('true')
   })
   it('preserves cache-only usage on failed requests', () => {
     const w = mount(UsageTokens, { props: { row: { ...row, cache_read_tokens: 1234 } }, global })

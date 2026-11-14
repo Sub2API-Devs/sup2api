@@ -1165,6 +1165,8 @@ export interface UsageLog {
   user_agent?: string
   node_id?: string
   attempts?: number
+  /** The attempts of a request sent upstream more than once, in order (CONTRACTS §98; read with attemptTrail); null when sent once and on rows recorded before it. */
+  attempt_trail?: unknown
   group_id: number
   group_name?: string // assumed
   account_id: number | null

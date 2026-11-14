@@ -149,7 +149,10 @@ func (c *call) dispatch(ctx context.Context) {
 		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID
 		c.startObservationAttempt(ref)
 		c.beginFailureAttempt(ref)
+		begun := c.g.now()
+		c.rec.ErrorMessage = "" // each attempt states its own failure (noteAttempt)
 		res := func() attemptResult { defer release(); return c.attempt(c.slotCtx, ref, attempts-1) }()
+		c.noteAttempt(ref.ID, res.err, begun)
 		res = c.planFailure(ctx, ref, res, attempts, excluded)
 		c.observeAttemptResult(ref, res)
 		lastAccount = ref.ID
