@@ -176,49 +176,44 @@ func (t *TrustStore) check(p *Package, sig *pkgsig.Signature, pub ed25519.Public
 }
 
 // registerOfficial upserts the publisher as official and records the root
-// key so it can be revoked like any other key.
+// key so it can be revoked like any other key. Both inserts tolerate a
+// concurrent first registration (several plugins verifying at once on a
+// fresh database): the loser's insert does nothing and the row is read back.
 func (t *TrustStore) registerOfficial(ctx context.Context, q store.Querier, name, keyID, b64 string) (int64, error) {
 	var (
 		id            int64
 		trust, status string
-		keyPub        *int64
+		keyPub        int64
 		keyStatus     string
 	)
-	err := q.QueryRow(ctx, `SELECT id, trust_level, status FROM publishers WHERE name = $1`, name).Scan(&id, &trust, &status)
-	switch {
-	case store.IsNoRows(err):
-		if err := q.QueryRow(ctx,
-			`INSERT INTO publishers (name, trust_level) VALUES ($1, 'official') RETURNING id`, name).Scan(&id); err != nil {
-			return 0, err
-		}
-	case err != nil:
+	if _, err := q.Exec(ctx,
+		`INSERT INTO publishers (name, trust_level) VALUES ($1, 'official') ON CONFLICT (name) DO NOTHING`, name); err != nil {
 		return 0, err
-	default:
-		if status != "active" {
-			return 0, revokedError(fmt.Sprintf("publisher %q has been revoked", name))
-		}
-		if trust != TrustOfficial {
-			if _, err := q.Exec(ctx, `UPDATE publishers SET trust_level = 'official' WHERE id = $1`, id); err != nil {
-				return 0, err
-			}
+	}
+	if err := q.QueryRow(ctx, `SELECT id, trust_level, status FROM publishers WHERE name = $1`, name).Scan(&id, &trust, &status); err != nil {
+		return 0, err
+	}
+	if status != "active" {
+		return 0, revokedError(fmt.Sprintf("publisher %q has been revoked", name))
+	}
+	if trust != TrustOfficial {
+		if _, err := q.Exec(ctx, `UPDATE publishers SET trust_level = 'official' WHERE id = $1`, id); err != nil {
+			return 0, err
 		}
 	}
-	err = q.QueryRow(ctx, `SELECT publisher_id, status FROM publisher_keys WHERE key_id = $1`, keyID).Scan(&keyPub, &keyStatus)
-	switch {
-	case store.IsNoRows(err):
-		if _, err := q.Exec(ctx,
-			`INSERT INTO publisher_keys (key_id, publisher_id, public_key) VALUES ($1, $2, $3)`, keyID, id, b64); err != nil {
-			return 0, err
-		}
-	case err != nil:
+	if _, err := q.Exec(ctx,
+		`INSERT INTO publisher_keys (key_id, publisher_id, public_key) VALUES ($1, $2, $3) ON CONFLICT (key_id) DO NOTHING`,
+		keyID, id, b64); err != nil {
 		return 0, err
-	default:
-		if keyPub == nil || *keyPub != id {
-			return 0, sigError(fmt.Sprintf("official key %q is registered to another publisher", keyID))
-		}
-		if keyStatus != "active" {
-			return 0, revokedError(fmt.Sprintf("signing key %q has been revoked", keyID))
-		}
+	}
+	if err := q.QueryRow(ctx, `SELECT publisher_id, status FROM publisher_keys WHERE key_id = $1`, keyID).Scan(&keyPub, &keyStatus); err != nil {
+		return 0, err
+	}
+	if keyPub != id {
+		return 0, sigError(fmt.Sprintf("official key %q is registered to another publisher", keyID))
+	}
+	if keyStatus != "active" {
+		return 0, revokedError(fmt.Sprintf("signing key %q has been revoked", keyID))
 	}
 	return id, nil
 }

@@ -49,8 +49,9 @@ func TestMakePersonal(t *testing.T) {
 
 	personalize(e.plain, true).failed(409, "conflict")
 	personalize(999999, false).failed(404, "not_found")
-	e.exec(`UPDATE users SET deleted_at = now() WHERE id = $1`, e.admin)
-	personalize(e.admin, false).failed(404, "not_found")
+	gone := e.user("gone@x.com")
+	e.exec(`UPDATE users SET deleted_at = now() WHERE id = $1`, gone)
+	personalize(gone, false).failed(404, "not_found")
 	e.do(e.plain, "POST", path("/users/%d/personal-segment", e.masked), map[string]any{"copy": false}).failed(403, "permission_denied")
 
 	list := e.do(e.masked, "GET", "/segments?kind=personal", nil)

@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/app"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox"
@@ -33,12 +34,21 @@ func main() {
 		fmt.Println(contract)
 		return
 	}
+	// The console's generated permission catalog
+	// (next/web/src/generated/permissions.ts).
+	if len(os.Args) == 2 && os.Args[1] == "permissions-ts" {
+		fmt.Print(authz.PermissionsTS())
+		return
+	}
 	// Hidden subcommand used by the plugin sandbox launcher.
 	if len(os.Args) > 1 && os.Args[1] == "plugin-exec" {
 		os.Exit(runPluginExec(os.Args[2:]))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "dev" {
 		os.Exit(runDev(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		os.Exit(runAdmin(os.Args[2:]))
 	}
 
 	cfg, err := config.Load(runtime.GOOS)

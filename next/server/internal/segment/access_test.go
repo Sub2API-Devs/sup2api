@@ -40,23 +40,36 @@ func newAccessFixture(t *testing.T) accessFixture {
 	return f
 }
 
+// groups returns the ids of the groups cond (with "$1" for user) holds for.
+func (f accessFixture) groups(t *testing.T, cond string, user int64) []int64 {
+	t.Helper()
+	rows, err := f.db.Pool.Query(context.Background(), `SELECT g.id FROM groups g WHERE `+cond+` ORDER BY g.id`, user)
+	require.NoError(t, err)
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		require.NoError(t, rows.Scan(&id))
+		ids = append(ids, id)
+	}
+	require.NoError(t, rows.Err())
+	return ids
+}
+
 func TestOpenToUserSQL(t *testing.T) {
 	f := newAccessFixture(t)
-	open := func(user int64) []int64 {
-		rows, err := f.db.Pool.Query(context.Background(), `SELECT g.id FROM groups g WHERE `+OpenToUserSQL("g", "$1")+` ORDER BY g.id`, user)
-		require.NoError(t, err)
-		defer rows.Close()
-		var ids []int64
-		for rows.Next() {
-			var id int64
-			require.NoError(t, rows.Scan(&id))
-			ids = append(ids, id)
-		}
-		require.NoError(t, rows.Err())
-		return ids
-	}
-	require.Equal(t, []int64{f.public, f.granted}, open(f.user))
-	require.Equal(t, []int64{f.public}, open(f.other))
+	require.Equal(t, []int64{f.public, f.granted}, f.groups(t, OpenToUserSQL("g", "$1"), f.user))
+	require.Equal(t, []int64{f.public}, f.groups(t, OpenToUserSQL("g", "$1"), f.other))
+}
+
+// A disabled group is open to its users still, but not usable.
+func TestUsableGroupSQL(t *testing.T) {
+	f := newAccessFixture(t)
+	_, err := f.db.Pool.Exec(context.Background(), `UPDATE groups SET status = 'disabled' WHERE id = $1`, f.public)
+	require.NoError(t, err)
+	require.Equal(t, []int64{f.granted}, f.groups(t, UsableGroupSQL("g", "$1"), f.user))
+	require.Empty(t, f.groups(t, UsableGroupSQL("g", "$1"), f.other))
+	require.Equal(t, []int64{f.public, f.granted}, f.groups(t, OpenToUserSQL("g", "$1"), f.user))
 }
 
 func TestTerms(t *testing.T) {

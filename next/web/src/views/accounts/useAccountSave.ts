@@ -18,6 +18,10 @@ import { subscriptionLabel } from './subscription'
 import type { useModelEdit } from './useModelEdit'
 import { fromCards, repeatedModel, type ModelLimitCard } from './modelLimits'
 import { windowOf } from './spmWindow'
+import { sameSet } from './bulkEdit'
+
+/** Field error codes of a save worded by the console: a restricted caller's account out of its groups (CONTRACTS §21). */
+const SCOPE_FIELD_CODES = { not_in_scope: 'accounts.scopeErrors.notInScope' }
 
 /** Editable basics of an account (AccountEditor's `basic`). */
 export interface AccountBasics {
@@ -146,7 +150,6 @@ export function useAccountSave(deps: AccountSaveDeps) {
     if (ccg.autoModels.value && accountType.value?.plugin_key === 'ccgateway') models.setModels([...models.defaultModels.value])
     const body: Record<string, unknown> = {
       name: basic.name.trim(),
-      group_ids: basic.group_ids,
       priority: Number(basic.priority),
       weight: Number(basic.weight),
       max_concurrency: Number(basic.max_concurrency),
@@ -162,6 +165,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
       conversion_loss_policy: basic.conversion_loss_policy,
       schedulable: basic.schedulable
     }
+    // Groups only when changed: changing them needs its own permission (CONTRACTS §21.2).
+    if (!sameSet(basic.group_ids, account.value?.group_ids ?? [])) body.group_ids = basic.group_ids
     if (ccg.autoDisableEnabled.value === true) body.auto_disable = basic.auto_disable
     if (ccgNeeded()) {
       body.settings = { locale: deps.settings.locale, timezone: deps.settings.timezone }
@@ -210,7 +215,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
       ccg.showAuth()
       return
     }
-    const all = fieldErrors(e)
+    const all = fieldErrors(e, undefined, SCOPE_FIELD_CODES)
     const { cred, base } = splitFieldErrors(all)
     errors.value = base
     deps.showCredentialErrors(cred)

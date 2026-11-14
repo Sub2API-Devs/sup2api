@@ -27,10 +27,16 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
-type fakeTokens struct{}
+type fakeTokens struct{ testutil.StepUpPassed }
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
+}
+
+// VerifyAccessKey reads "sak_<uid>" as an access key acting for uid.
+func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	uid, err := strconv.ParseInt(strings.TrimPrefix(raw, core.AccessKeyPrefix), 10, 64)
+	return core.AccessKeyIdentity{UserID: uid, KeyID: 1}, err
 }
 
 // fakeAuthz: admin can do anything; everyone else has apikey:self:manage and
@@ -56,7 +62,6 @@ func (a *fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, e
 	return core.PermissionSet{}, nil
 }
 func (*fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (*fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fakeGen implements the parts of core.Generation used for key platforms.
 type fakeGen struct {
@@ -190,12 +195,18 @@ func (e *env) exec(sql string, args ...any) {
 
 func (e *env) do(uid int64, method, path string, body any) (int, map[string]any) {
 	e.t.Helper()
+	return e.call(fmt.Sprintf("u%d", uid), method, path, body)
+}
+
+// call sends the request with bearer as the token.
+func (e *env) call(bearer, method, path string, body any) (int, map[string]any) {
+	e.t.Helper()
 	var b []byte
 	if body != nil {
 		b, _ = json.Marshal(body)
 	}
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(b))
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer u%d", uid))
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	w := httptest.NewRecorder()
 	e.h.ServeHTTP(w, req)
 	var out map[string]any
@@ -395,6 +406,12 @@ func TestCopyAPIKey(t *testing.T) {
 	if code != 200 || out["data"].(map[string]any)["key"] != raw {
 		t.Fatalf("owner reveal: %d", code)
 	}
+	// The owner's access key reveals too, after the step-up (passed here;
+	// iam tests the proofs).
+	code, out = e.call(core.AccessKeyPrefix+strconv.FormatInt(e.user, 10), "POST", path, nil)
+	if code != 200 || out["data"].(map[string]any)["key"] != raw {
+		t.Fatalf("access key reveal: %d %v", code, out)
+	}
 	other := e.exec1(`INSERT INTO users (email,password_hash) VALUES ('other@copy.test','x') RETURNING id`)
 	if code, _ := e.do(other, "POST", path, nil); code != 404 {
 		t.Fatalf("cross-owner: %d", code)
@@ -408,7 +425,7 @@ func TestCopyAPIKey(t *testing.T) {
 	}
 	var count int
 	_ = e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='apikey.reveal' AND target_id=$1`, strconv.FormatInt(id, 10)).Scan(&count)
-	if count != 1 {
+	if count != 2 {
 		t.Fatalf("audit count: %d", count)
 	}
 	e.exec(`UPDATE api_keys SET key_cipher=NULL WHERE id=$1`, id)

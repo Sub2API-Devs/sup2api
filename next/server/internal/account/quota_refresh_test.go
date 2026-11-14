@@ -218,7 +218,7 @@ func TestQuotaLifecycleEnvironmentPendingIsReady(t *testing.T) {
 	}
 	blocked := func() string {
 		t.Helper()
-		a, err := e.svc.loadRow(ctx, e.db.Pool, id, nil, false)
+		a, err := e.svc.loadRow(ctx, e.db.Pool, id, core.AllScope, false)
 		require.NoError(t, err)
 		reason, err := e.svc.quotaBlocked(ctx, a, e.gen.types[0])
 		require.NoError(t, err)

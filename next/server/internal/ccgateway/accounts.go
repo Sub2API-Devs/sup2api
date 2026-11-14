@@ -734,23 +734,14 @@ var (
 	startRetryEvery = 2 * time.Second
 )
 
-// callerScope is nil when the caller holds one of allKeys (it manages every
-// account runtime), otherwise the caller id: only accounts it created
-// (CONTRACTS §49.5, the account ownership rule of §21.1).
-func callerScope(ctx context.Context, allKeys ...string) *int64 {
-	for _, k := range allKeys {
-		if core.OwnerScope(ctx, k) == nil {
-			return nil
-		}
-	}
-	uid, _ := core.UserID(ctx)
-	return &uid
-}
-
-// accountManage serves /system/ccgateway/accounts/:id/:action for settings
-// administrators and for whoever may read (GET) or update (POST) the account
-// itself; own-level callers only reach accounts they created, others are 404.
-// Arbitrary remote paths are never accepted.
+// accountManage serves /system/ccgateway/accounts/:id/:action for whoever
+// may read (GET) or update (other methods) the account itself; own-level
+// callers only reach accounts they created, others are 404. Arbitrary remote
+// paths are never accepted.
+//
+// Two GETs write on purpose (W1-F7, won't fix): health records the
+// subscription type the runtime reports, and a draft status touches
+// last_seen_at as its keep-alive. Neither is a change the reader chooses.
 func (s *Service) accountManage(c *gin.Context) {
 	if c.Param("action") == "cc-features" {
 		if c.Request.Method != "GET" {
@@ -768,17 +759,9 @@ func (s *Service) accountManage(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
 	defer cancel()
-	allKeys := []string{"settings:manage", "account:update"}
-	if c.Request.Method == "GET" {
-		allKeys = []string{"settings:read", "account:read"}
-	}
-	if scope := callerScope(ctx, allKeys...); scope != nil {
-		var mine bool
-		if e = s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts
-			WHERE id = $1 AND deleted_at IS NULL AND created_by = $2)`, id, *scope).Scan(&mine); e != nil || !mine {
-			httpapi.Fail(c, core.ErrNotFound)
-			return
-		}
+	if e = s.authorizeAccount(ctx, c.Request.Method, id); e != nil {
+		httpapi.Fail(c, e)
+		return
 	}
 	d, e := s.desired(ctx, id, false)
 	if e != nil {

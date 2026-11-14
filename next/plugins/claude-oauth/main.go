@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -55,10 +56,12 @@ type credentials struct {
 type Plugin struct {
 	*pluginsdk.Router
 	host pluginsdk.Host
+	// tokenURL is where codes are exchanged: TokenURL, a fake in tests.
+	tokenURL string
 }
 
 func newPlugin() *Plugin {
-	p := &Plugin{Router: pluginsdk.NewRouter()}
+	p := &Plugin{Router: pluginsdk.NewRouter(), tokenURL: TokenURL}
 	p.Handle("POST", "/auth/start", p.handleAuthStart)
 	p.Handle("POST", "/auth/exchange", p.handleAuthExchange)
 	return p
@@ -228,6 +231,17 @@ type authStartRequest struct {
 	ProxyID *int64 `json:"proxy_id"` // 可选
 }
 
+// kvOAuthSession is the KV namespace of authorization sessions.
+const kvOAuthSession = "oauth_session"
+
+// authSession is the stored state of one authorization (a caller session).
+type authSession struct {
+	State        string `json:"state"`
+	CodeVerifier string `json:"code_verifier"`
+	Scope        string `json:"scope"`
+	CreatedAt    int64  `json:"created_at"`
+}
+
 type authStartResponse struct {
 	AuthURL   string `json:"auth_url"`
 	SessionID string `json:"session_id"`
@@ -255,20 +269,13 @@ func (p *Plugin) handleAuthStart(ctx context.Context, req *pluginv1.HTTPRequest)
 	}
 	challenge := generateCodeChallenge(verifier)
 
-	sessionID, err := generateRandomString(16)
+	// 存储会话（KV，绑定发起人：只有同一用户能用 session_id 换取凭证）
+	session := authSession{State: state, CodeVerifier: verifier, Scope: scope, CreatedAt: time.Now().Unix()}
+	sessionID, err := pluginsdk.SaveCallerSession(ctx, p.host.KV(), kvOAuthSession, req, session, 30*time.Minute)
+	if errors.Is(err, pluginsdk.ErrNoCaller) {
+		return pluginsdk.Unauthenticated(), nil
+	}
 	if err != nil {
-		return pluginsdk.ErrorResponse(500, "internal", "failed to generate session ID"), nil
-	}
-
-	// 存储会话（使用 KV）
-	session := map[string]any{
-		"state":         state,
-		"code_verifier": verifier,
-		"scope":         scope,
-		"created_at":    time.Now().Unix(),
-	}
-	sessionJSON, _ := json.Marshal(session)
-	if err := p.host.KV().Set(ctx, "oauth_session", sessionID, sessionJSON, 30*time.Minute); err != nil {
 		return pluginsdk.ErrorResponse(500, "internal", "failed to store session"), nil
 	}
 
@@ -292,8 +299,9 @@ func (p *Plugin) handleAuthExchange(ctx context.Context, req *pluginv1.HTTPReque
 		return pluginsdk.ErrorResponse(400, "invalid_request", "invalid JSON"), nil
 	}
 
-	// 获取会话
-	sessionData, ok, err := p.host.KV().Get(ctx, "oauth_session", input.SessionID)
+	// 获取会话：不存在、已过期与他人的会话不可区分
+	var session authSession
+	ok, err := pluginsdk.LoadCallerSession(ctx, p.host.KV(), kvOAuthSession, input.SessionID, req, &session)
 	if err != nil {
 		return pluginsdk.ErrorResponse(500, "internal", "failed to retrieve session"), nil
 	}
@@ -301,21 +309,16 @@ func (p *Plugin) handleAuthExchange(ctx context.Context, req *pluginv1.HTTPReque
 		return pluginsdk.ErrorResponse(404, "not_found", "session not found or expired"), nil
 	}
 
-	var session struct {
-		State        string `json:"state"`
-		CodeVerifier string `json:"code_verifier"`
-		Scope        string `json:"scope"`
-	}
-	if err := json.Unmarshal(sessionData, &session); err != nil {
-		return pluginsdk.ErrorResponse(500, "internal", "invalid session data"), nil
-	}
+	// 解析 code（可能包含 state）；粘贴时带上的首尾空白不算内容
+	code, codeState, _ := strings.Cut(strings.TrimSpace(input.Code), "#")
+	code, codeState = strings.TrimSpace(code), strings.TrimSpace(codeState)
 
-	// 解析 code（可能包含 state）
-	code := input.Code
-	codeState := ""
-	if idx := strings.Index(code, "#"); idx != -1 {
-		code = input.Code[:idx]
-		codeState = input.Code[idx+1:]
+	// code 带回的 state 必须是本会话发出的；不一致说明 code 属于另一次授权，
+	// 会话作废，需重新发起。这只防止粘错：不带 state 的 code 仍会转给上游，
+	// 由 PKCE verifier 保证它属于本会话。
+	if codeState != "" && subtle.ConstantTimeCompare([]byte(codeState), []byte(session.State)) != 1 {
+		_ = p.host.KV().Delete(ctx, kvOAuthSession, input.SessionID)
+		return pluginsdk.ErrorResponse(400, "state_mismatch", "the code does not belong to this authorization session; start again"), nil
 	}
 
 	// 交换 token
@@ -325,7 +328,7 @@ func (p *Plugin) handleAuthExchange(ctx context.Context, req *pluginv1.HTTPReque
 	}
 
 	// 删除会话
-	_ = p.host.KV().Delete(ctx, "oauth_session", input.SessionID)
+	_ = p.host.KV().Delete(ctx, kvOAuthSession, input.SessionID)
 
 	// 返回凭证（供控制台填充账号表单）
 	return pluginsdk.JSONResponse(200, map[string]any{
@@ -392,7 +395,7 @@ func (p *Plugin) exchangeCode(ctx context.Context, code, verifier, state string)
 	}
 
 	bodyJSON, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, "POST", TokenURL, strings.NewReader(string(bodyJSON)))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.tokenURL, strings.NewReader(string(bodyJSON)))
 	if err != nil {
 		return nil, err
 	}

@@ -11,28 +11,9 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
-// routeRefRe matches a manifest route reference such as "GET /models" or
-// "/models" (method defaulting to the caller's). It is the Go mirror of
-// parseRouteRef() in web/src/components/plugin/declarative.ts, which is what
-// actually turns Page.Source and Page.Submit into requests; the two must agree
-// on what parses, or the host would accept a reference the console cannot
-// call.
-var routeRefRe = regexp.MustCompile(`^\s*(?i:(GET|POST|PUT|PATCH|DELETE)\s+)?(/\S*)\s*$`)
-
-// ParseRouteRef parses a manifest route reference ("GET /models", "/models")
-// into an upper-case method and a path. defaultMethod is used when the
-// reference names none: GET for Page.Source, POST for Page.Submit, matching
-// the console.
+// ParseRouteRef is manifest.ParseRouteRef.
 func ParseRouteRef(ref, defaultMethod string) (method, path string, ok bool) {
-	m := routeRefRe.FindStringSubmatch(ref)
-	if m == nil {
-		return "", "", false
-	}
-	method = strings.ToUpper(m[1])
-	if method == "" {
-		method = strings.ToUpper(defaultMethod)
-	}
-	return method, m[2], true
+	return manifest.ParseRouteRef(ref, defaultMethod)
 }
 
 // routeRef checks one route reference (a page's source or submit, an account
@@ -46,20 +27,20 @@ func ParseRouteRef(ref, defaultMethod string) (method, path string, ok bool) {
 // all. Both are exactly the "declared and nobody honours it" shape - the page
 // is not visibly broken, it looks like a page with no rows.
 //
-// The route is matched by method plus NormalizeRoutePath, the same signature
+// The route is matched by manifest.RouteSignature, the same signature
 // routes() uses to find duplicates, so "/assets/:id" in routes and
 // "/assets/:asset" in a page reference are the same route (gin binds by
 // position, not by name).
 func (v *validator) routeRef(field, ref, defaultMethod string) *manifest.Route {
-	method, path, ok := ParseRouteRef(ref, defaultMethod)
+	method, path, ok := manifest.ParseRouteRef(ref, defaultMethod)
 	if !ok {
 		v.add(field, "invalid_route_ref", "%q is not a route reference; expected %q or %q",
 			ref, defaultMethod+" /path", "/path")
 		return nil
 	}
-	want := method + " " + NormalizeRoutePath(path)
+	want := manifest.RouteSignature(method, path)
 	for i := range v.m.Routes {
-		if r := &v.m.Routes[i]; strings.ToUpper(r.Method)+" "+NormalizeRoutePath(r.Path) == want {
+		if r := &v.m.Routes[i]; manifest.RouteSignature(r.Method, r.Path) == want {
 			return r
 		}
 	}
@@ -469,6 +450,10 @@ func (v *validator) uiAccountActions(u *manifest.UI) {
 			// The console posts {"account_ids": [...]} to the path as
 			// declared; it has nothing to fill a :param or *wildcard with.
 			v.add(f+".route", "parameterized_route", "route %s %s has a path parameter; the console posts {\"account_ids\":[...]} and cannot fill it", r.Method, r.Path)
+		case r.Accounts != nil && !slices.Contains(r.Accounts.From, manifest.AccountActionIDs):
+			// An explicit declaration replaces the inferred one
+			// (EffectiveRouteAccounts); it must still check what the console posts.
+			v.add(f+".route", "accounts_mismatch", "route %s %s declares accounts without %q, which the console posts", r.Method, r.Path, manifest.AccountActionIDs)
 		}
 	}
 }
@@ -513,12 +498,15 @@ type uiFloor struct {
 // last with UI 3.9 (3.10 starts at 0.1.277); 0.1.278 is the last with UI
 // 3.10 (3.11 starts at 0.1.279); 0.1.279 is the last with UI 3.11 (3.12
 // starts at 0.1.280); 0.1.280 is the last with UI 3.12 (3.13 starts at
-// 0.1.281); 0.1.283 is the last with UI 3.13 (3.14 starts at 0.1.284).
+// 0.1.281); 0.1.283 is the last with UI 3.13 (3.14 starts at 0.1.284);
+// 0.1.285 is the last with UI 3.14 (3.15 starts at 0.1.286).
 // 3.10 to 3.13 add components and props, no manifest declaration, so only
 // hostUICompat asks for them. 3.14 adds ui.pages.<page>.nav, but it needs
 // no floor of its own either: an older console ignores nav and the page
 // keeps its in-page section switcher, so the plugin still works there.
+// 3.15 adds the optional permissions.hasAction and scope (resource scopes).
 var uiFloors = []uiFloor{
+	{minor: 15, lastUI: "3.14.0", lastCore: "0.1.285", firstCore: "0.1.286"},
 	{minor: 14, lastUI: "3.13.0", lastCore: "0.1.283", firstCore: "0.1.284"},
 	{minor: 13, lastUI: "3.12.0", lastCore: "0.1.280", firstCore: "0.1.281"},
 	{minor: 12, lastUI: "3.11.0", lastCore: "0.1.279", firstCore: "0.1.280"},

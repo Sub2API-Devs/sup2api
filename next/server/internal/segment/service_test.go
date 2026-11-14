@@ -42,7 +42,9 @@ func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, erro
 	return core.PermissionSet{}, nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
+func (fakeAuthz) CanActOnUsers(context.Context, int64, core.UserAction, ...int64) error {
+	return nil
+}
 
 // env is the segment service behind the real router. admin has every
 // permission, masked every one but user:read, plain none. All three are
@@ -68,7 +70,7 @@ func setup(t *testing.T) *env {
 	}
 	engine := gin.New()
 	e.svc = New(Deps{
-		DB: e.db, Authz: authz,
+		DB: e.db, Authz: authz, Users: authz,
 		Platforms: func(_ context.Context, ids []int64) (map[int64][]string, error) {
 			out := map[int64][]string{}
 			for _, id := range ids {

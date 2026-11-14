@@ -32,13 +32,13 @@ type commonControl struct {
 	copy func(dst, src *input)
 	// coreDefault is the value of a new account without a declared default
 	// (scope: the caller's own-level scope); nil for none.
-	coreDefault func(scope *int64) any
+	coreDefault func(scope core.DataScope) any
 	// fillCore sets an absent field to the core default.
-	fillCore func(in *input, scope *int64)
+	fillCore func(in *input, scope core.DataScope)
 }
 
 // fieldControl is the control of a pointer field of input.
-func fieldControl[T any](field func(*input) **T, current func(*row) T, coreDefault func(*int64) T) commonControl {
+func fieldControl[T any](field func(*input) **T, current func(*row) T, coreDefault func(core.DataScope) T) commonControl {
 	return commonControl{
 		value: func(in *input) (any, bool) {
 			if p := *field(in); p != nil {
@@ -56,8 +56,8 @@ func fieldControl[T any](field func(*input) **T, current func(*row) T, coreDefau
 			return nil
 		},
 		copy:        func(dst, src *input) { *field(dst) = *field(src) },
-		coreDefault: func(scope *int64) any { return coreDefault(scope) },
-		fillCore: func(in *input, scope *int64) {
+		coreDefault: func(scope core.DataScope) any { return coreDefault(scope) },
+		fillCore: func(in *input, scope core.DataScope) {
 			if *field(in) == nil {
 				v := coreDefault(scope)
 				*field(in) = &v
@@ -66,7 +66,7 @@ func fieldControl[T any](field func(*input) **T, current func(*row) T, coreDefau
 	}
 }
 
-func always[T any](v T) func(*int64) T { return func(*int64) T { return v } }
+func always[T any](v T) func(core.DataScope) T { return func(core.DataScope) T { return v } }
 
 // paramOverrideControl is the control of param_override, a raw JSON field
 // whose core default is none.
@@ -83,8 +83,8 @@ var paramOverrideControl = commonControl{
 		return nil
 	},
 	copy:        func(dst, src *input) { dst.ParamOverride = src.ParamOverride },
-	coreDefault: func(*int64) any { return nil },
-	fillCore:    func(*input, *int64) {},
+	coreDefault: func(core.DataScope) any { return nil },
+	fillCore:    func(*input, core.DataScope) {},
 }
 
 // commonControlFields are the controls of account fields, keyed by control
@@ -132,7 +132,7 @@ type declaredControl struct {
 
 // expected is the only value a fixed control accepts: on create the
 // default, on update the current value (locked: the default).
-func (c declaredControl) expected(current *row, scope *int64) any {
+func (c declaredControl) expected(current *row, scope core.DataScope) any {
 	switch {
 	case c.def != nil && (current == nil || c.decl.Locked):
 		v, _ := c.control.value(c.def)
@@ -200,7 +200,7 @@ func normalizedDefault(ctx context.Context, name string, control commonControl, 
 // check refuses the request fields the declarations do not let the caller
 // choose, and a missing required proxy. current is the locked row on update,
 // nil on create.
-func (p controlPlan) check(ctx context.Context, in *input, current *row, scope *int64) []core.FieldError {
+func (p controlPlan) check(ctx context.Context, in *input, current *row, scope core.DataScope) []core.FieldError {
 	var fe []core.FieldError
 	for _, c := range p.fields {
 		if got, ok := c.control.value(in); ok && c.decl.Fixed() && !manifest.SameControlValue(got, c.expected(current, scope)) {
@@ -221,7 +221,7 @@ func readOnlyControl(ctx context.Context, field string) core.FieldError {
 
 // fillDefaults gives every control field the request of a new account
 // leaves out the declared default, else the core default.
-func (p controlPlan) fillDefaults(in *input, scope *int64) {
+func (p controlPlan) fillDefaults(in *input, scope core.DataScope) {
 	for name, control := range commonControlFields {
 		if _, ok := control.value(in); ok {
 			continue
@@ -282,6 +282,7 @@ func (p controlPlan) convergeUsageLimit(ctx context.Context, q store.Querier, id
 type ownCap struct {
 	name, zh string // the field, and its name in the Chinese message
 	field    func(*input) **int
+	current  func(*row) int // the stored value
 	min, max int
 	// below is what a default under min clamps to: min, or for
 	// max_concurrency (0 = unlimited, which own-level callers cannot set)
@@ -290,9 +291,9 @@ type ownCap struct {
 }
 
 var ownCapped = []ownCap{
-	{"priority", "优先级", func(in *input) **int { return &in.Priority }, 0, ownMaxPriority, 0},
-	{"weight", "权重", func(in *input) **int { return &in.Weight }, 1, ownMaxWeight, 1},
-	{"max_concurrency", "最大并发", func(in *input) **int { return &in.MaxConcurrency }, 1, ownMaxConcurrency, ownDefaultConcurrency},
+	{"priority", "优先级", func(in *input) **int { return &in.Priority }, func(a *row) int { return a.Priority }, 0, ownMaxPriority, 0},
+	{"weight", "权重", func(in *input) **int { return &in.Weight }, func(a *row) int { return a.Weight }, 1, ownMaxWeight, 1},
+	{"max_concurrency", "最大并发", func(in *input) **int { return &in.MaxConcurrency }, func(a *row) int { return a.MaxConcurrency }, 1, ownMaxConcurrency, ownDefaultConcurrency},
 }
 
 // clamp fits v into the cap.
@@ -304,8 +305,9 @@ func (f ownCap) clamp(v int) int {
 }
 
 // restricted is the error of a sent value outside the cap, nil otherwise.
-func (f ownCap) restricted(ctx context.Context, in *input) error {
-	if v := *f.field(in); v == nil || (*v >= f.min && *v <= f.max) {
+// The value cur (nil on create) already has passes: an administrator set it.
+func (f ownCap) restricted(ctx context.Context, in *input, cur *row) error {
+	if v := *f.field(in); v == nil || (*v >= f.min && *v <= f.max) || (cur != nil && *v == f.current(cur)) {
 		return nil
 	}
 	return core.InvalidFields(core.FieldError{Field: f.name, Code: "restricted",
@@ -318,8 +320,8 @@ func (f ownCap) restricted(ctx context.Context, in *input) error {
 // sent value equal to the default the console prefills (the declared one,
 // else defaultLimits). Other values stay for the own-level restrictions to
 // judge; fixed controls keep the declaration's value.
-func (p controlPlan) clampOwnDefaults(in *input, limits *manifest.AccountDefaultLimits, scope *int64) {
-	if scope == nil {
+func (p controlPlan) clampOwnDefaults(in *input, limits *manifest.AccountDefaultLimits, scope core.DataScope) {
+	if !scope.Restricted() {
 		return
 	}
 	suggested := limits.ControlDefaults()

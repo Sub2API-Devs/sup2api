@@ -19,6 +19,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -46,10 +47,18 @@ type Entity struct {
 	Status string // optional column, returned as stored
 	Live   string // optional condition leaving out soft-deleted rows
 
-	// Read reaches every row. OwnRead, its "own" counterpart (CONTRACTS §21),
-	// reaches the caller's rows only: a holder of OwnRead alone is narrowed
-	// by Mine instead of refused.
+	// Read reaches every row. OwnRead (kinds without a Table: groups, by
+	// account:group:bind) reaches the caller's rows only: a holder of
+	// OwnRead alone is narrowed by Mine instead of refused.
 	Read, OwnRead string
+	// Named, when set, gives a caller holding neither Read nor OwnRead the
+	// rows its own permission set names (by id), instead of a refusal: the
+	// console shows the scopes of the caller's grants by name.
+	Named func(core.PermissionSet) []int64
+	// Table makes Read a scoped action (CONTRACTS §21.0): the caller sees
+	// the rows of its scope of Read, any scope will do, and OwnRead is
+	// unused.
+	Table *core.ScopeTable
 	// Mine serves mine=true; nil when no row of the kind is the caller's own.
 	Mine *Mine
 
@@ -130,7 +139,7 @@ func (s *Service) lookup(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	own, ok := s.allow(c, e, p.mine)
+	a, ok := s.allow(c, e, p.mine)
 	if !ok {
 		return
 	}
@@ -139,8 +148,22 @@ func (s *Service) lookup(c *gin.Context) {
 	if e.Live != "" {
 		f.And(e.Live)
 	}
+	if a.named != nil {
+		f.And(e.ID+" = ANY(?)", a.named)
+	}
+	if e.Table != nil {
+		scope, err := core.Scope(ctx, s.authz, perm.Key(e.Read))
+		if err == nil && scope.Empty() {
+			err = core.ErrPermissionDenied.WithDetails(map[string]any{"permission": e.Read})
+		}
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		f.And(e.Table.Cond(), e.Table.Args(scope)...)
+	}
 	hint := e.Hint
-	if own {
+	if a.own {
 		uid, _ := core.UserID(ctx)
 		if err := e.Mine.Scope(ctx, s.db.Pool, uid, &f); err != nil {
 			httpapi.Fail(c, err)
@@ -172,21 +195,53 @@ func (s *Service) lookup(c *gin.Context) {
 	httpapi.OK(c, Result{Items: items, More: more})
 }
 
-// allow checks the caller's permission for the kind and reports whether the
-// lookup is limited to the caller's own rows. When ok is false the error has
-// been rendered.
-func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (own, ok bool) {
-	if !mine {
-		if !httpapi.CanAny(c, s.authz, e.Read, e.OwnRead) {
-			return false, false
-		}
-		return core.OwnerScope(c.Request.Context(), e.Read) != nil, true
-	}
-	if e.Mine == nil {
+// access is the caller's range of one lookup, beyond a Table's scope.
+type access struct {
+	own   bool    // narrowed by Mine
+	named []int64 // narrowed to these ids (Entity.Named); nil: not by it
+}
+
+// allow checks the caller's permission for the kind and returns the range
+// the lookup is limited to. When ok is false the error has been rendered.
+func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (a access, ok bool) {
+	if mine && e.Mine == nil {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("mine is not supported for "+e.Kind))
-		return false, false
+		return a, false
 	}
-	return true, len(e.Mine.Perms) == 0 || httpapi.CanAny(c, s.authz, e.Mine.Perms...)
+	if e.Table != nil { // checked and narrowed by its scope
+		return access{own: mine}, true
+	}
+	if mine {
+		return access{own: true}, len(e.Mine.Perms) == 0 || httpapi.CanAny(c, s.authz, e.Mine.Perms...)
+	}
+	ctx := c.Request.Context()
+	if e.Named != nil && !core.Can(ctx, s.authz, perm.Key(e.Read)) && !core.Can(ctx, s.authz, perm.Key(e.OwnRead)) {
+		return s.allowNamed(c, e)
+	}
+	if !httpapi.CanAny(c, s.authz, e.Read, e.OwnRead) {
+		return a, false
+	}
+	// CanAny recorded the keys it matched in a new request context: not ctx.
+	return access{own: !core.HasGranted(c.Request.Context(), perm.Key(e.Read))}, true
+}
+
+// allowNamed limits the lookup to the rows e.Named finds in the caller's
+// permission set (its access key applied), refusing as Read would when it
+// names none.
+func (s *Service) allowNamed(c *gin.Context, e *Entity) (access, bool) {
+	ctx := c.Request.Context()
+	uid, _ := core.UserID(ctx)
+	set, err := s.authz.PermissionSet(ctx, uid)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return access{}, false
+	}
+	ids := e.Named(set)
+	if len(ids) == 0 {
+		httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": e.Read}))
+		return access{}, false
+	}
+	return access{named: ids}, true
 }
 
 // params are the parsed query parameters of one request.

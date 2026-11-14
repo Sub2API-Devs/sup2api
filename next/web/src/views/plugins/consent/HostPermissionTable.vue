@@ -28,7 +28,7 @@ const descOf = (id: string) => tr(`plugins.hpDesc.${hpKey(id)}`, undefined, '')
 </script>
 
 <template>
-  <SCard :title="t('plugins.consent.hostPermissions')" :subtitle="t('plugins.consent.hostPermissionsHint')" class="mt-4">
+  <SCard :title="t('plugins.consent.hostPermissions')" :subtitle="t('plugins.consent.hostPermissionsHint')" class="mt-4" data-testid="host-permissions">
     <SEmpty v-if="props.rows.length === 0" :text="t('plugins.consent.noHostPermissions')" />
     <ul v-else class="divide-y divide-gray-100 dark:divide-dark-700">
       <li
@@ -50,6 +50,7 @@ const descOf = (id: string) => tr(`plugins.hpDesc.${hpKey(id)}`, undefined, '')
             <SBadge v-if="row.optional" tone="gray">{{ t('common.optional') }}</SBadge>
             <SBadge v-if="row.diffTag === 'added'" tone="danger">{{ t('plugins.consent.diffAdded') }}</SBadge>
             <SBadge v-if="row.diffTag === 'widened'" tone="warning">{{ t('plugins.consent.diffWidened') }}</SBadge>
+            <SBadge v-if="row.carried && !row.locked" tone="gray" data-testid="hp-carried">{{ t('plugins.consent.carried') }}</SBadge>
           </div>
           <SHint v-if="descOf(row.id)" size="xs" class="mt-0.5" :data-hp-desc="row.id">{{ descOf(row.id) }}</SHint>
           <p v-if="row.reason" class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">{{ lt(row.reason) }}</p>

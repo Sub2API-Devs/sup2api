@@ -95,6 +95,7 @@ const zh = {
     emptyTitle: '还没有重置卡',
     emptyText: 'OpenAI 会在推荐好友成功等活动中发放重置次数，发放后会显示在这里。',
     loadFailed: '读取重置次数失败',
+    needsUpdate: '查看和使用重置次数需要修改该账号的权限（account:update）。',
     confirm: {
       title: '使用一次官方重置？',
       body: '将消耗账号 {name} 的 1 次重置次数（{title}），立即清零当前用量窗口。',
@@ -209,6 +210,7 @@ const en: Messages = {
     emptyTitle: 'No resets yet',
     emptyText: 'OpenAI grants resets in promotions such as a successful referral; they show up here once granted.',
     loadFailed: 'Could not read the resets',
+    needsUpdate: 'Viewing and using the resets needs the permission to update this account (account:update).',
     confirm: {
       title: 'Use an official reset?',
       body: 'This spends 1 reset of account {name} ({title}) and clears the current usage windows at once.',

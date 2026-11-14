@@ -111,9 +111,9 @@ func TestAC02_CustomRoleMenusAndForbidden(t *testing.T) {
 	if r := NewClient(e.BaseURL).API(t, http.MethodGet, "/me", nil); r.Status != 401 || r.ErrCode() != "unauthenticated" {
 		t.Errorf("anonymous /me: %s", r)
 	}
-	// role:manage needs no password confirmation (CONTRACTS §3.3).
+	// role:define needs no password confirmation (CONTRACTS §3.3).
 	if r := admin.API(t, http.MethodPut, "/roles/"+itoa(roleID)+"/permissions",
 		map[string]any{"permission_keys": perms}); r.Status != 200 {
-		t.Errorf("role:manage without confirmation: %s", r)
+		t.Errorf("role:define without confirmation: %s", r)
 	}
 }

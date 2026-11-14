@@ -528,7 +528,7 @@ guard-0.1.0.s2plugin
 flowchart LR
   subgraph host["核心"]
     rt["grpcRuntime"]
-    hs["HostService<br/>Log · KVGet/KVSet/KVDelete/KVList · KVGetMany/KVSetMany/KVDeleteMany（CONTRACTS §93） · GetDSN<br/>AuthzCheck · LedgerCredit/LedgerDebit · Publish<br/>ListAccounts · GetAccountCredentials<br/>LockAcquire/LockRenew/LockRelease（CONTRACTS §27.3）"]
+    hs["HostService<br/>Log · KVGet/KVSet/KVDelete/KVList · KVGetMany/KVSetMany/KVDeleteMany（CONTRACTS §93） · GetDSN<br/>AuthzCheck · AccountScopeCheck · LedgerCredit/LedgerDebit · Publish<br/>ListAccounts · GetAccountCredentials<br/>LockAcquire/LockRenew/LockRelease（CONTRACTS §27.3）"]
     eg["EgressService<br/>Dial（双向流）"]
   end
   subgraph plugin["插件进程"]
@@ -640,14 +640,14 @@ stateDiagram-v2
 | 等级 | 权限 |
 |---|---|
 | 🟢 低 | `kv`、`config`、`log`、`broadcast`、`secrets`（§72.2）、`prices`（只读按模型价格试算费用，§72.13.1） |
-| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3） |
+| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`authz.read`（`AuthzCheck` 查询非本插件的权限 key）、`lock`（CONTRACTS §27.3） |
 | 🟠 高 | `accounts.auto_state`、`db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`gateway.observe`、`platform.register`、`scheduler.rank`、`sticky.clear`（§74.2）、`users.read`、`notify.send`（经其他插件的渠道向任意外部地址发通知，核心限速，§74.4） |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 
 - 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准（2026-10-05 起不再要求再次输入密码，CONTRACTS §3.3）
 - 批准结果写入 `plugin_permission_grants(plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)`；管理员可以把范围改得比申请的更小（比如入账上限）
 - 运行时插件每次调用 HostService，核心都在服务端检查授权
-- 升级时新增权限或扩大范围，新版本进入 `awaiting_consent`，旧版本继续运行
+- 升级时新增权限或扩大范围，新版本进入 `awaiting_consent`，旧版本继续运行；有版本在运行时，对新版本的同意先记为待生效授予（`plugin_staged_grants`），只作用于新版本的实例，发布提交时才成为插件的授予，升级失败或取消时撤回（CONTRACTS §5.7）
 
 ### 5.6 插件数据库 schema 与迁移
 
@@ -1197,7 +1197,7 @@ sequenceDiagram
 | 调度 | 0.1.237 起走定时任务框架（CONTRACTS §77.8）：`cluster` 任务（默认）是 River 全集群任务 `plugin.<key>.<id>`，每个时段全集群只跑一次；`node` 任务每个加载了插件的节点各跑一次。执行节点调用本机插件的 `AppService.RunJob`。插件还可以经 Host API 9 在运行时登记任务 |
 | 保证 | 同一时段只跑一次（River 唯一键 + `scheduled_tasks` 租约 + `plugin_job_runs_slot_uniq`）；错过的触发不补跑。超时上限全集群 1 小时、每节点 10 分钟，更长的工作分段续跑 |
 | 记录 | `plugin_job_runs(id, plugin_key, job_id, node_id, scheduled_at, started_at, finished_at, status, error)`，保留最近 1000 条 |
-| 手动触发 | 插件详情页"立即执行"，需要 `plugin:manage` |
+| 手动触发 | 插件详情页"立即执行"，需要 `task:run` |
 | 禁用 | 插件禁用时停止调度 |
 
 ---
@@ -1292,7 +1292,7 @@ cgroup 可以给每个插件单独设置硬性上限，超出直接被限制，�
 ```mermaid
 flowchart TD
   root["官方根公钥（编译进核心二进制）"] --> official["official：官方发布者"]
-  admin["管理员（publisher:manage 🔴）"] --> verified["verified：管理员确认过的发布者"]
+  admin["持有 publisher:manage 🔴 的人（默认只有超级管理员）"] --> verified["verified：管理员确认过的发布者"]
   admin --> community["community：已登记但未验证的发布者"]
   unsigned["未签名"] -.->|"仅 plugins.allow_unsigned=true 时"| devonly["仅开发环境"]
 ```
@@ -1399,13 +1399,13 @@ flowchart TD
 | 角色 | 说明 |
 |---|---|
 | `super_admin` | superuser，至少保留一个用户，不能删除 |
-| `admin` | 默认拥有全部核心权限，可修改 |
+| `admin` | 默认拥有除超管专属权限（CONTRACTS §4 标 👑 的 5 项）以外的全部核心权限，可修改（内置角色只有超级管理员能改） |
 | `user` | 管理自己的 API Key、查看自己的用量和余额流水、调用网关 |
 
 | 模块 | 权限 |
 |---|---|
 | 用户 | `user:read` `user:create` `user:update` `user:delete` |
-| 角色 | `role:read` `role:manage` |
+| 角色 | `role:read` `role:define` `role:assign` |
 | API Key | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | 分组 | `group:read` `group:manage` |
 | 用户组 | `segment:read` `segment:manage`（7.1，CONTRACTS §97.7） |

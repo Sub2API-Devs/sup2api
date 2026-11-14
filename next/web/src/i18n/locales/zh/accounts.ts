@@ -13,6 +13,7 @@ export default {
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
     numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选', idsTruncated: '{label}（前 {n} 个）',
     enableAccount: '启用：{name}', disableAccount: '禁用：{name}', disableHint: '禁用账号，不再参与调度',
+    adminLockedHint: '已被管理员禁用，只有管理员可以重新启用',
     enableHint: '启用账号',
     enableAutoHint: '未启用（已自动禁用或关闭了调度）。点击即手动启用：清除自动禁用及原因，并恢复调度；冷却不清除（可用“重置状态”清除）',
     enabledDone: '已启用「{name}」', disabledDone: '已禁用「{name}」', disableByHand: '转为手动禁用'
@@ -109,6 +110,9 @@ export default {
   createdBy: '创建人',
   proxyPickExisting: '选择已有',
   proxyPasteUrl: '粘贴代理串',
+  groupsLocked: '修改分组需要 group:manage 或 account:group:bind 权限。',
+  guardedSettingsHint: '受限设置（如 Base URL）只能使用官方值；其他值需要 account:settings:custom 权限。',
+  typeNeedsRelay: '需要 account:relay 权限：这个类型可以自定义上游地址。',
   proxyUrlProbeHint: '没有协议的写法（主机:端口:用户名:密码 等）请点「测试」，依次尝试 socks5、http、https',
   proxyProbeCreated: '测试通过：{protocol}，出口 IP {ip}，已新建代理 #{id} 并选中',
   proxyProbeReused: '测试通过：{protocol}，出口 IP {ip}，已选中已有代理 #{id}',
@@ -588,5 +592,9 @@ export default {
     refreshThrottled: '请求过于频繁，请 {n} 秒后再试',
     updatedAt: '更新于 {time}',
     error: '查询失败：{error}'
+  },
+  scopeErrors: {
+    notInScope: '账号必须绑定到你管理的分组',
+    wouldLeaveScope: '修改后账号将不在你的管理范围内'
   }
 }

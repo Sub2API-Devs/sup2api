@@ -15,6 +15,7 @@ import type { Account, AccountType } from '@/api/types'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
+import { useAccountCaps } from '@/composables/useAccountCaps'
 import { errorMessage } from '@/utils/errors'
 import { fixedCount, type CommonControlName } from './commonControls'
 import { todayQuery } from './accountUsage'
@@ -33,6 +34,7 @@ const failures = ref<BulkFailure<Account>[]>([])
 /** The fields that are common controls. */
 const FIXABLE = ['auto_disable', ...(Object.keys(BULK_LIMITS) as NumberField[])] as const
 const bulk = useBulkRun(4)
+const caps = useAccountCaps(true)
 
 watch(() => props.open, (open) => {
   if (!open) return
@@ -125,10 +127,10 @@ async function apply() {
           <SHint v-if="fixed.auto_disable" size="xs" tone="warning">{{ t('accounts.bulk.controlFixed', { n: fixed.auto_disable }) }}</SHint>
         </div>
         <div class="space-y-1 sm:col-span-2" data-testid="bulk-field-groups">
-          <SCheckbox v-model="on.groups" size="sm">{{ t('accounts.groups') }}</SCheckbox>
-          <SSegmented :model-value="values.groupMode" :options="groupModes" size="sm" :aria-label="t('accounts.bulk.groupModeLabel')" @update:model-value="set('groupMode', $event as GroupMode, 'groups')" />
-          <GroupPicker :model-value="values.group_ids" multiple @update:model-value="set('group_ids', $event as number[], 'groups')" />
-          <SHint size="xs">{{ t(`accounts.bulk.groupModeHint.${values.groupMode}`) }}</SHint>
+          <SCheckbox v-model="on.groups" size="sm" :disabled="!caps.bindGroups.value">{{ t('accounts.groups') }}</SCheckbox>
+          <SSegmented :model-value="values.groupMode" :options="groupModes" size="sm" :aria-label="t('accounts.bulk.groupModeLabel')" :disabled="!caps.bindGroups.value" @update:model-value="set('groupMode', $event as GroupMode, 'groups')" />
+          <GroupPicker :model-value="values.group_ids" multiple :disabled="!caps.bindGroups.value" @update:model-value="set('group_ids', $event as number[], 'groups')" />
+          <SHint size="xs" :tone="caps.bindGroups.value ? undefined : 'warning'">{{ caps.bindGroups.value ? t(`accounts.bulk.groupModeHint.${values.groupMode}`) : t('accounts.groupsLocked') }}</SHint>
         </div>
         <div class="space-y-1 sm:col-span-2" data-testid="bulk-field-proxy">
           <SCheckbox v-model="on.proxy" size="sm">{{ t('accounts.proxy') }}</SCheckbox>

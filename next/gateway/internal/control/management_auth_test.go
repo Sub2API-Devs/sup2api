@@ -26,47 +26,42 @@ func TestManagementTokenRequired(t *testing.T) {
 	}
 	reached := 0
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached++; w.WriteHeader(204) })
-	for _, allowMissing := range []bool{false, true} {
-		h := RequireManagementToken(token, allowMissing, inner)
-		for _, tc := range []struct {
-			name, header string
-			want         int
-		}{
-			{"missing", "", 401},
-			{"wrong token", "Bearer " + other, 401},
-			{"bare token", token, 401},
-			{"wrong scheme", "Basic " + token, 401},
-			{"token prefix", "Bearer " + token[:32], 401},
-			{"token with suffix", "Bearer " + token + "x", 401},
-			{"lowercase scheme", "bearer " + token, 401},
-			{"valid", "Bearer " + token, 204},
-		} {
-			if allowMissing && tc.name == "missing" {
-				tc.want = 204 // migration mode serves requests without any header
-			}
-			reached = 0
-			req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
-			if tc.header != "" {
-				req.Header.Set("Authorization", tc.header)
-			}
-			w := httptest.NewRecorder()
-			h.ServeHTTP(w, req)
-			if w.Code != tc.want {
-				t.Errorf("allowMissing=%v %s: status %d want %d", allowMissing, tc.name, w.Code, tc.want)
-			}
-			if (tc.want == 401) != (reached == 0) {
-				t.Errorf("allowMissing=%v %s: handler reached %d times", allowMissing, tc.name, reached)
-			}
-			if tc.want == 401 && (!strings.Contains(w.Body.String(), "updater_unauthorized") || w.Header().Get("WWW-Authenticate") != "Bearer") {
-				t.Errorf("allowMissing=%v %s: unexpected 401 response %q", allowMissing, tc.name, w.Body.String())
-			}
+	h := RequireManagementToken(token, inner)
+	for _, tc := range []struct {
+		name, header string
+		want         int
+	}{
+		{"missing", "", 401},
+		{"wrong token", "Bearer " + other, 401},
+		{"bare token", token, 401},
+		{"wrong scheme", "Basic " + token, 401},
+		{"token prefix", "Bearer " + token[:32], 401},
+		{"token with suffix", "Bearer " + token + "x", 401},
+		{"lowercase scheme", "bearer " + token, 401},
+		{"valid", "Bearer " + token, 204},
+	} {
+		reached = 0
+		req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
+		if tc.header != "" {
+			req.Header.Set("Authorization", tc.header)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Errorf("%s: status %d want %d", tc.name, w.Code, tc.want)
+		}
+		if (tc.want == 401) != (reached == 0) {
+			t.Errorf("%s: handler reached %d times", tc.name, reached)
+		}
+		if tc.want == 401 && (!strings.Contains(w.Body.String(), "updater_unauthorized") || w.Header().Get("WWW-Authenticate") != "Bearer") {
+			t.Errorf("%s: unexpected 401 response %q", tc.name, w.Body.String())
 		}
 	}
 	// An empty token never matches, even "Bearer ".
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
 	req.Header.Set("Authorization", "Bearer ")
-	RequireManagementToken("", false, inner).ServeHTTP(w, req)
+	RequireManagementToken("", inner).ServeHTTP(w, req)
 	if w.Code != 401 {
 		t.Fatalf("empty token accepted: %d", w.Code)
 	}
@@ -80,7 +75,7 @@ func TestManagementHandlerRoutesRequireToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	blobs := &pluginblob.Service{Store: &pluginblob.Store{Dir: t.TempDir()}}
-	h := RequireManagementToken(token, false, ManagementHandler(&Store{}, blobs, nil))
+	h := RequireManagementToken(token, ManagementHandler(&Store{}, blobs, nil))
 	sum := strings.Repeat("a", 64)
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/system/upgrades"},

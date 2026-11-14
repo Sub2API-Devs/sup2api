@@ -16,12 +16,14 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -182,7 +184,7 @@ func (r *Runtime) Load(ctx context.Context, pkg *registry.Package) (*Instance, e
 	if err != nil {
 		return nil, fmt.Errorf("plugin %s@%s: %w", pkg.Key, pkg.Version, err)
 	}
-	st, err := r.loadSettings(ctx, pkg.Key)
+	st, err := r.loadSettings(ctx, pkg)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %s@%s: load settings: %w", pkg.Key, pkg.Version, err)
 	}
@@ -225,7 +227,10 @@ type resourceLimits struct {
 // ConfigAAD is the AES-GCM associated data of plugins.config_enc.
 func ConfigAAD(pluginKey string) []byte { return []byte("plugin-config:" + pluginKey) }
 
-func (r *Runtime) loadSettings(ctx context.Context, key string) (*settings, error) {
+// loadSettings reads the settings an instance of pkg runs with; its grants
+// are those of its own version (grants.Granted).
+func (r *Runtime) loadSettings(ctx context.Context, pkg *registry.Package) (*settings, error) {
+	key := pkg.Key
 	var (
 		enc    []byte
 		egress string
@@ -237,7 +242,7 @@ func (r *Runtime) loadSettings(ctx context.Context, key string) (*settings, erro
 	if err != nil {
 		return nil, err
 	}
-	st := &settings{configJSON: "{}", egress: egress, grants: registry.Grants{}}
+	st := &settings{configJSON: "{}", egress: egress}
 	if len(enc) > 0 {
 		plain, err := r.o.Cipher.Decrypt(enc, ConfigAAD(key))
 		if err != nil {
@@ -250,24 +255,11 @@ func (r *Runtime) loadSettings(ctx context.Context, key string) (*settings, erro
 	if len(limits) > 0 {
 		_ = json.Unmarshal(limits, &st.limits)
 	}
-	rows, err := r.o.DB.Pool.Query(ctx,
-		`SELECT permission, scope FROM plugin_permission_grants WHERE plugin_key = $1 AND status = 'granted'`, key)
-	if err != nil {
-		return nil, err
+	var declared []manifest.HostPermission
+	if pkg.Manifest != nil {
+		declared = pkg.Manifest.HostPermissions
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var perm string
-		var scope []byte
-		if err := rows.Scan(&perm, &scope); err != nil {
-			return nil, err
-		}
-		if len(scope) == 0 {
-			scope = []byte("{}")
-		}
-		st.grants[perm] = json.RawMessage(scope)
-	}
-	if err := rows.Err(); err != nil {
+	if st.grants, err = grants.Granted(ctx, r.o.DB.Pool, key, pkg.Version, declared); err != nil {
 		return nil, err
 	}
 	h := sha256.New()

@@ -4,7 +4,9 @@ import { i18n } from '@/i18n'
 import TwoFactorCard from './TwoFactorCard.vue'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
+const ui = vi.hoisted(() => ({ confirm: vi.fn(), toast: vi.fn() }))
 vi.mock('@sub2api/host', async (orig) => ({ ...(await orig<object>()), api }))
+vi.mock('@sub2api/ui', async (orig) => ({ ...(await orig<object>()), confirm: ui.confirm, toast: ui.toast }))
 enableAutoUnmount(afterEach)
 
 const render = () => mount(TwoFactorCard, { global: { plugins: [i18n], stubs: { teleport: true } }, attachTo: document.body })
@@ -18,9 +20,11 @@ describe('two-factor card', () => {
     i18n.global.locale.value = 'zh'
     api.get.mockReset()
     api.post.mockReset()
+    ui.confirm.mockReset().mockResolvedValue(true)
+    ui.toast.mockReset()
   })
 
-  it('enrols: the password, then a code from the new secret, then the backup codes once', async () => {
+  it('enrols: step-up by the request, then a code from the new secret, then the backup codes once', async () => {
     let enabled = false
     api.get.mockImplementation(async () => ({ enabled, backup_codes_left: enabled ? 10 : 0 }))
     api.post.mockImplementation(async (path: string) => {
@@ -32,9 +36,7 @@ describe('two-factor card', () => {
     await flushPromises()
     await w.get('[data-testid="two-factor-enable"]').trigger('click')
     await flushPromises()
-    await w.get('[data-testid="two-factor-password"] input, input[data-testid="two-factor-password"]').setValue('pw')
-    await submit(w)
-    expect(api.post).toHaveBeenCalledWith('/me/two-factor/setup', { password: 'pw' })
+    expect(api.post).toHaveBeenCalledWith('/me/two-factor/setup')
     expect(w.get('[data-testid="two-factor-secret"]').text()).toBe('SECRET')
     await w.get('[data-testid="two-factor-code"] input, input[data-testid="two-factor-code"]').setValue('123456')
     await submit(w)
@@ -55,8 +57,6 @@ describe('two-factor card', () => {
     await flushPromises()
     await w.get('[data-testid="two-factor-enable"]').trigger('click')
     await flushPromises()
-    await w.get('[data-testid="two-factor-password"] input, input[data-testid="two-factor-password"]').setValue('pw')
-    await submit(w)
     await w.get('[data-testid="two-factor-code"] input, input[data-testid="two-factor-code"]').setValue('000000')
     await submit(w)
     expect(w.find('[data-testid="two-factor-secret"]').exists()).toBe(true)
@@ -64,23 +64,52 @@ describe('two-factor card', () => {
     w.unmount()
   })
 
-  it('asks for the password and a code to turn it off', async () => {
+  it('turns it off after a confirmation, with no body: the step-up dialog verifies', async () => {
     let enabled = true
     api.get.mockImplementation(async () => ({ enabled, backup_codes_left: 3 }))
     api.post.mockImplementation(async () => {
       enabled = false
-      return {}
+      return null
     })
     const w = render()
     await flushPromises()
     await w.get('[data-testid="two-factor-disable"]').trigger('click')
     await flushPromises()
-    const inputs = w.findAll('form').at(-1)!.findAll('input')
-    await inputs[0].setValue('pw')
-    await inputs[1].setValue('123456')
-    await submit(w)
-    expect(api.post).toHaveBeenCalledWith('/me/two-factor/disable', { password: 'pw', code: '123456' })
+    expect(ui.confirm).toHaveBeenCalled()
+    expect(api.post).toHaveBeenCalledWith('/me/two-factor/disable')
     expect(w.find('[data-testid="two-factor-enable"]').exists()).toBe(true)
     w.unmount()
+  })
+
+  it('keeps it on when the confirmation is declined', async () => {
+    api.get.mockResolvedValue({ enabled: true, backup_codes_left: 3 })
+    ui.confirm.mockResolvedValueOnce(false)
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="two-factor-disable"]').trigger('click')
+    await flushPromises()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('regenerates the backup codes with no body and shows them once', async () => {
+    api.get.mockResolvedValue({ enabled: true, backup_codes_left: 3 })
+    api.post.mockResolvedValue({ backup_codes: ['NEW01-CODE1'] })
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="two-factor-regenerate"]').trigger('click')
+    await flushPromises()
+    expect(api.post).toHaveBeenCalledWith('/me/two-factor/backup-codes')
+    expect(w.get('[data-testid="two-factor-backup-codes"]').text()).toContain('NEW01-CODE1')
+  })
+
+  it('says nothing when the verification is dismissed', async () => {
+    const { ApiError, VERIFICATION_CANCELLED } = await import('@sub2api/host')
+    api.get.mockResolvedValue({ enabled: true, backup_codes_left: 3 })
+    api.post.mockRejectedValue(new ApiError(403, { code: VERIFICATION_CANCELLED, message: '' }))
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="two-factor-disable"]').trigger('click')
+    await flushPromises()
+    expect(ui.toast).not.toHaveBeenCalled()
   })
 })

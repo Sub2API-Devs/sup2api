@@ -31,9 +31,9 @@ import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue
 import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
 import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
-import { useAuthStore } from '@/stores/auth'
 import { useEnvironmentLayer, useGroupsWith, useProxiesLookup } from '@/composables/lookups'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
+import { useAccountCaps } from '@/composables/useAccountCaps'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 import { groupPolicies, policyLabel, policyOptions, policySourceHint } from '@/utils/conversion'
@@ -63,17 +63,19 @@ const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
 const { t, locale: displayLocale } = useI18n()
 const plugins = usePluginStore()
-const auth = useAuthStore()
-const own = useOwnership()
+const scope = useScope()
 
 const editing = computed(() => !!props.account?.id)
+const caps = useAccountCaps(editing)
 
 const mode = computed(() => props.accountType?.form.mode || 'schema')
-// Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
-// key or the own-level key on an account the caller created.
-const canEditAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.update))
-const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.test))
-const authOptions = computed(() => (props.accountTypeOptions || []).map(at => ({ value: at.type, label: lt(at.auth_method_label) || at.type })))
+// Row-level rights (CONTRACTS §21): editing an account needs a scope of
+// account:update that reaches it.
+const canEditAccount = computed(() => editing.value && scope.can(props.account, ACCOUNT_ACTIONS.update))
+const canTestAccount = computed(() => editing.value && scope.can(props.account, ACCOUNT_ACTIONS.test))
+const authOptions = computed(() => (props.accountTypeOptions || []).map(at => ({ value: at.type, label: lt(at.auth_method_label) || at.type, disabled: !caps.creatable(at) })))
+/** Guarded settings stay at the official values for this caller (the server enforces it). */
+const settingsGuarded = computed(() => !!props.accountType?.guarded_settings?.length && !caps.customSettings.value)
 function changeAuth(value: unknown) {
   const at = props.accountTypeOptions?.find(at => at.type === value)
   if (!editing.value && at && at.type !== props.accountType?.type) emit('change-type', at)
@@ -348,10 +350,15 @@ const environmentStatus = computed(() => {
 type ProxyMode = 'existing' | 'url'
 const proxyMode = ref<ProxyMode>('existing')
 const proxyUrl = ref('')
+// Pasting a URL may create a proxy: only with a proxy management key.
 const proxyModeOptions = computed(() => [
   { value: 'existing', label: t('accounts.proxyPickExisting') },
-  { value: 'url', label: t('accounts.proxyPasteUrl') }
+  ...(caps.proxyByURL.value ? [{ value: 'url', label: t('accounts.proxyPasteUrl') }] : [])
 ])
+// The paste option withdrawn (permissions reloaded): back to picking one.
+watch(caps.proxyByURL, (ok) => {
+  if (!ok && proxyMode.value === 'url') setProxyMode('existing')
+})
 /** The proxy_url that will be sent, or '' (existing mode / empty input). */
 const proxyUrlToSend = computed(() => (proxyMode.value === 'url' ? proxyUrl.value.trim() : ''))
 const proxyError = computed(() => (proxyMode.value === 'url' ? errors.value.proxy_url : errors.value.proxy_id))
@@ -436,7 +443,7 @@ async function probeProxyUrl() {
 const fetchOpen = ref(false)
 const fetching = ref(false)
 const fetched = ref<{ models: string[]; skipped: number }>({ models: [], skipped: 0 })
-const canFetch = computed(() => !!props.accountType && !props.account?.orphaned && (editing.value ? canTestAccount.value : auth.has([...ACCOUNT_KEYS.create])))
+const canFetch = computed(() => !!props.accountType && !props.account?.orphaned && (editing.value ? canTestAccount.value : caps.scope.value !== null && caps.creatable(props.accountType)))
 
 /** Server field errors of the credentials: on the plugin form (and its iframe). */
 function showCredentialErrors(cred: Record<string, string>) {
@@ -508,11 +515,11 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   applyValues(a ? savedAccountValues(a, coreValues()) : newAccountValues(at, coreValues(), ownCaller()))
 }
 
-/** Whether the caller creates own-level accounts (capped scheduling, CONTRACTS §15.9). */
-const ownCaller = () => own.scopeOf(ACCOUNT_KEYS.create) === 'own'
+/** Whether the caller creates accounts at a restricted scope (capped scheduling, CONTRACTS §15.9). */
+const ownCaller = () => scope.level(ACCOUNT_ACTIONS.create) === 'own'
 /** The core's values of the controls (before the plugin's defaults). */
 const coreValues = (): ControlValues => ({
-  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create)), schedulable: true, auto_disable: true,
+  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(scope.level(ACCOUNT_ACTIONS.create)), schedulable: true, auto_disable: true,
   rpm_limit: 0, tpm_limit: 0, spm_limit: 0, spm_window_seconds: SPM_WINDOW_DEFAULT, environment: {}, header_passthrough: [], param_override: null, model_limits: []
 })
 /** Controls kept outside `basic`. */
@@ -651,13 +658,13 @@ const { save } = useAccountSave({
               <SField :label="t('common.name')" :error="errors.name" required>
                 <SInput v-model="basic.name" :maxlength="100" :placeholder="t('accounts.editorUi.namePlaceholder')" />
               </SField>
-              <SField :label="t('accounts.groups')" :error="errors.group_ids" :hint="basic.group_ids.length ? '' : t('accounts.editorUi.groupsHint')">
-                <GroupPicker :model-value="basic.group_ids" multiple @update:model-value="basic.group_ids = $event as number[]" />
+              <SField :label="t('accounts.groups')" :error="errors.group_ids" :hint="!caps.bindGroups.value ? t('accounts.groupsLocked') : basic.group_ids.length ? '' : t('accounts.editorUi.groupsHint')">
+                <GroupPicker :model-value="basic.group_ids" multiple :disabled="!caps.bindGroups.value" @update:model-value="basic.group_ids = $event as number[]" />
               </SField>
               <div ref="proxyFieldEl" class="md:col-span-2" data-testid="proxy-field">
                 <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                   <span class="text-sm font-medium text-fg">{{ t('accounts.proxy') }}<span v-if="controls.proxy.required" class="ml-0.5 text-red-500" aria-hidden="true">*</span></span>
-                  <SSegmented :model-value="proxyMode" :options="proxyModeOptions" size="sm" :aria-label="t('accounts.proxy')" data-testid="proxy-mode" @update:model-value="setProxyMode(String($event))" />
+                  <SSegmented v-if="proxyModeOptions.length > 1" :model-value="proxyMode" :options="proxyModeOptions" size="sm" :aria-label="t('accounts.proxy')" data-testid="proxy-mode" @update:model-value="setProxyMode(String($event))" />
                 </div>
                 <SField :error="proxyError">
                   <ProxyPicker v-if="proxyMode === 'existing'" :model-value="basic.proxy_id" @update:model-value="setProxy" />
@@ -713,6 +720,7 @@ const { save } = useAccountSave({
               <SChoiceCards :model-value="accountType?.type" :options="authOptions" :cols="2" :disabled="saving" data-testid="auth-method" @update:model-value="changeAuth" />
             </SField>
 
+            <SHint v-if="settingsGuarded" size="xs" class="mb-3" data-testid="guarded-settings-hint">{{ t('accounts.guardedSettingsHint') }}</SHint>
             <SAlert v-if="account?.orphaned || !accountType" tone="warning">{{ t('accounts.orphanedEdit') }}</SAlert>
             <template v-else-if="mode === 'schema'">
               <SSpinner v-if="formLoading" block />

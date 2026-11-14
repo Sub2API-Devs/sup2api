@@ -45,6 +45,18 @@ type FakeHost struct {
 	SchemaValue string
 	// Authz decides AuthzCheck; nil allows everything.
 	Authz func(userID int64, permission string) bool
+	// AccountScope decides AccountScopeCheck: whether the user reaches every
+	// account for the action, or else which of ids are within their scope;
+	// an error is returned as is (status.Error(codes.PermissionDenied, ...)
+	// for a user holding the action at no scope). nil answers that the user
+	// reaches all, so a test of a route that acts on accounts should set it
+	// to cover a narrower scope and its 404. The arguments are checked as the core checks them
+	// (known action, positive ids, batch size) before it is called. As on
+	// the host, the call is PERMISSION_DENIED unless the user is the caller
+	// of a request in flight: Harness.Do and DoAs see to that, a test that
+	// calls a handler by itself uses Serve. The fake has no grants, so the
+	// "accounts.read" grant the host also asks for is not simulated.
+	AccountScope func(userID int64, action string, ids []int64) (all bool, allowed []int64, err error)
 	// DialFunc is used by EgressService.Dial (default net.Dialer).
 	DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
 	// ExecuteHTTPFunc handles scoped Poll requests. Set it before Start.
@@ -99,6 +111,7 @@ type FakeHost struct {
 	// SetKVBatchUnimplemented while the plugin runs. See KVCalls.
 	KVBatchUnimplemented bool
 
+	serving   map[int64]int // console users of the requests in flight
 	logs      []LogEntry
 	kv        map[string]kvItem
 	kvCalls   map[string]int

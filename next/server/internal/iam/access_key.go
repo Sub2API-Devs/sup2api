@@ -13,6 +13,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -42,7 +43,6 @@ type AccessKey struct {
 // CreateAccessKeyInput is the body of POST /me/access-keys.
 type CreateAccessKeyInput struct {
 	Name        string     `json:"name"`
-	Password    string     `json:"password"`
 	Permissions []string   `json:"permissions"`
 	ExpiresAt   *time.Time `json:"expires_at"`
 }
@@ -50,7 +50,6 @@ type CreateAccessKeyInput struct {
 // UpdateAccessKeyInput is the body of PATCH /me/access-keys/:id.
 type UpdateAccessKeyInput struct {
 	Name        *string  `json:"name"`
-	Password    string   `json:"password"`
 	Permissions []string `json:"permissions"`
 }
 
@@ -63,9 +62,9 @@ func normalizeAccessKeyName(name string) (string, error) {
 }
 
 // grantablePermissions checks a key's permissions against what the user holds
-// right now, the rule of §80: a key is a subset of its user. It returns them
-// sorted without duplicates. A superuser may choose any active permission.
-// Plugin permissions are not offered: plugin routes do not take access keys.
+// right now, the rule of §80: a key is a subset of its user, scope by scope.
+// It returns them canonical, sorted, without duplicates. A superuser may
+// choose any active permission.
 func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted []string) ([]string, error) {
 	if len(wanted) == 0 {
 		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "required", Message: "choose at least one permission"})
@@ -78,23 +77,28 @@ func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted
 	if err != nil {
 		return nil, err
 	}
-	known := make(map[string]struct{}, len(active))
-	for _, k := range active {
-		known[k] = struct{}{}
-	}
-	out := slices.Clone(wanted)
-	slices.Sort(out)
-	out = slices.Compact(out)
-	var denied []string
-	for _, p := range out {
-		if _, ok := known[p]; !ok || !set.Has(p) || strings.HasPrefix(p, "plugin.") {
-			denied = append(denied, p)
+	var invalid, missing []string
+	for _, k := range wanted {
+		if _, err := perm.Parse(k); err != nil {
+			invalid = append(invalid, k)
 		}
 	}
-	if len(denied) > 0 {
+	if len(invalid) > 0 {
+		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "invalid", Message: "invalid permission keys: " + strings.Join(invalid, ", ")})
+	}
+	// Canonical keys, each implied by the user's (CONTRACTS §21: a key's
+	// scope never reaches beyond its user's).
+	out := perm.CanonicalSet(wanted)
+	for _, k := range out {
+		p, _ := perm.Parse(k)
+		if !slices.Contains(active, string(p.Action)) || !set.Has(k) {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
 		return nil, core.ErrPermissionDenied.WithMessage(t(ctx,
 			"an access key can only have permissions you hold",
-			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": denied})
+			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": missing})
 	}
 	return out, nil
 }
@@ -119,8 +123,7 @@ const accessKeyColumns = `id, name, token_hint, permissions, expires_at, last_us
 
 func scanAccessKey(row pgx.Row) (*AccessKey, error) {
 	k := &AccessKey{}
-	err := row.Scan(&k.ID, &k.Name, &k.Hint, &k.Permissions, &k.ExpiresAt, &k.LastUsedAt, &k.LastUsedIP, &k.CreatedAt)
-	return k, err
+	return k, row.Scan(&k.ID, &k.Name, &k.Hint, &k.Permissions, &k.ExpiresAt, &k.LastUsedAt, &k.LastUsedIP, &k.CreatedAt)
 }
 
 // AccessKeys lists the user's keys.
@@ -144,18 +147,15 @@ func (s *Service) AccessKeys(ctx context.Context, userID int64) ([]*AccessKey, e
 	return out, s.lostPermissions(ctx, userID, out)
 }
 
-// CreateAccessKey checks the password and the permissions and creates a key.
-// The secret appears only in this result.
-func (s *Service) CreateAccessKey(ctx context.Context, userID int64, in CreateAccessKeyInput, ip string) (*AccessKey, error) {
+// CreateAccessKey checks the permissions and creates a key (the route takes
+// a self.access_key.write step-up). The secret appears only in this result.
+func (s *Service) CreateAccessKey(ctx context.Context, userID int64, in CreateAccessKeyInput) (*AccessKey, error) {
 	name, err := normalizeAccessKeyName(in.Name)
 	if err != nil {
 		return nil, err
 	}
 	if in.ExpiresAt != nil && in.ExpiresAt.Before(time.Now().Add(accessKeyMinLifetime)) {
 		return nil, core.InvalidFields(core.FieldError{Field: "expires_at", Code: "too_soon", Message: "at least one hour from now"})
-	}
-	if _, err := s.confirmPassword(ctx, userID, in.Password, ip); err != nil {
-		return nil, err
 	}
 	perms, err := s.grantablePermissions(ctx, userID, in.Permissions)
 	if err != nil {
@@ -194,9 +194,9 @@ func (s *Service) CreateAccessKey(ctx context.Context, userID int64, in CreateAc
 	return key, nil
 }
 
-// UpdateAccessKey renames a key or replaces its permissions. Replacing them
-// asks for the password, as creating a key does.
-func (s *Service) UpdateAccessKey(ctx context.Context, userID, id int64, in UpdateAccessKeyInput, ip string) (*AccessKey, error) {
+// UpdateAccessKey renames a key or replaces its permissions (the route
+// takes a self.access_key.write step-up, as creating a key does).
+func (s *Service) UpdateAccessKey(ctx context.Context, userID, id int64, in UpdateAccessKeyInput) (*AccessKey, error) {
 	var name *string
 	if in.Name != nil {
 		v, err := normalizeAccessKeyName(*in.Name)
@@ -207,9 +207,6 @@ func (s *Service) UpdateAccessKey(ctx context.Context, userID, id int64, in Upda
 	}
 	var perms []string
 	if in.Permissions != nil {
-		if _, err := s.confirmPassword(ctx, userID, in.Password, ip); err != nil {
-			return nil, err
-		}
 		var err error
 		if perms, err = s.grantablePermissions(ctx, userID, in.Permissions); err != nil {
 			return nil, err
@@ -249,8 +246,9 @@ func (s *Service) DeleteAccessKey(ctx context.Context, userID, id int64) error {
 	})
 }
 
-// AccessKeyPermissions is the catalog a user chooses from: the core modules of
-// the permissions they hold, with only those.
+// AccessKeyPermissions is the catalog a user chooses from: the self module,
+// which every user holds, then the active core and plugin modules of the
+// permissions they hold, with only those.
 func (s *Service) AccessKeyPermissions(ctx context.Context, userID int64) ([]*authz.PermissionModule, error) {
 	set, err := s.authz.PermissionSet(ctx, userID)
 	if err != nil {
@@ -260,15 +258,17 @@ func (s *Service) AccessKeyPermissions(ctx context.Context, userID int64) ([]*au
 	if err != nil {
 		return nil, err
 	}
-	out := []*authz.PermissionModule{}
+	out := []*authz.PermissionModule{authz.SelfPermissionModule()}
 	for _, m := range modules {
 		kept := m.Permissions[:0:0]
 		for _, p := range m.Permissions {
-			if (p.Status == "active" || p.Status == "") && set.Has(p.Key) {
+			// Offered when the user holds the action with any scope; the
+			// key's scope must then be within the user's (grantablePermissions).
+			if (p.Status == "active" || p.Status == "") && set.HasAction(perm.Key(p.Key)) {
 				kept = append(kept, p)
 			}
 		}
-		if len(kept) > 0 && m.Source != "plugin" && (m.Status == "active" || m.Status == "") {
+		if len(kept) > 0 && (m.Status == "active" || m.Status == "") {
 			m.Permissions = kept
 			out = append(out, m)
 		}
@@ -293,7 +293,7 @@ func (s *Service) VerifyAccessKey(ctx context.Context, raw, ip string) (core.Acc
 	if expiresAt != nil && !expiresAt.After(time.Now()) {
 		return id, core.ErrUnauthenticated.WithMessage("access key has expired")
 	}
-	active, _, err := s.isActiveWithVersion(ctx, id.UserID)
+	active, _, err := s.isActiveWithVersion(ctx, id.UserID, 0)
 	if err != nil {
 		return id, err
 	}

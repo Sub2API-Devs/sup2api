@@ -5,6 +5,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -24,6 +25,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -101,19 +103,20 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 	}
 }
 
-// RegisterRoutes mounts the proxy endpoints. Every route accepts the "all"
-// key or its "own" counterpart (CONTRACTS §21.2); handlers narrow their SQL
-// with core.OwnerScope.
+// RegisterRoutes mounts the proxy endpoints. Every route accepts any scope of
+// its action (CONTRACTS §21.0); handlers narrow their SQL with the caller's
+// scope (scopeOf).
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
-	r.PermAny("POST", "/proxies", s.create, "proxy:manage", "proxy:own:manage")
-	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")
-	r.PermAny("GET", "/proxies/:id/location", s.location, "proxy:read", "proxy:own:read")
-	r.PermAny("PATCH", "/proxies/:id", s.update, "proxy:manage", "proxy:own:manage")
-	r.PermAny("DELETE", "/proxies/:id", s.delete, "proxy:manage", "proxy:own:manage")
-	r.PermAny("POST", "/proxies/:id/test", s.test, "proxy:manage", "proxy:own:manage")
-	r.PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, "proxy:manage", "proxy:own:manage")
-	r.PermAny("POST", "/proxies/probe", s.probeURL, "proxy:manage", "proxy:own:manage")
+	r.PermScoped("GET", "/proxies", s.list, perm.ProxyRead)
+	r.PermScoped("POST", "/proxies", s.create, perm.ProxyManage)
+	r.PermScoped("GET", "/proxies/:id", s.get, perm.ProxyRead)
+	r.PermScoped("GET", "/proxies/:id/location", s.location, perm.ProxyRead)
+	r.PermScoped("PATCH", "/proxies/:id", s.update, perm.ProxyManage)
+	r.PermScoped("DELETE", "/proxies/:id", s.delete, perm.ProxyManage)
+	r.PermScoped("POST", "/proxies/:id/test", s.test, perm.ProxyManage)
+	// The URL carries the plain-text password: a step-up proof each time (CONTRACTS §80.2).
+	r.StepUp(core.StepUpProxyReveal).PermScoped("POST", "/proxies/:id/reveal-url", s.revealURL, perm.ProxyManage)
+	r.PermScoped("POST", "/proxies/probe", s.probeURL, perm.ProxyManage)
 }
 
 // changeMsg is published on config:changed when a proxy changes.
@@ -163,9 +166,12 @@ func (s *Service) changed(ctx context.Context, id int64) {
 
 // ---------------------------------------------------------------- directory
 
-// newTransport builds an upstream transport for the given proxy URL.
-func newTransport(proxyURL *url.URL) *http.Transport {
-	dialer := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+// newTransport builds an upstream transport for the given proxy URL. Unless
+// allowPrivate, the dial to the proxy (socks5 included: it goes through
+// DialContext too) is refused when the resolved address is not public, so a
+// host name pointing inside the deployment's network is caught as well.
+func newTransport(proxyURL *url.URL, allowPrivate bool) *http.Transport {
+	dialer := netguard.Dialer(15*time.Second, allowPrivate)
 	tr := &http.Transport{
 		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
@@ -198,17 +204,25 @@ type row struct {
 func (s *Service) proxyURL(r *row) (*url.URL, error) {
 	u := &url.URL{Scheme: r.Protocol, Host: net.JoinHostPort(r.Host, strconv.Itoa(r.Port))}
 	if r.Username != "" || len(r.PasswordEnc) > 0 {
-		pw := ""
-		if len(r.PasswordEnc) > 0 {
-			b, err := s.cipher.Decrypt(r.PasswordEnc, passwordAAD)
-			if err != nil {
-				return nil, fmt.Errorf("decrypt proxy password: %w", err)
-			}
-			pw = string(b)
+		pw, err := s.password(r)
+		if err != nil {
+			return nil, err
 		}
 		u.User = url.UserPassword(r.Username, pw)
 	}
 	return u, nil
+}
+
+// password is the stored password of r in plain text ("" when none).
+func (s *Service) password(r *row) (string, error) {
+	if len(r.PasswordEnc) == 0 {
+		return "", nil
+	}
+	b, err := s.cipher.Decrypt(r.PasswordEnc, passwordAAD)
+	if err != nil {
+		return "", fmt.Errorf("decrypt proxy password: %w", err)
+	}
+	return string(b), nil
 }
 
 func (s *Service) buildClient(r *row) (*http.Client, error) {
@@ -217,13 +231,53 @@ func (s *Service) buildClient(r *row) (*http.Client, error) {
 		return nil, err
 	}
 	// A proxy saved under the own key must not itself be a private address
-	// unless the operator had proxy:manage (CONTRACTS §21.5).
-	if !r.AllowPrivate && !s.opts.AllowPrivate {
-		if netguard.LiteralPrivate(r.Host) {
-			return nil, core.ErrUnavailable.WithMessage("proxy address is private and not allowed")
-		}
+	// unless the operator had proxy:manage (CONTRACTS §43.3): a literal
+	// address fails here, a name resolving to one fails when dialing.
+	allowPrivate := r.AllowPrivate || s.opts.AllowPrivate
+	if !allowPrivate && netguard.LiteralPrivate(r.Host) {
+		return nil, core.ErrUnavailable.WithMessage("proxy address is private and not allowed")
 	}
-	return &http.Client{Transport: newTransport(u)}, nil
+	return &http.Client{Transport: newTransport(u, allowPrivate)}, nil
+}
+
+// scopeOf is the proxies the caller reaches with action, as the route
+// (Router.PermScoped) computed it; outside such a route it reaches none.
+func (s *Service) scopeOf(ctx context.Context, action perm.Key) core.DataScope {
+	scope, _ := core.Scope(ctx, nil, action)
+	return scope
+}
+
+// canCreate fails unless scope may create proxies: every row, or own (a new
+// proxy is the caller's). proxy:manage:proxy/X reaches those proxies only.
+func canCreate(ctx context.Context, scope core.DataScope) error {
+	if scope.All || scope.Owner != 0 {
+		return nil
+	}
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"creating a proxy requires proxy:manage for every proxy or your own",
+		"新建代理需要全部或自己创建范围的 proxy:manage 权限")).
+		WithDetails(map[string]any{"permission": "proxy:manage:own"})
+}
+
+// checkPrivate decides whether a proxy at host may be written in scope: only
+// every-row proxy:manage may save a private address, and only rows it writes
+// are stored with allow_private (CONTRACTS §43.3).
+func (s *Service) checkPrivate(ctx context.Context, scope core.DataScope, host string) (allowPrivate bool, err error) {
+	if scope.Restricted() && !s.opts.AllowPrivate && netguard.LiteralPrivate(host) {
+		return false, core.ErrPermissionDenied.WithMessage(t(ctx,
+			"saving a proxy at a private address requires proxy:manage",
+			"保存私网地址代理需要 proxy:manage 权限")).
+			WithDetails(map[string]any{"permission": "proxy:manage"})
+	}
+	return !scope.Restricted(), nil
+}
+
+// privateScope is the caller's proxy:manage scope, together with
+// checkPrivate's answer for host.
+func (s *Service) privateScope(ctx context.Context, host string) (scope core.DataScope, allowPrivate bool, err error) {
+	scope = s.scopeOf(ctx, perm.ProxyManage)
+	allowPrivate, err = s.checkPrivate(ctx, scope, host)
+	return scope, allowPrivate, err
 }
 
 // HTTPClient returns the client for proxyID; nil means a direct connection.
@@ -335,17 +389,10 @@ func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "proxy not found", "代理不存在"))
 }
 
-// scoped is the ownership condition every scoped statement carries on the
-// bigint parameter param (e.g. "$2"): nil for the "all" permission (every
-// row), otherwise the caller id (rows the caller created; created_by NULL
-// never matches).
-func scoped(param string) string {
-	return "(" + param + "::bigint IS NULL OR p.created_by = " + param + ")"
-}
-
-// load returns one proxy visible in scope (nil = all); others are 404.
-func (s *Service) load(ctx context.Context, id int64, scope *int64) (*Proxy, error) {
-	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy("$3")+` WHERE p.id = $1 AND `+scoped("$2"), id, scope, core.ActivePluginKeys(s.opts.Registry)))
+// load returns one proxy in scope; others are 404.
+func (s *Service) load(ctx context.Context, id int64, scope core.DataScope) (*Proxy, error) {
+	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy("$2")+` WHERE p.id = $1 AND `+core.ProxyRows.SQL(3),
+		append([]any{id, core.ActivePluginKeys(s.opts.Registry)}, core.ProxyRows.Args(scope)...)...))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -357,31 +404,36 @@ func (s *Service) list(c *gin.Context) {
 	page, size := httpapi.Pagination(c)
 	q := strings.TrimSpace(c.Query("q"))
 	status := c.Query("status")
-	// Visible range: the caller's own rows unless proxy:read was granted;
-	// mine=true narrows to own rows either way; created_by=<id> filters
-	// within the "all" range and is ignored under the own range.
-	scope := core.OwnerScope(ctx, "proxy:read")
+	// Visible range: the caller's proxy:read scope (CONTRACTS §21.0);
+	// mine=true narrows to own rows and created_by=<id> to that creator's,
+	// both within it.
+	var creator *int64
 	if mine, _ := strconv.ParseBool(c.Query("mine")); mine {
 		uid, _ := core.UserID(ctx)
-		scope = &uid
+		creator = &uid
 	}
-	if v := c.Query("created_by"); v != "" && scope == nil {
+	if v := c.Query("created_by"); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
 			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "created_by", Code: "invalid",
 				Message: t(ctx, "created_by must be a user id", "created_by 必须是用户 ID")}))
 			return
 		}
-		scope = &id
+		if creator != nil && *creator != id {
+			id = 0 // mine and someone else: nothing
+		}
+		creator = &id
 	}
 	where := ` WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%' OR p.host ILIKE '%' || $1 || '%') AND ($2 = '' OR p.status = $2)
-		AND ` + scoped("$3")
+		AND ($3::bigint IS NULL OR p.created_by = $3) AND ` + core.ProxyRows.SQL(4)
+	args := append([]any{q, status, creator}, core.ProxyRows.Args(s.scopeOf(ctx, perm.ProxyRead))...)
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies p`+where, q, status, scope).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies p`+where, args...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, selectProxy("$6")+where+` ORDER BY p.id LIMIT $4 OFFSET $5`, q, status, scope, size, (page-1)*size, core.ActivePluginKeys(s.opts.Registry))
+	rows, err := s.db.Pool.Query(ctx, selectProxy("$9")+where+` ORDER BY p.id LIMIT $7 OFFSET $8`,
+		append(args, size, (page-1)*size, core.ActivePluginKeys(s.opts.Registry))...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -409,7 +461,7 @@ func (s *Service) get(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	p, err := s.load(ctx, id, core.OwnerScope(ctx, "proxy:read"))
+	p, err := s.load(ctx, id, s.scopeOf(ctx, perm.ProxyRead))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -479,6 +531,42 @@ func (in *input) validate(ctx context.Context, create bool) error {
 	return nil
 }
 
+// addressChanged reports whether the PATCH moves the proxy: a protocol, host
+// or port other than the stored one.
+func (in *input) addressChanged(cur *row) bool {
+	return differs(in.Protocol, cur.Protocol) || differs(in.Host, cur.Host) || differs(in.Port, cur.Port)
+}
+
+// connectionChanged reports whether the PATCH changes how the proxy is
+// reached: its address or its credentials. A stored password that cannot be
+// decrypted counts as different from any given one.
+func (s *Service) connectionChanged(in *input, cur *row) bool {
+	if in.addressChanged(cur) || differs(in.Username, cur.Username) {
+		return true
+	}
+	if in.Password == nil {
+		return false
+	}
+	pw, err := s.password(cur)
+	return err != nil || *in.Password != pw
+}
+
+// errInUse refuses an owner changing the connection of a proxy that accounts
+// of other users go through (details.account_count).
+var errInUse = core.NewError(http.StatusConflict, "proxy_in_use", "proxy in use")
+
+// inUseByOthers counts the live accounts on proxy id that uid did not create
+// (uid 0: every account).
+func inUseByOthers(ctx context.Context, q store.Querier, id, uid int64) (n int64, err error) {
+	err = q.QueryRow(ctx, `SELECT count(*) FROM accounts
+		WHERE proxy_id = $1 AND deleted_at IS NULL AND created_by IS DISTINCT FROM $2`, id, uid).Scan(&n)
+	return n, err
+}
+
+// differs reports whether a PATCH field is present with a value other than
+// the stored one.
+func differs[T comparable](in *T, cur T) bool { return in != nil && *in != cur }
+
 func (s *Service) encryptPassword(pw *string) ([]byte, error) {
 	if pw == nil || *pw == "" {
 		return nil, nil
@@ -536,26 +624,13 @@ func (s *Service) create(c *gin.Context) {
 	if in.Status != nil {
 		status = *in.Status
 	}
-	// Only proxy:manage (not proxy:own:manage) may save a proxy at a private
-	// address (CONTRACTS §21.5).
-	allowPriv := s.opts.AllowPrivate
-	if !allowPriv {
-		granted := httpapi.Granted(c)
-		hasManage := false
-		for _, k := range granted {
-			if k == "proxy:manage" {
-				hasManage = true
-				break
-			}
-		}
-		if !hasManage && netguard.LiteralPrivate(*in.Host) {
-			httpapi.Fail(c, core.ErrPermissionDenied.WithMessage(t(ctx,
-				"saving a proxy at a private address requires proxy:manage",
-				"保存私网地址代理需要 proxy:manage 权限")).
-				WithDetails(map[string]any{"permission": "proxy:manage"}))
-			return
-		}
-		allowPriv = hasManage
+	scope, allowPriv, err := s.privateScope(ctx, *in.Host)
+	if err == nil {
+		err = canCreate(ctx, scope)
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
 	uid, _ := core.UserID(ctx)
 	var id int64
@@ -573,7 +648,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	p, err := s.load(ctx, id, nil)
+	p, err := s.load(ctx, id, core.AllScope)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -600,10 +675,60 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	scope := core.OwnerScope(ctx, "proxy:manage")
+	scope := s.scopeOf(ctx, perm.ProxyManage)
 	uid, _ := core.UserID(ctx)
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE proxies p SET
+		// Visibility first (404 outside the caller's range); the lock keeps
+		// what the checks below read true until the commit.
+		var cur row
+		err := tx.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
+			WHERE p.id = $1 AND `+core.ProxyRows.SQL(2)+` FOR UPDATE`, append([]any{id}, core.ProxyRows.Args(scope)...)...).
+			Scan(&cur.Protocol, &cur.Host, &cur.Port, &cur.Username, &cur.PasswordEnc)
+		if store.IsNoRows(err) {
+			return notFound(ctx)
+		}
+		if err != nil {
+			return err
+		}
+		// A host spelled in another case is the stored host: not written, so
+		// "unchanged" below means exactly that.
+		if in.Host != nil && strings.EqualFold(*in.Host, cur.Host) {
+			in.Host = nil
+		}
+		// A new address (protocol, host or port) is judged like a new proxy.
+		// allow_private follows whoever set the host last, and an owner's
+		// address edit clears it; proxy:manage moving only the port or
+		// protocol keeps it (CONTRACTS §43.3). The console sends every
+		// field, so only a value that differs counts.
+		var allowPriv *bool
+		if in.addressChanged(&cur) {
+			host := cur.Host
+			if in.Host != nil {
+				host = *in.Host
+			}
+			allow, err := s.checkPrivate(ctx, scope, host)
+			if err != nil {
+				return err
+			}
+			if in.Host != nil || scope.Restricted() {
+				allowPriv = &allow
+			}
+		}
+		// Accounts of other users go through this proxy too: where they
+		// connect is not the owner's to change (the full key may).
+		if scope.Restricted() && s.connectionChanged(&in, &cur) {
+			n, err := inUseByOthers(ctx, tx, id, uid)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return errInUse.WithMessage(t(ctx,
+					"accounts of other users use this proxy; its connection settings can only be changed with proxy:manage",
+					"该代理正被其他用户的账号使用，连接设置只能由持有 proxy:manage 的人修改")).
+					WithDetails(map[string]any{"account_count": n})
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE proxies SET
 			name = COALESCE($2, name),
 			protocol = COALESCE($3, protocol),
 			host = COALESCE($4, host),
@@ -611,14 +736,11 @@ func (s *Service) update(c *gin.Context) {
 			username = COALESCE($6, username),
 			password_enc = CASE WHEN $7 THEN $8 ELSE password_enc END,
 			status = COALESCE($9, status),
+			allow_private = COALESCE($10, allow_private),
 			updated_at = clock_timestamp()
-			WHERE p.id = $1 AND `+scoped("$10"),
-			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, scope)
-		if err != nil {
+			WHERE id = $1`,
+			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, allowPriv); err != nil {
 			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return notFound(ctx)
 		}
 		if err := s.notifyAccountProxyChange(ctx, tx, id, "proxy"); err != nil {
 			return err
@@ -645,21 +767,24 @@ func (s *Service) delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	scope := core.OwnerScope(ctx, "proxy:manage")
+	scope := s.scopeOf(ctx, perm.ProxyManage)
 	uid, _ := core.UserID(ctx)
+	var authzVersion int64
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// Visibility first: a proxy outside the caller's range is 404 even
 		// when it is in use.
 		var name string
-		err := tx.QueryRow(ctx, `SELECT p.name FROM proxies p WHERE p.id = $1 AND `+scoped("$2")+` FOR UPDATE`, id, scope).Scan(&name)
+		err := tx.QueryRow(ctx, `SELECT p.name FROM proxies p WHERE p.id = $1 AND `+core.ProxyRows.SQL(2)+` FOR UPDATE`,
+			append([]any{id}, core.ProxyRows.Args(scope)...)...).Scan(&name)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
 		if err != nil {
 			return err
 		}
-		var n int64
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM accounts WHERE proxy_id = $1 AND deleted_at IS NULL`, id).Scan(&n); err != nil {
+		// No user has id 0: every account counts.
+		n, err := inUseByOthers(ctx, tx, id, 0)
+		if err != nil {
 			return err
 		}
 		if n > 0 {
@@ -671,12 +796,16 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM proxies WHERE id = $1`, id); err != nil {
 			return err
 		}
+		if authzVersion, err = core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefProxy, []int64{id}); err != nil {
+			return err
+		}
 		return audit.Audit(ctx, tx, uid, "proxy.delete", "proxy", strconv.FormatInt(id, 10), map[string]any{"name": name})
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	core.AnnounceAuthzChanged(ctx, s.bus, authzVersion)
 	s.changed(ctx, id)
 	httpapi.NoContent(c)
 }
@@ -693,7 +822,7 @@ func (s *Service) revealURL(c *gin.Context) {
 	}
 	var r row
 	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
-		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
+		WHERE p.id = $1 AND `+core.ProxyRows.SQL(2), append([]any{id}, core.ProxyRows.Args(s.scopeOf(ctx, perm.ProxyManage))...)...).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))
@@ -733,7 +862,7 @@ func (s *Service) test(c *gin.Context) {
 	}
 	var r row
 	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc, p.allow_private FROM proxies p
-		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
+		WHERE p.id = $1 AND `+core.ProxyRows.SQL(2), append([]any{id}, core.ProxyRows.Args(s.scopeOf(ctx, perm.ProxyManage))...)...).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc, &r.AllowPrivate)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))
@@ -831,6 +960,10 @@ func (s *Service) probe(ctx context.Context, client *http.Client) TestResult {
 	start := time.Now()
 	resp, err := client.Do(req)
 	latency := time.Since(start).Milliseconds()
+	if errors.Is(err, netguard.ErrPrivate) {
+		// The refused address is what the name resolved to: not echoed.
+		return TestResult{LatencyMs: latency, Message: "proxy address is private and not allowed"}
+	}
 	if err != nil {
 		return TestResult{LatencyMs: latency, Message: err.Error()}
 	}

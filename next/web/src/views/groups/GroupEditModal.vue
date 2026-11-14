@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import { policyOptions } from '@/utils/conversion'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import { markUnsaved, useTabbedSave, type SaveStep } from '@/composables/useTabbedSave'
 import type { DraftedSetting } from '@/components/pricing/accessRateDrafts'
 import { validRate } from '@/components/pricing/pricingFormat'
@@ -36,7 +36,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 // Account membership is stored on accounts, so editing it needs account rights
 // (all-level or own-level, CONTRACTS §21; the editor disables rows the caller cannot edit).
-const canEditAccounts = computed(() => auth.has([...ACCOUNT_KEYS.read]) && auth.has([...ACCOUNT_KEYS.update]))
+const canEditAccounts = computed(() => auth.hasAction(ACCOUNT_ACTIONS.read) && auth.hasAction(ACCOUNT_ACTIONS.update))
 // A saved group answers with its own user groups (group:read); one not created yet has to list
 // them all (GET /segments), which takes segment:read. Without it they are set once the group is saved.
 const canSetSegments = computed(() => props.group !== null || auth.has('segment:read'))

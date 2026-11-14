@@ -15,7 +15,12 @@ import { setResetCount } from './resetCount'
 const props = defineProps<{ account: { id: number; name?: string; quota?: QuotaLike | null } }>()
 const host = useCodexHost()
 const t = host.t
-const canUse = computed(() => host.can('codex:reset'))
+// POST /reset-credits/list and /consume act on the account (RouteAccounts
+// update): without account:update at any scope both are refused, so the tab
+// says so instead of failing to load. An account outside the scope still
+// gets the core's 404.
+const mayUpdate = host.permissions.hasAction?.('account:update') === true
+const canUse = computed(() => mayUpdate && host.can('codex:reset'))
 
 /** Refusals that spent nothing: shown as a warning with the plugin's message. */
 const REFUSALS = new Set(['nothing_to_reset', 'no_credit'])
@@ -41,6 +46,7 @@ const usage = computed(() => usageWindows(quota.value))
 const full = computed(() => anyFull(usage.value))
 
 async function load() {
+  if (!mayUpdate) return
   const id = props.account.id
   loading.value = true
   error.value = ''
@@ -133,9 +139,10 @@ watch(
     <SHint size="xs">{{ t('reset.hint') }}</SHint>
     <SAlert v-if="full && count" tone="warning" dense>{{ t('reset.fullHint') }}</SAlert>
     <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
+    <SAlert v-if="!mayUpdate" tone="info" dense data-testid="codex-reset-needs-update">{{ t('reset.needsUpdate') }}</SAlert>
 
     <SSkeleton v-if="loading && !data" :lines="3" height="2.5rem" />
-    <SEmpty v-else-if="!listed.length && !error" size="sm" icon="inbox" :title="t('reset.emptyTitle')" :text="t('reset.emptyText')" />
+    <SEmpty v-else-if="mayUpdate && !listed.length && !error" size="sm" icon="inbox" :title="t('reset.emptyTitle')" :text="t('reset.emptyText')" />
     <ul v-else-if="listed.length" class="cx-reset-list">
       <li
         v-for="c in listed"

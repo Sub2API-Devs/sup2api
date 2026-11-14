@@ -1,12 +1,12 @@
 import { api } from '@sub2api/host'
 import type { Account, AccountRateModels, ModelLimit } from '@/api/types'
-import type { OwnerScope } from '@/composables/useOwnership'
+import type { ScopeLevel } from '@/composables/useScope'
 import { todayQuery } from './accountUsage'
 import { usageLevel, type UsageLevel } from './usageLevel'
 import { windowOf } from './spmWindow'
 
-/** Max concurrency of a new account: unlimited, or 10 for an own-level caller, who may only set 1–1000 (as the server, CONTRACTS §15.9). */
-export const newAccountConcurrency = (scope: OwnerScope) => (scope === 'own' ? 10 : 0)
+/** Max concurrency of a new account: unlimited, or 10 for a restricted caller, who may only set 1–1000 (as the server, CONTRACTS §15.9). */
+export const newAccountConcurrency = (scope: ScopeLevel) => (scope === 'own' ? 10 : 0)
 
 /** One figure of an account's limits: what is used now and the cap (0 = none). */
 export interface LimitFigure {

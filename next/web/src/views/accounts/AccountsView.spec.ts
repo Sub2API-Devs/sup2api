@@ -16,15 +16,15 @@ import type { PluginAccountActionEntry, SlotEntry } from '@/stores/plugins'
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), pluginFacts: vi.fn((): { key: string; label: string; value: string }[] => []), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[], groups: [] as { id: number; name: string; platforms?: string[] }[] }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), pluginFacts: vi.fn((): { key: string; label: string; value: string }[] => []), canUpdate: true, scope: 'all' as 'all' | 'own', slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[], groups: [] as { id: number; name: string; platforms?: string[] }[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false, hasAction: () => false }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: mocks.slotEntries, get accountActions() { return mocks.accountActions }, plugin: () => undefined, component: () => undefined }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref(mocks.groups) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
-vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => 'all', can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
+vi.mock('@/composables/useScope', async (original) => ({ ...await original<typeof import('@/composables/useScope')>(), useScope: () => ({ level: () => mocks.scope, can: (_a: Account, action: string) => action === 'account:update' && mocks.canUpdate }) }))
 vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => mocks.pluginFacts(), pluginName: (key: string) => key, typeLabel: (_key: string, type: string) => type }) }))
 vi.mock('@/composables/useList', async (original) => ({ ...await original<object>(), useList: () => list }))
 
@@ -196,6 +196,34 @@ describe('account status recovery', () => {
     expect(toggle.attributes('disabled')).toBeDefined()
     await flip(toggle)
     expect(mocks.patch).not.toHaveBeenCalled()
+  })
+
+  it('does not let an own-level caller enable or reset an account an administrator disabled', async () => {
+    Object.assign(list.items.value[0], { status: 'disabled', schedulable: false, admin_locked: true })
+    mocks.scope = 'own'
+    try {
+      const wrapper = renderRow()
+      const toggle = wrapper.get('[data-testid="account-enable-toggle"]')
+      expect(toggle.text()).toBe('启用')
+      expect(toggle.attributes('disabled')).toBeDefined()
+      expect(toggle.attributes('title')).toBe('已被管理员禁用，只有管理员可以重新启用')
+      await flip(toggle)
+      expect(mocks.patch).not.toHaveBeenCalled()
+      // A stale lock on an account the gateway disabled since holds nothing back, as on the server: the
+      // reset link is offered.
+      list.items.value[0].status = 'error'
+      await flushPromises()
+      expect(wrapper.find('[data-testid="account-reset-status"]').exists()).toBe(true)
+
+      // The full scope enables it as any other account.
+      mocks.scope = 'all'
+      list.items.value[0].status = 'disabled'
+      const admin = renderRow().get('[data-testid="account-enable-toggle"]')
+      expect(admin.attributes('disabled')).toBeUndefined()
+      expect(admin.attributes('title')).toBe('启用账号')
+    } finally {
+      mocks.scope = 'all'
+    }
   })
 
   it.each(['auto_disabled', 'error'])('offers a direct reset for %s without a cooldown', (status) => {

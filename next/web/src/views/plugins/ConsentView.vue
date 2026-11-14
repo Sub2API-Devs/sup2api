@@ -2,9 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
+import { api, isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
-import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
+import type { HostPermissionReview, PluginReview, PluginRoleGrant, ReviewDiffItem } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -17,7 +17,9 @@ import HostPermissionTable from './consent/HostPermissionTable.vue'
 import type { HPRow } from './consent/hostPermission'
 import { useConsentLabels } from './consent/hostPermission'
 import { useOptionalT } from '@/composables/optionalText'
-import { fetchFirstPage } from '@/composables/lookups'
+import { useNewPermissionRoles } from './consent/newPermissionRoles'
+import NewRoleGrants from './consent/NewRoleGrants.vue'
+import { P } from '@/generated/permissions'
 
 const { t } = useI18n()
 const tr = useOptionalT()
@@ -31,39 +33,52 @@ const version = computed(() => String(route.params.version))
 const review = ref<PluginReview | null>(null)
 const loading = ref(true)
 const loadError = ref('')
+/** The version's package is no longer on any node (410 package_gone): nothing to review or approve. */
+const packageGone = ref(false)
 const fromCache = ref(false)
 const submitting = ref(false)
 const rejecting = ref(false)
 const showMissing = ref(false)
 
 const checked = reactive<Record<string, boolean>>({})
-const roles = ref<Role[]>([])
-const roleKeys = ref<string[]>([])
+const permissionRoles = useNewPermissionRoles(review)
+/** The default grants, less those of permissions given other roles here (their choice is shown with them). */
+const shownRoleGrants = computed(() => {
+  const changed = new Set(Object.keys(permissionRoles.payload()).map((k) => `plugin.${key.value}:${k}`))
+  return asArray<PluginRoleGrant>(review.value?.new_role_grants).filter((g) => g.via !== 'default' || !changed.has(g.permission))
+})
 
-function requiredPermOf(hp: HostPermissionReview, risk: Risk): string | null {
+/** Granting db.schema to this plugin takes the override as well (review.needs_db_schema_unconfined). */
+const DB_SCHEMA = 'db.schema'
+const DB_SCHEMA_UNCONFINED = P.PluginGrantDbSchemaUnconfined
+
+function riskPermOf(hp: HostPermissionReview, risk: Risk): string | null {
   if (hp.requires) return hp.requires
-  if (risk === 'critical') return 'plugin:grant:critical'
-  if (risk === 'high') return 'plugin:grant:high'
+  if (risk === 'critical') return P.PluginGrantCritical
+  if (risk === 'high') return P.PluginGrantHigh
   return null
+}
+
+/** The console permissions granting `hp` takes; the first one the caller lacks is shown. */
+function requiredPermsOf(hp: HostPermissionReview, risk: Risk): string[] {
+  const out = [riskPermOf(hp, risk), hp.id === DB_SCHEMA && review.value?.needs_db_schema_unconfined ? DB_SCHEMA_UNCONFINED : null]
+  return out.filter((p): p is string => !!p)
 }
 
 const rows = computed<HPRow[]>(() => {
   const r = review.value
   if (!r) return []
-  const added = new Set(r.diff?.added || [])
-  const widened = new Set(r.diff?.widened || [])
+  const added = new Set(asArray<ReviewDiffItem>(r.diff?.added).map((d) => d.id))
+  const widened = new Set(asArray<ReviewDiffItem>(r.diff?.widened).map((d) => d.id))
   return asArray<HostPermissionReview>(r.host_permissions)
     .map((hp) => {
       const risk = riskOf(hp.id, hp.risk)
-      const requiredPerm = requiredPermOf(hp, risk)
-      return {
-        ...hp,
-        risk,
-        requiredPerm,
-        allowed: !requiredPerm || auth.has(requiredPerm),
-        locked: risk === 'low',
-        diffTag: added.has(hp.id) ? ('added' as const) : widened.has(hp.id) ? ('widened' as const) : null
-      }
+      const diffTag = added.has(hp.id) ? ('added' as const) : widened.has(hp.id) ? ('widened' as const) : null
+      // The server carries over a grant that already covers the request (consent.go decide).
+      const carried = !!r.diff && hp.current_status === 'granted' && !diffTag
+      const required = requiredPermsOf(hp, risk)
+      const lacking = carried ? undefined : required.find((p) => !auth.hasDynamic(p))
+      return { ...hp, risk, requiredPerm: lacking ?? required[0] ?? null, allowed: !lacking, locked: risk === 'low', diffTag, carried }
     })
     .sort((a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || a.id.localeCompare(b.id))
 })
@@ -71,7 +86,7 @@ const rows = computed<HPRow[]>(() => {
 function initChecks() {
   for (const k of Object.keys(checked)) delete checked[k]
   for (const row of rows.value) {
-    if (row.locked) checked[row.id] = true
+    if (row.locked || row.carried) checked[row.id] = true
     else if (!row.allowed) checked[row.id] = false
     else if (row.risk === 'medium') checked[row.id] = !row.optional
     else checked[row.id] = false
@@ -86,8 +101,19 @@ function toggle(row: HPRow, v: boolean) {
 const missingRequired = computed(() => rows.value.filter((r) => !r.optional && !checked[r.id]))
 const blockedByPermission = computed(() => rows.value.filter((r) => !r.optional && !r.allowed))
 const signatureOk = computed(() => review.value?.signature_status === 'valid')
-const canSubmit = computed(() => !!review.value && review.value.host_compat_ok !== false && blockedByPermission.value.length === 0)
 const isUpgrade = computed(() => !!review.value?.diff)
+/**
+ * An upgrade's grants that need consent go only to roles the caller may name
+ * (the server's checkRolesGrantable, as confirming held-back grants): the
+ * roles of such grants it may not name. Giving a permission other roles
+ * above takes its default grants out of the list.
+ */
+const blockedRoles = computed(() =>
+  isUpgrade.value ? [...new Set(shownRoleGrants.value.filter((g) => g.needs_consent && !permissionRoles.canName(g.role)).map((g) => g.role))] : []
+)
+const canSubmit = computed(
+  () => !!review.value && review.value.host_compat_ok !== false && blockedByPermission.value.length === 0 && blockedRoles.value.length === 0
+)
 const { colon, hpLabel } = useConsentLabels()
 
 function sigLabel(s: string | undefined): string {
@@ -101,27 +127,20 @@ const capabilityIds = computed(() => capabilityIdsOf(review.value?.capabilities)
 
 // ------------------------------------------------------------------ load / submit
 
-async function loadRoles() {
-  if (!auth.has('role:read') || asArray(review.value?.user_permissions).length === 0) return
-  try {
-    const items = await fetchFirstPage<Role>('/roles')
-    roles.value = items
-    roleKeys.value = items.some((x) => x.key === 'admin') ? ['admin'] : []
-  } catch {
-    roles.value = []
-  }
-}
-
 async function load() {
   loading.value = true
   loadError.value = ''
   fromCache.value = false
+  packageGone.value = false
   try {
     review.value = await api.get<PluginReview>(
       `/plugins/${encodeURIComponent(key.value)}/versions/${encodeURIComponent(version.value)}/review`
     )
   } catch (e) {
-    const cached = getReview(key.value, version.value)
+    // The review kept from the upload would offer to approve a package that is gone.
+    packageGone.value = isApiError(e) && e.code === 'package_gone'
+    if (packageGone.value) dropReview(key.value, version.value)
+    const cached = packageGone.value ? undefined : getReview(key.value, version.value)
     if (cached) {
       review.value = cached
       fromCache.value = true
@@ -132,14 +151,7 @@ async function load() {
   } finally {
     loading.value = false
   }
-  if (review.value) {
-    initChecks()
-    loadRoles()
-  }
-}
-
-function toggleRole(k: string, v: boolean) {
-  roleKeys.value = v ? [...new Set([...roleKeys.value, k])] : roleKeys.value.filter((x) => x !== k)
+  if (review.value) initChecks()
 }
 
 async function submit() {
@@ -150,14 +162,15 @@ async function submit() {
     toast(t('plugins.consent.missingRequired', { list: missingRequired.value.map((x) => hpLabel(x.id)).join(', ') }), 'error')
     return
   }
-  const grants = rows.value.filter((x) => checked[x.id]).map((x) => (x.scope ? { permission: x.id, scope: x.scope } : { permission: x.id }))
+  // A carried grant left ticked is not sent: the server keeps it.
+  const grants = rows.value.filter((x) => checked[x.id] && !x.carried).map((x) => (x.scope ? { permission: x.id, scope: x.scope } : { permission: x.id }))
   const denied = rows.value.filter((x) => !checked[x.id]).map((x) => x.id)
   submitting.value = true
   try {
     await api.post(`/plugins/${encodeURIComponent(key.value)}/versions/${encodeURIComponent(version.value)}/consent`, {
       grants,
       denied,
-      role_keys_for_new_permissions: roleKeys.value
+      new_permission_roles: permissionRoles.payload()
     })
     dropReview(key.value, version.value)
     toast(t('plugins.consent.approved', { name: lt(r.name) || r.plugin_key, version: r.version }), 'success')
@@ -204,8 +217,8 @@ onMounted(load)
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
 
     <SCard v-else-if="!review">
-      <SEmpty icon="warning" :text="t('plugins.consent.notFound')">
-        <SHint v-if="loadError" size="xs" tone="danger">{{ loadError }}</SHint>
+      <SEmpty icon="warning" :text="packageGone ? t('plugins.consent.packageGone', { version }) : t('plugins.consent.notFound')" data-testid="consent-unavailable">
+        <SHint v-if="loadError && !packageGone" size="xs" tone="danger">{{ loadError }}</SHint>
         <SButton size="sm" @click="load">{{ t('common.refresh') }}</SButton>
       </SEmpty>
     </SCard>
@@ -252,15 +265,15 @@ onMounted(load)
         <div class="space-y-2 text-sm">
           <div v-if="review.diff.added?.length" class="flex flex-wrap items-center gap-1.5">
             <span class="w-24 shrink-0 font-medium text-red-600 dark:text-red-400">+ {{ t('plugins.consent.diffAdded') }}</span>
-            <SBadge v-for="p in review.diff.added" :key="p" tone="danger">{{ hpLabel(p) }}</SBadge>
+            <SBadge v-for="p in review.diff.added" :key="p.id" tone="danger">{{ hpLabel(p.id) }}</SBadge>
           </div>
           <div v-if="review.diff.widened?.length" class="flex flex-wrap items-center gap-1.5">
             <span class="w-24 shrink-0 font-medium text-orange-600 dark:text-orange-400">↑ {{ t('plugins.consent.diffWidened') }}</span>
-            <SBadge v-for="p in review.diff.widened" :key="p" tone="warning">{{ hpLabel(p) }}</SBadge>
+            <SBadge v-for="p in review.diff.widened" :key="p.id" tone="warning">{{ hpLabel(p.id) }}</SBadge>
           </div>
           <div v-if="review.diff.removed?.length" class="flex flex-wrap items-center gap-1.5">
             <SHint inline class="w-24 shrink-0 font-medium">− {{ t('plugins.consent.diffRemoved') }}</SHint>
-            <SBadge v-for="p in review.diff.removed" :key="p" tone="gray"><span class="line-through">{{ hpLabel(p) }}</span></SBadge>
+            <SBadge v-for="p in review.diff.removed" :key="p.id" tone="gray"><span class="line-through">{{ hpLabel(p.id) }}</span></SBadge>
           </div>
           <SHint v-if="!review.diff.added?.length && !review.diff.widened?.length && !review.diff.removed?.length">
             {{ t('plugins.consent.diffNone') }}
@@ -269,7 +282,10 @@ onMounted(load)
       </SCard>
 
       <!-- what the plugin provides -->
-      <ProvidesSummary :review="review" :roles="roles" :role-keys="roleKeys" @toggle-role="toggleRole" />
+      <ProvidesSummary :review="review" :permission-roles="permissionRoles" />
+
+      <!-- the role grants the new permissions get -->
+      <NewRoleGrants :grants="shownRoleGrants" :need-consent="!!review.role_grants_need_consent" :blocked-roles="blockedRoles" class="mt-4" />
 
       <!-- host permissions -->
       <HostPermissionTable :rows="rows" :checked="checked" :show-missing="showMissing" @toggle="toggle" />
@@ -282,6 +298,9 @@ onMounted(load)
           <p v-if="!review.host_compat_ok" class="text-red-600 dark:text-red-400">{{ t('plugins.consent.incompatibleTitle') }}</p>
           <p v-else-if="blockedByPermission.length" class="text-orange-700 dark:text-orange-300">
             {{ t('plugins.consent.blockedByPermission', { list: blockedByPermission.map((x) => hpLabel(x.id)).join(', ') }) }}
+          </p>
+          <p v-else-if="blockedRoles.length" class="text-orange-700 dark:text-orange-300" data-testid="role-grants-blocked">
+            {{ t('plugins.consent.roleGrantsBlocked') }}
           </p>
           <p v-else-if="missingRequired.length" class="text-gray-600 dark:text-gray-300">
             {{ t('plugins.consent.stillRequired', { n: missingRequired.length }) }}

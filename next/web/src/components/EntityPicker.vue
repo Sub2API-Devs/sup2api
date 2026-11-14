@@ -24,7 +24,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FIELD_KEY, SInput, SSelect, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ENTITIES, isEntityId, lookupPermissions, type EntityKind } from './entity/entities'
+import { ENTITIES, isEntityId, mayLookUp, type EntityKind } from './entity/entities'
 import { lookupEntities, lookupUnavailable, useEntityNames, type EntityItem, type LookupResult } from './entity/lookup'
 
 const props = withDefaults(
@@ -67,7 +67,7 @@ const label = computed(() => props.placeholder ?? t(entity.value.label))
 const field = inject(FIELD_KEY, null)
 const ariaLabel = computed(() => (field?.labelId.value ? undefined : label.value))
 const searchesText = computed(() => props.text !== undefined)
-const available = computed(() => auth.has(lookupPermissions(props.kind, props.mine)) && !lookupUnavailable(props.kind, props.mine))
+const available = computed(() => mayLookUp(props.kind, !!props.mine, auth) && !lookupUnavailable(props.kind, props.mine))
 const excluded = computed(() => new Set(props.exclude.map(String)))
 
 function set(id: string, text: string) {

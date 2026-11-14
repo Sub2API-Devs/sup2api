@@ -191,7 +191,8 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.az = az
 	b.settler.Authz = az
 	b.bill.Authz = az
-	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az, Cipher: b.cipher, PriceRulesChanged: b.bill.PriceRulesChanged})
+	b.bill.Users = az
+	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az, Bus: b.cl.Bus, Cipher: b.cipher, PriceRulesChanged: b.bill.PriceRulesChanged})
 	if b.managed == nil || b.managed.prepare.Bootstrap {
 		if err := b.idm.Bootstrap(b.ctx); err != nil {
 			return nil, fmt.Errorf("bootstrap admin: %w", err)
@@ -243,6 +244,7 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	// A changed subscription type recomputes automatic model lists (§59);
 	// account already imports ccgateway, so the hook is wired here.
 	b.ccg.FactsObserved = b.acc.FactsObserved
+	b.ccg.Accounts = b.acc
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).
 	b.bill.SetSyncDeps(billing.SyncDeps{Cipher: b.cipher, Keys: b.keys})
@@ -506,14 +508,14 @@ func (b *boot) startBackground() error {
 // registerRoutes mounts every module's console API and the gateway.
 func (b *boot) registerRoutes(r *httpapi.Router) {
 	cfg := b.cfg
-	r.Authed(http.MethodGet, "/system/version", systemVersionHandler(b.version, cfg.Managed.Enabled, cfg.NodeID, b.cl.Registry.BootID()))
+	r.AuthedRead("/system/version", systemVersionHandler(b.version, cfg.Managed.Enabled, cfg.NodeID, b.cl.Registry.BootID()))
 	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, cfg.Managed.UpdaterToken, b.db)
 	b.ccg.RegisterRoutes(r)
 	audit.RegisterRoutes(r, b.db)
 	b.idm.RegisterRoutes(r)
 	b.az.RegisterRoutes(r)
 	b.grp.RegisterRoutes(r)
-	segment.New(segment.Deps{DB: b.db, Authz: b.az, Platforms: b.grp.Platforms, PriceRulesChanged: b.bill.PriceRulesChanged,
+	segment.New(segment.Deps{DB: b.db, Authz: b.az, Users: b.az, Platforms: b.grp.Platforms, PriceRulesChanged: b.bill.PriceRulesChanged,
 		RuleCounts: b.grp.SegmentRuleCounts}).RegisterRoutes(r)
 	b.env.RegisterRoutes(r)
 	b.ntf.RegisterRoutes(r)
@@ -545,7 +547,8 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 		case <-wait.Done():
 		}
 	})
-	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs), routes.WithAudit(writes))
+	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs), routes.WithAudit(writes),
+		routes.WithAccountAccess(b.acc))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(b.engine)
 	b.gw.RegisterRoutes(r)
@@ -595,6 +598,9 @@ func (b *boot) startHTTP() error {
 		return err
 	}
 	b.registerRoutes(b.router)
+	if err := checkRoutes(b.router, b.az); err != nil {
+		return err
+	}
 	ui, err := webui.New(web.Dist, webui.WithSharedAssets(sharedAssets))
 	if err != nil {
 		return fmt.Errorf("console assets: %w", err)

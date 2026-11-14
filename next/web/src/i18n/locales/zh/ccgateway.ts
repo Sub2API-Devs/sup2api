@@ -152,7 +152,7 @@ export default {
     codeLabel: '完整授权码（code#state）', codePlaceholder: '粘贴形如 xxxx#yyyy 的授权码', codeShape: '授权码通常包含 #（code#state），请确认已完整复制。', submit: '完成授权',
     completeFailed: '授权码未被接受', notConfirmed: '授权码已提交，但容器尚未确认登录；请稍后重试或重新获取链接。', regetLink: '重新获取链接', cancel: '取消本次授权',
     authorized: '凭据已保存', loggedOut: '未保存凭据', authorizedToast: 'Claude 凭据已保存', authorizedDraftHint: '现在可以保存账号。', reauthorize: '重新授权',
-    readOnly: '需要编辑该账号的权限（或 settings:manage）才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
+    readOnly: '需要编辑该账号的权限才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
     saveBlocked: '完成 Claude 授权后才能保存账号', saveBlockedFix: '查看授权步骤',
     blockedTitle: '账号容器已停止：{reason}', blockedUnknown: '核心停止了该容器',
     blocked: { pickProxy: '去选择代理' },
@@ -507,6 +507,7 @@ export default {
     },
     upstream: {
       hint: 'CLI 最终发给上游的请求；密钥类请求头的值已遮蔽。',
+      hintSummary: 'CLI 最终发给上游的请求：只显示 host 与摘要类请求头（其余需要 settings:manage）。',
       none: '没有记录发给上游的请求（旧日志、未到发送阶段，或 CLI 未写出记录）。',
       body: '上游请求体',
       method: '方法', url: 'URL', attempts: '发送次数', sentAt: '最后发送', encoding: '正文编码',
@@ -521,7 +522,7 @@ export default {
     contentGone: '这条日志的正文已过期或已删除。',
     eventFilter: '按事件名过滤',
     eventsTruncated: '事件太多，只显示了前一部分。',
-    eventsBounded: '事件里的文字只显示前 256 字节。',
+    eventsBounded: '事件只显示摘要字段；错误文本、路径与身份信息需要 settings:manage。',
     contentNotice: '正文包含用户对话内容，查看和下载都会记入审计。',
     kind: { request: '请求', build: '组装', history: '历史', cli: 'CLI', upstream: '上游', response: '响应', other: '其他' },
     content: {

@@ -291,8 +291,8 @@ func TestFeaturePreviewPermissionsAndNoWorker(t *testing.T) {
 	ctx := context.Background()
 	uid := f.user("owner@test")
 	outsider := f.user("other@test")
-	f.auth.keys[uid] = []string{"account:own:read", "account:own:update"}
-	f.auth.keys[outsider] = []string{"account:own:read", "account:own:update"}
+	f.auth.keys[uid] = []string{"account:read:own", "account:update:own"}
+	f.auth.keys[outsider] = []string{"account:read:own", "account:update:own"}
 	id := f.account(false)
 	_, err := f.db.Pool.Exec(ctx, "UPDATE accounts SET created_by=$1 WHERE id=$2", uid, id)
 	require.NoError(t, err)

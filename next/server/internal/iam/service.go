@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -28,7 +29,8 @@ import (
 )
 
 // statusCacheTTL bounds how long a disabled user's access token keeps
-// working on a node that missed the authz:changed broadcast.
+// working on a node that missed the authz:changed or iam:user:changed
+// broadcast.
 const statusCacheTTL = 30 * time.Second
 
 // Deps are the dependencies of Service.
@@ -38,6 +40,9 @@ type Deps struct {
 	Config *config.Config
 	Events core.EventPublisher
 	Authz  *authz.Service
+	// Bus announces ended sessions to the other nodes (iam:user:changed).
+	// Optional: without it only this node's status cache is dropped.
+	Bus core.Bus
 	// Cipher seals the two-factor secrets.
 	Cipher *secret.Cipher
 	// BcryptCost defaults to bcrypt.DefaultCost (tests lower it).
@@ -55,6 +60,7 @@ type Service struct {
 	cfg    *config.Config
 	events core.EventPublisher
 	authz  *authz.Service
+	bus    core.Bus
 	cipher *secret.Cipher
 	cost   int
 
@@ -77,7 +83,10 @@ type statusEntry struct {
 
 var (
 	_ core.TokenVerifier     = (*Service)(nil)
+	_ core.SessionVerifier   = (*Service)(nil)
 	_ core.AccessKeyVerifier = (*Service)(nil)
+	_ core.StepUpVerifier    = (*Service)(nil)
+	_ core.StepUpSessions    = (*Service)(nil)
 )
 
 // New creates the service. The authz service must be started before
@@ -89,14 +98,34 @@ func New(d Deps) *Service {
 	if d.PriceRulesChanged == nil {
 		d.PriceRulesChanged = func(context.Context) {}
 	}
-	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cipher: d.Cipher, cost: d.BcryptCost, status: map[int64]statusEntry{},
+	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, bus: d.Bus, cipher: d.Cipher, cost: d.BcryptCost, status: map[int64]statusEntry{},
 		priceRulesChanged: d.PriceRulesChanged, limiter: newLoginLimiter(d.Redis)}
 	s.dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), s.cost)
 	if d.Authz != nil {
+		d.Authz.UseStepUp(s)
 		// Status changes (disable/delete) bump the authz version.
 		d.Authz.OnChange(s.clearStatusCache)
 	}
+	if d.Bus != nil {
+		s.subscribe(d.Bus)
+	}
 	return s
+}
+
+// subscribe keeps the status cache in step with sessions ended on other
+// nodes; after a reconnect, whose missed messages are lost, it drops it all.
+func (s *Service) subscribe(bus core.Bus) {
+	bus.Subscribe(core.ChannelUserSessionsChanged, func(payload []byte) {
+		uid, err := strconv.ParseInt(string(payload), 10, 64)
+		if err != nil {
+			s.clearStatusCache()
+			return
+		}
+		s.forgetStatus(uid)
+	})
+	if r, ok := bus.(core.BusReconnects); ok {
+		r.OnReconnect(s.clearStatusCache)
+	}
 }
 
 func (s *Service) clearStatusCache() {
@@ -139,43 +168,56 @@ func (s *Service) issueAccessToken(userID int64, tokenVersion int, family string
 // VerifyAccessToken implements core.TokenVerifier: checks signature and
 // expiry, then that the user still exists, is active, and token_version matches.
 func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, error) {
+	uid, _, err := s.VerifySession(ctx, token)
+	return uid, err
+}
+
+// VerifySession implements core.SessionVerifier: VerifyAccessToken that also
+// returns the token's login session.
+func (s *Service) VerifySession(ctx context.Context, token string) (int64, string, error) {
 	var claims accessClaims
 	_, err := jwt.ParseWithClaims(token, &claims, func(*jwt.Token) (any, error) { return s.cfg.JWTSecret, nil },
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 	if err != nil {
-		return 0, core.ErrUnauthenticated.WithCause(err)
+		return 0, "", core.ErrUnauthenticated.WithCause(err)
 	}
 	uid, err := strconv.ParseInt(claims.Subject, 10, 64)
 	if err != nil || uid <= 0 {
-		return 0, core.ErrUnauthenticated.WithMessage("invalid token subject")
+		return 0, "", core.ErrUnauthenticated.WithMessage("invalid token subject")
 	}
-	active, currentVersion, err := s.isActiveWithVersion(ctx, uid)
+	active, currentVersion, err := s.isActiveWithVersion(ctx, uid, claims.TokenVersion)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if !active {
-		return 0, core.ErrUnauthenticated.WithMessage("user is disabled or deleted")
+		return 0, "", core.ErrUnauthenticated.WithMessage("user is disabled or deleted")
 	}
 	// SEC-M1: reject tokens from before password change / logout-all / disable
 	if claims.TokenVersion != currentVersion {
-		return 0, core.ErrUnauthenticated.WithMessage("token has been invalidated")
+		return 0, "", core.ErrUnauthenticated.WithMessage("token has been invalidated")
 	}
-	return uid, nil
+	return uid, claims.Family, nil
 }
 
-func (s *Service) isActiveWithVersion(ctx context.Context, uid int64) (bool, int, error) {
+// isActiveWithVersion reads the user's status through the cache. seen is the
+// token_version a signed token carries: a cached entry older than that missed
+// a change this node was not told about (the server CLI has no bus), so it is
+// read again instead of rejecting the new login for up to statusCacheTTL. A
+// deleted user is cached with the highest version, since no token can be
+// newer than that: their leftover tokens do not read the row on every request.
+func (s *Service) isActiveWithVersion(ctx context.Context, uid int64, seen int) (bool, int, error) {
 	s.mu.Lock()
 	e, ok := s.status[uid]
 	epoch := s.statusEpoch
 	s.mu.Unlock()
-	if ok && time.Since(e.at) < statusCacheTTL {
+	if ok && time.Since(e.at) < statusCacheTTL && e.tokenVersion >= seen {
 		return e.active, e.tokenVersion, nil
 	}
 	var active bool
 	var version int
 	err := s.db.Pool.QueryRow(ctx, `SELECT status = 'active', token_version FROM users WHERE id = $1 AND deleted_at IS NULL`, uid).Scan(&active, &version)
 	if store.IsNoRows(err) {
-		active, err = false, nil
+		active, version, err = false, math.MaxInt, nil
 	}
 	if err != nil {
 		return false, 0, err

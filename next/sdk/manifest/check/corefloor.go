@@ -39,6 +39,14 @@ const CommonControlsFirstCore = "0.1.262"
 // only turns that into a clear hostCompat error.
 const SPMWindowFirstCore = "0.1.276"
 
+// RouteAccountsFirstCore is the first core that checks routes[].accounts:
+// the caller's scope over the accounts a plugin route names (CONTRACTS
+// §21.0). An older core ignores the declaration and forwards the request
+// with no account check at all. The accounts the core infers for a route an
+// account action posts to (manifest.EffectiveRouteAccounts) have no field
+// to look for; such a plugin keeps older cores out by its own hostCompat.
+const RouteAccountsFirstCore = "0.1.286"
+
 // ConvertMatrixFirstCore is the first core of the protocol conversion
 // matrix (CONTRACTS §88), which adds the openai.responses -> openai.chat
 // conversion within the openai platform.
@@ -79,6 +87,9 @@ var coreFloors = []coreFloor{
 		uses: usesSamePlatformConversion(ConvertMatrixFirstCore)},
 	{field: "accountTypes[].upstream", firstCore: UpstreamFirstCore, uses: func(v *validator) bool {
 		return slices.ContainsFunc(v.m.AccountTypes, func(at manifest.AccountType) bool { return at.Upstream != nil })
+	}},
+	{field: "routes[].accounts", firstCore: RouteAccountsFirstCore, uses: func(v *validator) bool {
+		return slices.ContainsFunc(v.m.Routes, func(r manifest.Route) bool { return r.Accounts != nil })
 	}},
 	{field: "hooks[].point " + manifest.HookPointAttempt, firstCore: AttemptHookFirstCore, uses: func(v *validator) bool {
 		return slices.ContainsFunc(v.m.Hooks, func(h manifest.Hook) bool { return h.Point == manifest.HookPointAttempt })

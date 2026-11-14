@@ -11,6 +11,8 @@ export interface HPRow extends HostPermissionReview {
   allowed: boolean
   locked: boolean
   diffTag: 'added' | 'widened' | null
+  /** An upgrade's permission already granted as wide: kept as it is, so granting it takes no grant right and it is not sent as a grant. */
+  carried: boolean
 }
 
 /**

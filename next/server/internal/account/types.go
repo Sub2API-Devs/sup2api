@@ -33,6 +33,10 @@ type AccountTypeView struct {
 	// for callers without account:settings:custom (CONTRACTS §21.3); empty
 	// when the type declares none.
 	GuardedSettings []manifest.GuardedSetting `json:"guarded_settings"`
+	// CustomUpstream reports that a caller without account:settings:custom
+	// can still point an account of the type anywhere
+	// (manifest.AccountType.CustomUpstream).
+	CustomUpstream bool `json:"custom_upstream"`
 	// DefaultModels / DefaultModelMapping are the plugin's suggestions the
 	// console prefills into a new account (CONTRACTS §41); never null.
 	DefaultModels               []string            `json:"default_models"`
@@ -128,6 +132,7 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		Form:                        FormView{Mode: b.Type.Form.Mode, Page: b.Type.Form.Page, Component: b.Type.Form.Component},
 		SensitiveFields:             b.Type.SensitiveFields,
 		GuardedSettings:             b.Type.GuardedSettings,
+		CustomUpstream:              b.Type.CustomUpstream(),
 		DefaultModels:               b.Type.DefaultModels,
 		DefaultModelsBySubscription: b.Type.DefaultModelsBySubscription,
 		DefaultModelMapping:         b.Type.DefaultModelMapping,

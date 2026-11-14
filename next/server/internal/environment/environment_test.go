@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,14 +34,16 @@ type fakeAuthz struct {
 	perms map[int64][]string
 }
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
-	return uid == a.admin || slices.Contains(a.perms[uid], key), nil
+func (a fakeAuthz) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
 }
-func (a fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
+	set := core.PermissionSetOf(a.perms[uid]...)
+	set.Superuser = uid == a.admin
+	return set, nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type fakeBus struct {
 	mu   sync.Mutex
@@ -65,7 +66,7 @@ type env struct {
 	h     http.Handler
 	admin int64
 	user  int64
-	// ownRead holds account:own:read, ownCreate account:own:create only.
+	// ownRead holds account:read:own, ownCreate account:create:own only.
 	ownRead, ownCreate int64
 }
 
@@ -80,8 +81,8 @@ func setup(t *testing.T) *env {
 	engine := gin.New()
 	e.svc = New(db, e.bus, core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 900, core.EnvVarStreamingIdleTimeoutSeconds: 45})
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin, perms: map[int64][]string{
-		e.ownRead:   {"account:own:read", "account:own:update"},
-		e.ownCreate: {"account:own:create"},
+		e.ownRead:   {"account:read:own", "account:update:own"},
+		e.ownCreate: {"account:create:own"},
 	}}))
 	e.h = engine
 	return e

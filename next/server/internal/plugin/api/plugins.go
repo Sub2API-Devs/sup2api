@@ -43,6 +43,10 @@ type PluginSummary struct {
 	// first, or the core holds them): the console shows the plugin as
 	// abnormal (audit 2026-10-09 P2-2).
 	ResourceConflicts []core.ResourceConflict `json:"resource_conflicts"`
+	// RoleGrantsToReview are the role grants an automatic (built-in) upgrade
+	// withheld until someone confirms or rejects them (install
+	// PendingRoleGrants).
+	RoleGrantsToReview []install.RoleGrant `json:"role_grants_to_review"`
 }
 
 // NodeSummary counts live nodes by reported plugin state.
@@ -80,6 +84,11 @@ func (a *API) fillSummary(ctx context.Context, s *PluginSummary) error {
 			}
 		}
 	}
+	pending, err := install.PendingRoleGrants(ctx, a.d.DB.Pool, s.Key, "")
+	if err != nil {
+		return err
+	}
+	s.RoleGrantsToReview = append([]install.RoleGrant{}, pending...)
 	v, err := install.CurrentVersion(ctx, a.d.DB.Pool, s.Key)
 	if err != nil {
 		return err
@@ -390,6 +399,19 @@ func (a *API) consent(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, res)
+}
+
+// reviewRoleGrants confirms or rejects the role grants an automatic upgrade
+// of the version withheld; it returns the grants it settled.
+func (a *API) reviewRoleGrants(confirm bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		gs, err := a.d.Install.ReviewRoleGrants(ctx(c), c.Param("key"), c.Param("version"), confirm, actor(c))
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		httpapi.OK(c, gin.H{"grants": gs, "confirmed": confirm})
+	}
 }
 
 func (a *API) reject(c *gin.Context) {

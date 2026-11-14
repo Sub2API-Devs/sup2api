@@ -511,8 +511,8 @@ func TestAccountResetStatusOwnership(t *testing.T) {
 	authz := fakeAuthz{keys: map[int64][]string{}}
 	e := setupWith(t, authz)
 	owner, stranger, reader := e.addUser("owner@x.com"), e.addUser("stranger@x.com"), e.addUser("reader@x.com")
-	authz.keys[owner] = []string{"account:own:update"}
-	authz.keys[stranger] = []string{"account:own:update"}
+	authz.keys[owner] = []string{"account:update:own"}
+	authz.keys[stranger] = []string{"account:update:own"}
 	authz.keys[reader] = []string{"account:read"}
 	id := e.mkRawAccount("anthropic", "apikey", "private", "sk-good-key-123", false)
 	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET created_by=$2,status_reason='rejected' WHERE id=$1`, id, owner); err != nil {

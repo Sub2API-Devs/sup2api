@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -116,7 +117,9 @@ type recorder struct {
 	events   []string
 }
 
-func (r *recorder) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef, []string) error {
+func (r *recorder) CanGrantToRoles(context.Context, pgx.Tx, int64, []string) error        { return nil }
+func (r *recorder) GrantPluginPermission(context.Context, pgx.Tx, string, []string) error { return nil }
+func (r *recorder) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef) error {
 	return nil
 }
 func (r *recorder) SetPluginActive(_ context.Context, _ pgx.Tx, _ string, active bool) error {
@@ -126,7 +129,7 @@ func (r *recorder) SetPluginActive(_ context.Context, _ pgx.Tx, _ string, active
 	return nil
 }
 func (r *recorder) DeletePlugin(context.Context, pgx.Tx, string) error { return nil }
-func (r *recorder) ApplyDefaults(_ context.Context, _ pgx.Tx, m *manifest.Manifest, _ []string) error {
+func (r *recorder) ApplyDefaults(_ context.Context, _ pgx.Tx, m *manifest.Manifest, _ map[string][]string) error {
 	r.mu.Lock()
 	r.defaults = append(r.defaults, m.Version)
 	r.mu.Unlock()
@@ -490,7 +493,8 @@ func TestTwoNodeRollout(t *testing.T) {
 		return phase == rollout.PhaseActive && a.version(h.key) == "" && b.version(h.key) == ""
 	})
 	act, _, evs = h.rec.snapshot()
-	if len(act) != 2 || act[1] || evs[len(evs)-1] != "plugin.disabled:3.0.0" {
+	// The enable and the two committed upgrades turned the keys on.
+	if !slices.Equal(act, []bool{true, true, true, false}) || evs[len(evs)-1] != "plugin.disabled:3.0.0" {
 		t.Fatalf("perms=%v events=%v", act, evs)
 	}
 

@@ -71,7 +71,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
 	r.Perm("PATCH", "/me/api-keys/:id", "apikey:self:manage", s.updateMine)
 	r.Perm("PUT", "/me/api-keys/:id/ip-allowlist", "apikey:self:manage", s.updateIPAllowlist)
-	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
+	// Reveal returns an existing key in plain text: a step-up proof each time (CONTRACTS §80.2).
+	r.StepUp(core.StepUpAPIKeyReveal).Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
 	r.Perm("POST", "/me/api-keys/:id/rotate", "apikey:self:manage", s.rotateMine)
 	r.Perm("DELETE", "/me/api-keys/:id", "apikey:self:manage", s.deleteMine)
 }
@@ -519,8 +520,8 @@ func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, erro
 // foreign key violation.
 func groupAvailable(ctx context.Context, q store.Querier, userID, groupID int64) (bool, error) {
 	var ok bool
-	err := q.QueryRow(ctx, `SELECT true FROM groups g WHERE g.id = $2 AND g.status = 'active'
-		AND `+segment.OpenToUserSQL("g", "$1")+`
+	err := q.QueryRow(ctx, `SELECT true FROM groups g WHERE g.id = $2
+		AND `+segment.UsableGroupSQL("g", "$1")+`
 		FOR KEY SHARE OF g`,
 		userID, groupID).Scan(&ok)
 	if store.IsNoRows(err) {

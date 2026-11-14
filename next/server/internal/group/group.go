@@ -438,6 +438,7 @@ func (s *Service) delete(c *gin.Context) {
 		moveTo = &n
 	}
 	var hashes []string
+	var authzVersion int64
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// Lock the group and the move target in id order, so two deletes
 		// moving keys into each other's group cannot deadlock.
@@ -468,13 +469,18 @@ func (s *Service) delete(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM groups WHERE id = $1`, id)
+		if _, err = tx.Exec(ctx, `DELETE FROM groups WHERE id = $1`, id); err != nil {
+			return err
+		}
+		uid, _ := core.UserID(ctx)
+		authzVersion, err = core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefGroup, []int64{id})
 		return err
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	core.AnnounceAuthzChanged(ctx, s.bus, authzVersion)
 	s.delKeys(ctx, hashes)
 	s.announceAccounts(ctx)
 	httpapi.NoContent(c)
@@ -486,7 +492,7 @@ func (s *Service) myGroups(c *gin.Context) {
 	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.description, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
 			g.visibility = 'restricted'
 		FROM groups g
-		WHERE g.status = 'active' AND `+segment.OpenToUserSQL("g", "$1")+`
+		WHERE `+segment.UsableGroupSQL("g", "$1")+`
 		ORDER BY g.id`, uid)
 	if err != nil {
 		httpapi.Fail(c, err)

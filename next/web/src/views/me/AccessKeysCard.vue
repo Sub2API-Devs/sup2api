@@ -8,7 +8,9 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SCopyButton, SDateTime, SField, SFormModal, SInput, SSelect, STable, confirm, type TableColumn } from '@sub2api/ui'
 import type { PermissionModule } from '@/api/types'
 import PermissionTree from '@/views/roles/PermissionTree.vue'
-import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
+import { parsePermission } from '@/authz/implies'
+import { useAuthStore } from '@/stores/auth'
+import { errorMessage, fieldErrors, notifyError, verificationCancelled } from '@/utils/errors'
 
 interface AccessKey {
   id: number
@@ -24,6 +26,7 @@ interface AccessKey {
 }
 
 const { t } = useI18n()
+const auth = useAuthStore()
 const rows = ref<AccessKey[]>([])
 const loading = ref(false)
 const modules = ref<PermissionModule[]>([])
@@ -44,7 +47,6 @@ const editing = ref<AccessKey | null>(null)
 const busy = ref(false)
 const errors = ref<Record<string, string>>({})
 const name = ref('')
-const password = ref('')
 const expires = ref('90')
 const granted = ref(new Set<string>())
 const created = ref('')
@@ -60,8 +62,8 @@ async function start(row: AccessKey | null) {
   errors.value = {}
   editing.value = row
   name.value = row?.name || ''
-  password.value = ''
   expires.value = '90'
+  // Stored canonical (CONTRACTS §80), as the picker writes them.
   granted.value = new Set(row?.permissions.filter((p) => !row.lost.includes(p)) || [])
   try {
     modules.value = (await api.get<PermissionModule[]>('/me/access-keys/permissions')) || []
@@ -71,7 +73,12 @@ async function start(row: AccessKey | null) {
   }
 }
 
-const canSubmit = computed(() => !!name.value.trim() && !!password.value && granted.value.size > 0)
+// Chosen permissions whose high-risk endpoints ask the key for a proof on every call (§80.2).
+const chosenActions = computed(() => new Set([...granted.value].map((k) => parsePermission(k)?.action ?? k)))
+const stepUpChosen = computed(() => modules.value.some((m) => m.permissions.some((p) => p.step_up && chosenActions.value.has(p.key))))
+
+// Saving asks for a step-up (self.access_key.write), answered by the StepUpDialog the HTTP layer opens.
+const canSubmit = computed(() => !!name.value.trim() && granted.value.size > 0)
 
 async function submit() {
   busy.value = true
@@ -79,15 +86,16 @@ async function submit() {
   const permissions = [...granted.value]
   try {
     if (editing.value) {
-      await api.patch(`/me/access-keys/${editing.value.id}`, { name: name.value, password: password.value, permissions })
+      await api.patch(`/me/access-keys/${editing.value.id}`, { name: name.value, permissions })
     } else {
       const expires_at = expires.value ? new Date(Date.now() + Number(expires.value) * 86400_000).toISOString() : null
-      const r = await api.post<AccessKey>('/me/access-keys', { name: name.value, password: password.value, permissions, expires_at })
+      const r = await api.post<AccessKey>('/me/access-keys', { name: name.value, permissions, expires_at })
       created.value = r.key || ''
     }
     open.value = false
     await load()
   } catch (e) {
+    if (verificationCancelled(e)) return
     errors.value = fieldErrors(e)
     if (!Object.keys(errors.value).length) errors.value = { form: errorMessage(e) }
   } finally {
@@ -155,12 +163,11 @@ const columns: TableColumn[] = [
         </SField>
       </div>
       <p class="text-xs text-fg-muted">{{ t('me.accessKeys.subsetHint') }}</p>
+      <SAlert v-if="stepUpChosen" tone="info" dense data-testid="access-key-step-up">{{ t('me.accessKeys.stepUpHint') }}</SAlert>
       <div class="max-h-80 overflow-y-auto" data-testid="access-key-permissions">
-        <PermissionTree v-model:granted="granted" :modules="modules" />
+        <!-- Scopes are offered within the user's own: a key never reaches beyond its user. -->
+        <PermissionTree v-model:granted="granted" :modules="modules" :scope-limit="auth.scopes" />
       </div>
-      <SField :label="t('me.confirmPassword')" :error="errors.password" required>
-        <SInput v-model="password" type="password" autocomplete="current-password" revealable data-testid="access-key-password" />
-      </SField>
     </SFormModal>
 
     <SFormModal :open="!!created" :title="t('me.accessKeys.createdTitle')" width="md" persistent :submit-text="t('me.twoFactor.saved')" @update:open="created = ''" @submit="created = ''">

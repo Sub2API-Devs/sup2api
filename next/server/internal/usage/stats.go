@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -148,12 +149,7 @@ type Overview struct {
 		NewToday    int64 `json:"new_today"`
 		ActiveToday int64 `json:"active_today"`
 	} `json:"users,omitempty"`
-	Accounts *struct {
-		Total        int64 `json:"total"`
-		Available    int64 `json:"available"`
-		AutoDisabled int64 `json:"auto_disabled"`
-		Disabled     int64 `json:"disabled"`
-	} `json:"accounts,omitempty"`
+	Accounts *account.Counts `json:"accounts,omitempty"`
 }
 
 // totalsColumns are the aggregates of Totals over the statRows matching cond
@@ -203,8 +199,7 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 	if self != nil {
 		out, err = s.loadOverview(ctx, tz, loc, self, false, false)
 	} else {
-		uid, _ := core.UserID(ctx)
-		users, accounts := s.can(ctx, uid, "user:read"), s.can(ctx, uid, "account:read")
+		users, accounts := core.Can(ctx, s.Authz, "user:read"), core.Can(ctx, s.Authz, "account:read")
 		var hit bool
 		out, hit, err = s.overviews.get(ctx, fmt.Sprintf("%s|%t|%t", tz, users, accounts), func(ctx context.Context) (Overview, error) {
 			return s.loadOverview(ctx, tz, loc, nil, users, accounts)
@@ -268,19 +263,11 @@ func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Locatio
 			}
 		}
 		if accounts {
-			out.Accounts = &struct {
-				Total        int64 `json:"total"`
-				Available    int64 `json:"available"`
-				AutoDisabled int64 `json:"auto_disabled"`
-				Disabled     int64 `json:"disabled"`
-			}{}
-			// The console's three statuses: a legacy "error" and an active account out of scheduling read as auto-disabled.
-			if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE status = 'active' AND schedulable),
-				count(*) FILTER (WHERE status IN ('auto_disabled', 'error') OR (status = 'active' AND NOT schedulable)),
-				count(*) FILTER (WHERE status = 'disabled')
-				FROM accounts WHERE deleted_at IS NULL`).Scan(&out.Accounts.Total, &out.Accounts.Available, &out.Accounts.AutoDisabled, &out.Accounts.Disabled); err != nil {
+			counts, err := account.CountAccounts(ctx, tx, core.AllScope)
+			if err != nil {
 				return err
 			}
+			out.Accounts = &counts
 		}
 		return nil
 	})
@@ -353,15 +340,6 @@ func (s *Service) realtime(c *gin.Context, self *int64) {
 		return
 	}
 	httpapi.OK(c, out)
-}
-
-// can asks the Authorizer; no Authorizer or an error count as "no".
-func (s *Service) can(ctx context.Context, uid int64, perm string) bool {
-	if s.Authz == nil {
-		return false
-	}
-	ok, err := s.Authz.Can(ctx, uid, perm)
-	return err == nil && ok
 }
 
 type windows struct{ today, yesterday, last30d, last5m time.Time }

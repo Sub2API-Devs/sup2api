@@ -361,13 +361,13 @@ describe('installing the controller', () => {
     expect(message).toContain('将通过 SSH 在 deploy@198.51.100.4:22 上')
     expect(message).toContain('自动选择（从 18443 起）')
     expect(message).not.toContain('ssh-secret')
-    const [url, body, opts] = mocks.post.mock.calls[0] as [string, Record<string, unknown>, { signal: AbortSignal }]
+    const [url, body, opts] = mocks.post.mock.calls[0] as [string, Record<string, unknown>, { timeoutMs: number }]
     expect(url).toBe('/system/ccgateway/controller/install')
     expect(body).toEqual({
       method: 'ssh', scheme: 'https', host: '198.51.100.4', port: 0,
       ssh: { host: '198.51.100.4', port: 22, user: 'deploy', auth_mode: 'password', password: 'ssh-secret', host_key_fingerprint: SSH_FP }
     })
-    expect(opts.signal).toBeInstanceOf(AbortSignal)
+    expect(opts.timeoutMs).toBeGreaterThan(0)
     expect(mocks.put).not.toHaveBeenCalled()
     // The returned configuration fills the endpoint, with the port the core chose.
     expect(w.get('[data-testid="controller-status"]').attributes('data-state')).toBe('connected')

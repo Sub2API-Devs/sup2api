@@ -206,13 +206,19 @@ func (s *Service) adjustBalance(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("amount exceeds maximum allowed"))
 		return
 	}
-	operator, _ := core.UserID(ctx)
 	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
 	if key == "" {
 		key = uuid.NewString()
 	}
 	if len(key) > 100 {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Idempotency-Key too long"))
+		return
+	}
+	operator, _ := core.UserID(ctx)
+	// Only users the operator manages, itself only as a superuser (M7, FU6);
+	// beyond plain users only with balance:adjust:any.
+	if err := core.GuardOrDeny(s.Users).CanActOnUsers(ctx, operator, core.ActOnBalance, id); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	// Scope the idempotency key to target user and operator to prevent cross-user reuse

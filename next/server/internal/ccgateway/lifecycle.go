@@ -114,8 +114,7 @@ func (s *Service) AccountAction(ctx context.Context, id int64, action string) (a
 	if action != "refresh_auth" {
 		return nil, core.ErrUnsupported
 	}
-	uid, _ := core.UserID(ctx)
-	key, created, err := s.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	key, created, err := s.ReauthDraft(ctx, id)
 	if err != nil {
 		return nil, err
 	}

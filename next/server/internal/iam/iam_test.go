@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -80,6 +81,7 @@ func (f *fakeEvents) types() []string {
 
 type env struct {
 	svc    *Service
+	bus    *memBus
 	authz  *authz.Service
 	redis  *miniredis.Miniredis
 	events *fakeEvents
@@ -113,8 +115,8 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := New(Deps{DB: db, Redis: redis.NewClient(&redis.Options{Addr: mr.Addr()}), Config: cfg, Events: ev, Authz: az, Cipher: cipher, BcryptCost: bcrypt.MinCost})
-	return &env{svc: svc, authz: az, redis: mr, events: ev, cfg: cfg}
+	svc := New(Deps{DB: db, Redis: redis.NewClient(&redis.Options{Addr: mr.Addr()}), Config: cfg, Events: ev, Authz: az, Bus: bus, Cipher: cipher, BcryptCost: bcrypt.MinCost})
+	return &env{svc: svc, bus: bus, authz: az, redis: mr, events: ev, cfg: cfg}
 }
 
 func isCode(err error, code string) bool {
@@ -175,7 +177,7 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 		t.Fatal("tampered token accepted")
 	}
 	me, err := s.GetMe(ctx, uid)
-	if err != nil || !me.Superuser || len(me.Permissions) != len(authz.CorePermissions()) {
+	if err != nil || !me.Superuser || len(me.Permissions) != len(authz.CorePermissions())+len(authz.SelfPermissionKeys()) {
 		t.Fatalf("me: %+v %v", me, err)
 	}
 
@@ -195,15 +197,12 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 		t.Fatalf("refresh after logout: %v", err)
 	}
 
-	// Password change revokes refresh tokens and requires the old password.
+	// Password change revokes refresh tokens (the route verifies the caller).
 	p3 := mustLogin(t, s, adminEmail, adminPassword)
-	if err := s.ChangePassword(ctx, uid, "wrong", "new-password-1"); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong old password: %v", err)
-	}
-	if err := s.ChangePassword(ctx, uid, adminPassword, "short"); !isCode(err, "invalid_argument") {
+	if err := s.ChangePassword(ctx, uid, "", "short"); !isCode(err, "invalid_argument") {
 		t.Fatalf("short password: %v", err)
 	}
-	if err := s.ChangePassword(ctx, uid, adminPassword, "new-password-1"); err != nil {
+	if err := s.ChangePassword(ctx, uid, "", "new-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Refresh(ctx, p3.RefreshToken); err == nil {
@@ -256,7 +255,7 @@ func TestUserLifecycle(t *testing.T) {
 	// Disable: login and access tokens stop working.
 	pair := mustLogin(t, s, "alice@example.com", "password-1")
 	disabled := StatusDisabled
-	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}, testIP); err != nil || u.Status != StatusDisabled {
+	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}); err != nil || u.Status != StatusDisabled {
 		t.Fatalf("disable: %+v %v", u, err)
 	}
 	if _, err := s.Login(ctx, "alice@example.com", "password-1", testIP); !isCode(err, "permission_denied") {
@@ -273,13 +272,13 @@ func TestUserLifecycle(t *testing.T) {
 	}
 	active := StatusActive
 	name := "Alice B"
-	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &active, DisplayName: &name}, testIP); err != nil || u.DisplayName != "Alice B" {
+	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &active, DisplayName: &name}); err != nil || u.DisplayName != "Alice B" {
 		t.Fatalf("enable: %+v %v", u, err)
 	}
 	mustLogin(t, s, "alice@example.com", "password-1")
 
 	// Super admin protections.
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}, testIP); !isCode(err, "conflict") {
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}); !isCode(err, "conflict") {
 		t.Fatalf("self disable: %v", err)
 	}
 	if err := s.DeleteUser(ctx, root, root); !isCode(err, "conflict") {
@@ -289,13 +288,13 @@ func TestUserLifecycle(t *testing.T) {
 		t.Fatalf("admin deletes root: %v", err)
 	}
 	pw := "hijacked-password"
-	if _, err := s.UpdateUser(ctx, admin.ID, root, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
+	if _, err := s.UpdateUser(ctx, admin.ID, root, UpdateUserInput{Password: &pw}); !isCode(err, "permission_denied") {
 		t.Fatalf("admin resets root password: %v", err)
 	}
 	if _, err := s.SetUserRoles(ctx, admin.ID, admin.ID, []string{authz.RoleSuperAdmin}); !isCode(err, "permission_denied") {
 		t.Fatalf("admin self-promotion: %v", err)
 	}
-	if _, err := s.SetUserRoles(ctx, root, root, []string{authz.RoleAdmin}); !isCode(err, "conflict") {
+	if _, err := s.SetUserRoles(ctx, root, root, []string{authz.RoleAdmin}); !isCode(err, "permission_denied") {
 		t.Fatalf("revoke own super admin: %v", err)
 	}
 	if err := s.DeleteUser(ctx, 0, root); !isCode(err, "conflict") {
@@ -344,6 +343,25 @@ type client struct {
 
 func (c client) do(method, path, token string, body any) (int, map[string]any) {
 	c.t.Helper()
+	return c.doProof(method, path, token, "", body)
+}
+
+// proof verifies for scope and operation with the fields of how (method,
+// password, code...) and returns the proof.
+func (c client) proof(token, scope, operation string, how map[string]any) string {
+	c.t.Helper()
+	body := map[string]any{"scope": scope, "context": operation}
+	maps.Copy(body, how)
+	code, out := c.do("POST", "/me/verify", token, body)
+	if code != 200 {
+		c.t.Fatalf("verify %s: %d %v", scope, code, out)
+	}
+	return out["data"].(map[string]any)["proof"].(string)
+}
+
+// doProof is do with a step-up proof (none when empty).
+func (c client) doProof(method, path, token, proof string, body any) (int, map[string]any) {
+	c.t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
 		_ = json.NewEncoder(&buf).Encode(body)
@@ -353,6 +371,9 @@ func (c client) do(method, path, token string, body any) (int, map[string]any) {
 	req.Header.Set("Accept-Language", "zh-CN")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if proof != "" {
+		req.Header.Set(core.HeaderVerifyProof, proof)
 	}
 	w := httptest.NewRecorder()
 	c.engine.ServeHTTP(w, req)
@@ -379,6 +400,11 @@ func TestHTTP(t *testing.T) {
 	r := httpapi.NewRouter(engine, e.svc, e.authz)
 	e.svc.RegisterRoutes(r)
 	e.authz.RegisterRoutes(r)
+	// The other modules' routes are not mounted here: every menu stands on a
+	// key the super admin holds (app binds the real route table).
+	if err := e.authz.BindMenuRoutes(func(string) ([]string, bool) { return []string{"user:read"}, true }); err != nil {
+		t.Fatal(err)
+	}
 	c := client{t, engine}
 
 	code, out := c.do("POST", "/auth/login", "", map[string]any{"email": adminEmail, "password": adminPassword})
@@ -394,10 +420,10 @@ func TestHTTP(t *testing.T) {
 	if code, out = c.do("GET", "/me", tok, nil); code != 200 || out["data"].(map[string]any)["superuser"] != true {
 		t.Fatalf("me: %d %v", code, out)
 	}
-	// A superuser sees every core section that has items. security and
-	// finance have no core item (only plugins join them, CONTRACTS §90) and
-	// empty sections are dropped.
-	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || sectionKeys(out["data"]) != "overview,gateway,users,plugins,system,me" {
+	// A superuser sees every core section that has items. security has no
+	// core item (only plugins join it, CONTRACTS §90) and empty sections are
+	// dropped; finance has the balance ledger.
+	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || sectionKeys(out["data"]) != "overview,gateway,finance,users,plugins,system,me" {
 		t.Fatalf("menus: %d %v", code, out)
 	}
 	if code, out = c.do("GET", "/permissions", tok, nil); code != 200 {
@@ -440,7 +466,12 @@ func TestHTTP(t *testing.T) {
 		t.Fatalf("ops lists users: %d %v", code, out)
 	}
 	// Delete needs only user:delete.
-	if code, out = c.do("DELETE", "/users/"+strconv.FormatInt(joeID, 10), ops, nil); code != 204 {
+	joePath := "/users/" + strconv.FormatInt(joeID, 10)
+	if code, out = c.do("DELETE", joePath, ops, nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("delete without a proof: %d %v", code, out)
+	}
+	proof := c.proof(ops, core.StepUpUserDelete, "DELETE /api/v1"+joePath, map[string]any{"method": "password", "password": "password-1"})
+	if code, out = c.doProof("DELETE", joePath, ops, proof, nil); code != 204 {
 		t.Fatalf("delete: %d %v", code, out)
 	}
 	if code, _ = c.do("GET", "/me", joe, nil); code != 401 {
@@ -457,11 +488,11 @@ func TestHTTP(t *testing.T) {
 	if code, out = c.do("POST", "/roles", ops, map[string]any{"key": "viewer", "name": map[string]string{"en": "Viewer", "zh": "只读"}, "permission_keys": []string{"user:read"}}); code != 201 {
 		t.Fatalf("create role: %d %v", code, out)
 	}
-	if code, out = c.do("GET", "/roles", ops, nil); code != 200 || len(out["data"].([]any)) != 5 {
+	if code, out = c.do("GET", "/roles", ops, nil); code != 200 || len(out["data"].([]any)) != 6 { // five built-in roles and viewer
 		t.Fatalf("list roles: %d %v", code, out)
 	}
 
-	// Logout revokes the refresh token.
+	// Logout ends that session; the others renew on their next 401.
 	_, out = c.do("POST", "/auth/login", "", map[string]any{"email": adminEmail, "password": adminPassword})
 	rt := out["data"].(map[string]any)["refresh_token"].(string)
 	if code, _ = c.do("POST", "/auth/logout", tok, map[string]any{"refresh_token": rt}); code != 204 {
@@ -470,9 +501,30 @@ func TestHTTP(t *testing.T) {
 	if code, _ = c.do("POST", "/auth/refresh", "", map[string]any{"refresh_token": rt}); code != 401 {
 		t.Fatalf("refresh after logout: %d", code)
 	}
-	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"old_password": adminPassword, "new_password": "another-pass-1"}); code != 204 {
+	if code, _ = c.do("GET", "/me", tok, nil); code != 401 {
+		t.Fatalf("access token after another session's logout: %d", code)
+	}
+	renew := func(refresh string) (access, next string) {
+		code, out := c.do("POST", "/auth/refresh", "", map[string]any{"refresh_token": refresh})
+		if code != 200 {
+			t.Fatalf("renew: %d %v", code, out)
+		}
+		d := out["data"].(map[string]any)
+		return d["access_token"].(string), d["refresh_token"].(string)
+	}
+	tok, rt = renew(data["refresh_token"].(string))
+	// Changing the password keeps the caller's own session.
+	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"new_password": "another-pass-1"}); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("change password without a proof: %d %v", code, out)
+	}
+	proof = c.proof(tok, core.StepUpSelfPassword, "PUT /api/v1/me/password", map[string]any{"method": "password", "password": adminPassword})
+	if code, out = c.doProof("PUT", "/me/password", tok, proof, map[string]any{"new_password": "short"}); code != 400 {
+		t.Fatalf("short password: %d %v", code, out)
+	}
+	if code, out = c.doProof("PUT", "/me/password", tok, proof, map[string]any{"new_password": "another-pass-1"}); code != 204 {
 		t.Fatalf("change password: %d %v", code, out)
 	}
+	renew(rt)
 }
 
 // sectionKeys lists the section keys of a /me/menus response, in order.

@@ -116,7 +116,7 @@ func TestProbePrivateAddress(t *testing.T) {
 	svc := New(db, testCipher(t), nil, Options{ProbeURL: "http://probe.example.invalid/generate_204"})
 	engine := gin.New()
 	own := addUser(t, db, "own-probe@x.com")
-	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{own: {"proxy:own:manage", "proxy:own:read"}}}))
+	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{own: {"proxy:manage:own", "proxy:read:own"}}}))
 	if code, out := do(t, engine, own, "POST", "/proxies/probe", map[string]any{"proxy_url": "127.0.0.1:9:u:p"}); code != 403 {
 		t.Fatalf("private probe: %d %v", code, out)
 	}

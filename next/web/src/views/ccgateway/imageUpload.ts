@@ -8,6 +8,10 @@
 //   POST   /system/ccgateway/runtime/uploads/:id/load {role, apply: true, update_existing?: true}
 //   DELETE /system/ccgateway/runtime/uploads/:id            (cancel / give up)
 //
+// Creating the upload asks for a step-up verification (host.install, CONTRACTS §80.2), answered by the
+// StepUpDialog the HTTP layer opens; the upload's other requests continue it without one (403
+// verification_expired once it lapsed or from another session: start again).
+//
 // The chunk loop is a pure function over an injectable transport, so the
 // resume / retry / cancel rules are unit-tested apart from the component.
 import { ApiError, api, apiBase, session } from '@sub2api/host'
@@ -221,7 +225,8 @@ export function createUploadTransport(fetchImpl: typeof fetch = (...args) => fet
     return (json && typeof json === 'object' && 'data' in json ? json.data : json) as UploadPosition
   }
   return {
-    create: (size, signal) => api.post<UploadCreated>(UPLOADS, { size }, { signal: timeoutSignal(60_000, signal) }),
+    // No timeout of its own: the verification it asks for waits for the user (the core bounds the controller call).
+    create: (size, signal) => api.post<UploadCreated>(UPLOADS, { size }, { signal }),
     put,
     load: (id, role, updateExisting) => api.post<ImageLoadResult>(`${path(id)}/load`, updateExisting ? { role, apply: true, update_existing: true } : { role, apply: true }, { signal: AbortSignal.timeout(LOAD_TIMEOUT_MS) }),
     remove: async id => { await api.del(path(id), undefined, { signal: AbortSignal.timeout(30_000) }) }

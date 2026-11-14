@@ -9,7 +9,7 @@ import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SFormModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
 import { fetchFirstPage } from '@/composables/lookups'
 import { runPool } from '@/views/accounts/pool'
 import type { CcgRuntimeHealth } from '@/api/types'
@@ -73,6 +73,7 @@ interface Row {
   checking: boolean
   error: boolean
   created_by?: number | null
+  group_ids?: number[]
   logsEnabled: boolean | null
   logsBusy: boolean
   logsError: boolean
@@ -92,8 +93,11 @@ const { blockedTitle, describe } = useCcgText()
 const auth = useAuthStore()
 /** Bumped by reload(): the retained list below reloads with the table. */
 const retainedRevision = ref(0)
-const own = useOwnership()
-const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
+const scope = useScope()
+// Changing a row (start, re-authorization) takes update on that row, as the core checks.
+const canUpdateRow = (r: Row) => scope.can(r, ACCOUNT_ACTIONS.update)
+// Changing or clearing the request logs is not an own-level action: the core takes this key only.
+const canLogs = computed(() => auth.has('account:update'))
 // Reading the logs: settings or account readers, not own-level ones (§7).
 const canViewLogs = computed(() => auth.has('settings:read') || auth.has('account:read'))
 const viewing = ref<Row | null>(null)
@@ -108,7 +112,10 @@ const rows = ref<Row[]>([])
 const loading = ref(false)
 const cleaning = ref(false)
 const error = ref('')
-const canAccounts = computed(() => auth.has('account:read') || auth.has('account:own:read') || auth.has('account:update') || auth.has('account:own:update'))
+// The list takes the keys of the accounts list, as the core checks a runtime by
+// account:*; a settings-only caller gets the cleanup and the retained runtimes.
+const canList = computed(() => auth.hasAction(ACCOUNT_ACTIONS.read))
+const canAccounts = computed(() => auth.hasAction([ACCOUNT_ACTIONS.read, ACCOUNT_ACTIONS.update]))
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('ccgateway.runtimes.account') },
@@ -152,11 +159,12 @@ async function inspect(r: Row) {
 }
 
 async function load() {
+  if (!canList.value) return
   loading.value = true
   error.value = ''
   try {
-    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway' })
-    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null, logsPolicy: null }))
+    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null; group_ids?: number[] }>('/accounts', { plugin_key: 'ccgateway' })
+    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, group_ids: a.group_ids, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null, logsPolicy: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []
@@ -195,7 +203,7 @@ async function setLogs(r: Row, enabled: boolean) {
 }
 
 async function putLogs(r: Row, body: Record<string, unknown>) {
-  if (r.logsBusy || !canLogs(r)) return
+  if (r.logsBusy || !canLogs.value) return
   r.logsBusy = true
   r.logsError = false
   try {
@@ -249,7 +257,7 @@ function setHours(v: SelectOption['value']) {
 }
 
 async function chooseLevel(r: Row, value: SelectOption['value']) {
-  if (r.logsBusy || !canLogs(r) || !isLevel(value) || value === r.logsLevels?.level) return
+  if (r.logsBusy || !canLogs.value || !isLevel(value) || value === r.logsLevels?.level) return
   if (value === 'full') {
     fullDialog.value = { row: r, hours: 1 }
     return
@@ -264,7 +272,7 @@ async function chooseLevel(r: Row, value: SelectOption['value']) {
  */
 async function chooseSetting(r: Row, value: SelectOption['value']) {
   const p = r.logsPolicy
-  if (!p || r.logsBusy || !canLogs(r) || !isSetting(value) || value === activeSetting(p, now.value)) return
+  if (!p || r.logsBusy || !canLogs.value || !isSetting(value) || value === activeSetting(p, now.value)) return
   if (value === 'full') {
     fullDialog.value = { row: r, hours: 1 }
     return
@@ -280,14 +288,14 @@ async function confirmFull() {
 }
 
 async function clearFull(r: Row) {
-  if (r.logsBusy || !canLogs(r)) return
+  if (r.logsBusy || !canLogs.value) return
   if (!await confirm({ title: t('ccgateway.requestLogs.clearFullTitle'), message: t('ccgateway.requestLogs.clearFullConfirm'), confirmText: t('ccgateway.requestLogs.clearFull'), danger: true })) return
   await putLogs(r, { clear_full: true })
 }
 
 /** Deletes every log of the account (summaries and bodies); the setting stays (§4). */
 async function clearAll(r: Row) {
-  if (r.logsBusy || !canLogs(r) || !r.logsPolicy?.worker?.clearAll) return
+  if (r.logsBusy || !canLogs.value || !r.logsPolicy?.worker?.clearAll) return
   if (!await confirm({ title: t('ccgateway.requestLogs.clearAllTitle'), message: t('ccgateway.requestLogs.clearAllConfirm'), confirmText: t('ccgateway.requestLogs.clearAll'), danger: true })) return
   await putLogs(r, { clear_all: true })
 }
@@ -378,13 +386,12 @@ function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gra
   if (r.phase === 'preparing') return { tone: 'warning', label: t('ccgateway.runtimes.state.preparing') }
   return { tone: 'gray', label: t('ccgateway.runtimes.state.unknown') }
 }
-const canStart = computed(() => auth.has('settings:manage') || auth.has('account:update') || auth.has('account:own:update'))
 const parked = (r: Row) => r.phase === 'blocked' && r.reason === 'account_parked'
 const starting = ref<number | null>(null)
 
 /** Starts a container stopped because its account stayed red; it is stopped again after another park_after_hours. */
 async function start(r: Row) {
-  if (!canStart.value || starting.value !== null) return
+  if (!canUpdateRow(r) || starting.value !== null) return
   starting.value = r.id
   try {
     await api.post(`/system/ccgateway/accounts/${r.id}/sync`, {}, longCall())
@@ -401,7 +408,7 @@ const editLink = (r: Row) => ({ path: '/accounts', query: { edit: String(r.id) }
 
 /** Opens a re-authorization draft, then the account editor where it is completed. */
 async function refreshAuth(r: Row) {
-  if (!canAccounts.value) return
+  if (!canUpdateRow(r)) return
   try {
     const result = await api.post<{ key: string; created: boolean; message: string }>(`/accounts/${r.id}/actions/ccgateway/refresh_auth`)
     toast(result.message || t('ccgateway.runtimes.refreshStarted'), 'success')
@@ -420,11 +427,11 @@ async function refreshAuth(r: Row) {
       <SButton v-if="canAccounts" size="sm" variant="primary" to="/accounts">{{ t('ccgateway.runtimes.openAccounts') }}</SButton>
     </template>
     <div class="space-y-3">
-      <SHint tone="warning">{{ t('ccgateway.runtime.switchHint') }}</SHint>
-      <SHint>{{ t('ccgateway.requestLogs.hint') }}</SHint>
+      <SHint v-if="canList" tone="warning">{{ t('ccgateway.runtime.switchHint') }}</SHint>
+      <SHint v-if="canList">{{ t('ccgateway.requestLogs.hint') }}</SHint>
       <SHint v-if="legacyRows" data-testid="request-log-legacy-hint">{{ t('ccgateway.requestLogs.legacyHint') }}</SHint>
       <SHint v-if="error" tone="danger">{{ error }}</SHint>
-      <STable :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
+      <STable v-if="canList" :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
         <template #cell-name="{ row }">
           <div class="whitespace-nowrap font-medium">{{ row.name }} <span class="font-mono text-xs text-fg-subtle">#{{ row.id }}</span></div>
           <div class="whitespace-nowrap text-xs text-fg-muted">{{ row.type === 'managed' ? t('ccgateway.runtimes.typeOAuth') : t('ccgateway.runtimes.typeApiKey') }}</div>
@@ -448,7 +455,7 @@ async function refreshAuth(r: Row) {
           <!-- The tooltip only mirrors the row's hidden description, which assistive technology reads instead. -->
           <template v-if="row.logsPolicy">
             <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
-              <SSegmented :model-value="settingOf(row.logsPolicy)" :options="settingOptions(row.logsPolicy)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseSetting(row, $event)" />
+              <SSegmented :model-value="settingOf(row.logsPolicy)" :options="settingOptions(row.logsPolicy)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseSetting(row, $event)" />
               <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
               <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
               <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
@@ -456,14 +463,14 @@ async function refreshAuth(r: Row) {
             <div class="mt-1 flex items-center gap-2 whitespace-nowrap">
               <SButton v-if="showViewer(row)" size="sm" variant="ghost" icon="list" :disabled="!row.logsPolicy.worker" :data-testid="`request-log-view-${row.id}`" @click="viewing = row">{{ viewText(row.logsPolicy.worker) }}</SButton>
               <SHint v-if="settingOf(row.logsPolicy) === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
-              <SButton v-if="(row.logsPolicy.worker?.usage.full_bytes ?? 0) > 0 && canLogs(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
-              <SButton v-if="canLogs(row) && row.logsPolicy.worker?.clearAll" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-all-${row.id}`" @click="clearAll(row)">{{ t('ccgateway.requestLogs.clearAll') }}</SButton>
+              <SButton v-if="(row.logsPolicy.worker?.usage.full_bytes ?? 0) > 0 && canLogs" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
+              <SButton v-if="canLogs && row.logsPolicy.worker?.clearAll" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-all-${row.id}`" @click="clearAll(row)">{{ t('ccgateway.requestLogs.clearAll') }}</SButton>
             </div>
             <SHint v-if="!row.logsPolicy.worker" size="xs" :data-testid="`request-log-worker-unavailable-${row.id}`">{{ t('ccgateway.requestLogs.workerUnavailable') }}</SHint>
           </template>
           <template v-else-if="row.logsLevels">
             <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
-              <SSegmented :model-value="row.logsLevels.level" :options="levelOptions(row)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseLevel(row, $event)" />
+              <SSegmented :model-value="row.logsLevels.level" :options="levelOptions(row)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseLevel(row, $event)" />
               <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
               <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
               <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
@@ -473,11 +480,11 @@ async function refreshAuth(r: Row) {
                 {{ viewText(row.logsLevels) }}
               </SButton>
               <SHint v-if="row.logsLevels.level === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
-              <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canLogs(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
+              <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canLogs" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
             </div>
           </template>
           <STooltip v-else-if="row.logsEnabled !== null" :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
-            <SSwitch :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
+            <SSwitch :model-value="row.logsEnabled" :disabled="!canLogs || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
             <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
             <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
             <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
@@ -487,9 +494,9 @@ async function refreshAuth(r: Row) {
         </template>
         <template #cell-actions="{ row }">
           <div class="flex items-center justify-end gap-2">
-            <SButton v-if="parked(row) && canStart" size="sm" icon="play" :loading="starting === row.id" :disabled="starting !== null" :data-testid="`ccgateway-runtime-start-${row.id}`" @click="start(row)">{{ t('ccgateway.runtimes.start') }}</SButton>
+            <SButton v-if="parked(row) && canUpdateRow(row)" size="sm" icon="play" :loading="starting === row.id" :disabled="starting !== null" :data-testid="`ccgateway-runtime-start-${row.id}`" @click="start(row)">{{ t('ccgateway.runtimes.start') }}</SButton>
             <CLISettings v-if="auth.has('settings:read')" :account-id="row.id" :disabled="row.phase !== 'ready'" @changed="inspect(row)" />
-            <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" @click="refreshAuth(row)">{{ t('ccgateway.runtimes.refreshAuth') }}</SButton>
+            <SButton v-if="row.type === 'managed' && canUpdateRow(row)" size="sm" variant="ghost" :data-testid="`ccgateway-runtime-refresh-${row.id}`" @click="refreshAuth(row)">{{ t('ccgateway.runtimes.refreshAuth') }}</SButton>
             <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="editLink(row)" data-testid="ccgateway-runtime-edit">
               {{ needsAuth(row) ? t('ccgateway.runtimes.goAuthorize') : t('ccgateway.runtimes.goEdit') }}
             </SButton>

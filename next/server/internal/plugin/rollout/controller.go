@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -595,6 +596,11 @@ func (c *Controller) finishFailed(ctx context.Context, r *rolloutRow, phase, msg
 		}
 		ok = true
 		if r.action == "upgrade" {
+			// The permission catalog is left alone: keys the target version
+			// registered at consent stay until another version is activated
+			// (commit syncs the catalog with the manifest which then runs).
+			// Nothing of the running version checks them, and role grants
+			// chosen at consent survive the new consent a retry needs (grants.Withdraw).
 			_, err = tx.Exec(ctx, `UPDATE plugins SET status = 'enabled', desired_version = active_version,
 				updated_at = now(), row_version = row_version + 1 WHERE key = $1`, r.key)
 		} else {
@@ -602,6 +608,11 @@ func (c *Controller) finishFailed(ctx context.Context, r *rolloutRow, phase, msg
 				desired_version = NULL, status_reason = $2, updated_at = now(), row_version = row_version + 1 WHERE key = $1`, r.key, msg)
 		}
 		if err != nil {
+			return err
+		}
+		// What was approved for the target stays with it only until it is
+		// activated: an abandoned upgrade takes it back.
+		if err := grants.Withdraw(ctx, tx, r.key, deref(r.target), phase); err != nil {
 			return err
 		}
 		if err := c.writeNodes(ctx, tx, r); err != nil {

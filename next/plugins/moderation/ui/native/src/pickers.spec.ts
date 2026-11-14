@@ -12,7 +12,7 @@ import BlocksTab from './BlocksTab.vue'
 import SettingsTab from './SettingsTab.vue'
 import UserStateSection from './UserStateSection.vue'
 import WatchEditModal from './WatchEditModal.vue'
-import { fetchAccountGroups, fetchAccountNames, setHost } from './host'
+import { fetchAccountGroups, fetchAccountNames, fetchGroups, setHost } from './host'
 import { resetSessionCaches } from './session'
 import type { Binding, Watch } from './types'
 
@@ -55,7 +55,7 @@ beforeEach(() => {
     plugin: { key: 'moderation' },
     pluginApi: { get: pluginGet, post, put, del },
     api: { get: coreGet, put: corePut, list: async () => ({ items: [], paged: false, page: {} }) },
-    permissions: { superuser: () => true, has: () => true },
+    permissions: { superuser: () => true, has: () => true, hasAction: () => true },
     can: () => true,
     toast: vi.fn(),
     confirm: vi.fn(async () => true)
@@ -421,15 +421,36 @@ describe('fetchAccountNames', () => {
   })
 
   it('asks nothing for a caller who may read no account, and for one who may read only its own', async () => {
-    const as = (...permissions: string[]) => setHost({ api: { get: coreGet }, permissions: { has: (key: string) => permissions.includes(key) } } as unknown as PluginHost)
+    const as = (...permissions: string[]) =>
+      setHost({
+        api: { get: coreGet },
+        permissions: { has: (key: string) => permissions.includes(key), hasAction: (a: string) => permissions.some((k) => k === a || k.startsWith(`${a}:`)) }
+      } as unknown as PluginHost)
     as('plugin.moderation:moderation:manage')
     expect((await fetchAccountNames([1, 2])).size).toBe(0)
     expect(await fetchAccountGroups(1)).toBeNull()
     expect(coreGet).not.toHaveBeenCalled()
-    as('account:own:read')
+    as('account:read:own')
     coreGet.mockResolvedValue({ id: 1, group_ids: [2], items: [{ id: 1, name: 'mine' }] })
     expect((await fetchAccountNames([1, 2])).get(1)).toBe('mine')
     expect(await fetchAccountGroups(1)).toEqual([2])
+  })
+
+  it('asks a console with resource scopes whether account:read is held at any scope', async () => {
+    const hasAction = vi.fn((action: string) => action === 'account:read')
+    setHost({ api: { get: coreGet }, permissions: { has: () => false, hasAction } } as unknown as PluginHost)
+    coreGet.mockResolvedValue({ items: [{ id: 1, name: 'in group 12' }] })
+    expect((await fetchAccountNames([1])).get(1)).toBe('in group 12')
+    expect(hasAction).toHaveBeenCalledWith('account:read')
+  })
+  it('lists the groups only with group:read', async () => {
+    const list = vi.fn(async () => ({ items: [{ id: 2, name: 'g' }], paged: false, page: {} }))
+    const as = (...permissions: string[]) => setHost({ api: { list }, permissions: { has: (key: string) => permissions.includes(key) } } as unknown as PluginHost)
+    as('plugin.moderation:moderation:read')
+    expect(await fetchGroups()).toEqual([])
+    expect(list).not.toHaveBeenCalled()
+    as('group:read')
+    expect(await fetchGroups()).toEqual([{ id: 2, name: 'g' }])
   })
 })
 

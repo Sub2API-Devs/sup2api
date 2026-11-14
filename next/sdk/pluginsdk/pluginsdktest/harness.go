@@ -173,8 +173,15 @@ func (h *Harness) Configure(config any, grants []*pluginv1.Grant) []*pluginv1.Fi
 // JSON-marshalable value.
 func (h *Harness) Do(method, routePath string, query map[string]string, body any) *pluginv1.HTTPResponse {
 	h.T.Helper()
+	return h.DoAs(1, method, routePath, query, body)
+}
+
+// DoAs is Do as console user userID (Do is user 1; 0 is an unauthenticated
+// caller).
+func (h *Harness) DoAs(userID int64, method, routePath string, query map[string]string, body any) *pluginv1.HTTPResponse {
+	h.T.Helper()
 	req := &pluginv1.HTTPRequest{
-		Caller: &pluginv1.Caller{UserId: 1, RequestId: "test", Locale: "en"},
+		Caller: &pluginv1.Caller{UserId: userID, RequestId: "test", Locale: "en"},
 		Method: method, Path: routePath, RoutePath: routePath,
 		Query: map[string]*pluginv1.HeaderValues{},
 	}
@@ -193,6 +200,9 @@ func (h *Harness) Do(method, routePath string, query map[string]string, body any
 			h.T.Fatalf("pluginsdktest: marshal body: %v", err)
 		}
 		req.Body = raw
+	}
+	if userID > 0 {
+		defer h.Host.Serve(userID)()
 	}
 	resp, err := h.HTTP.HandleHTTP(context.Background(), req)
 	if err != nil {

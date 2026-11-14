@@ -43,6 +43,7 @@ type Instance struct {
 
 	sems     [numClasses]chan struct{}
 	inflight atomic.Int64
+	callers  callerSet     // console users of the HTTP requests in flight
 	draining atomic.Bool   // no new calls are admitted
 	idle     chan struct{} // closed once draining and no call in flight
 	idleOnce sync.Once
@@ -680,7 +681,7 @@ func (i *Instance) restart(reason string) {
 func (i *Instance) Refresh(ctx context.Context) error {
 	i.refreshMu.Lock()
 	defer i.refreshMu.Unlock()
-	st, err := i.rt.loadSettings(ctx, i.pkg.Key)
+	st, err := i.rt.loadSettings(ctx, i.pkg)
 	if err != nil {
 		return err
 	}

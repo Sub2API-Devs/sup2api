@@ -39,6 +39,9 @@ type Service struct {
 	users      map[int64]core.PermissionSet
 	catalog    *catalogSnapshot
 	listeners  []func()
+	stepUp     core.StepUpVerifier
+	// menuKeys are the permissions of each core menu item (BindMenuRoutes).
+	menuKeys map[string][]string
 }
 
 type permMeta struct {
@@ -53,6 +56,7 @@ type catalogSnapshot struct {
 var (
 	_ core.Authorizer        = (*Service)(nil)
 	_ core.PermissionCatalog = (*Service)(nil)
+	_ core.AuthzVersioner    = (*Service)(nil)
 )
 
 // New creates the service. Call Start before serving requests.
@@ -64,23 +68,36 @@ func New(d Deps) *Service {
 }
 
 // Start syncs the core catalog and built-in roles and subscribes to
-// authz:changed (stopped with ctx); the fallback version poll is the node
-// task RegisterTasks registers.
+// authz:changed and bus reconnects (stopped with ctx); the fallback version
+// poll is the node task RegisterTasks registers.
 func (s *Service) Start(ctx context.Context) error {
 	if err := s.SyncCore(ctx); err != nil {
 		return err
 	}
-	if s.bus != nil {
-		cancel := s.bus.Subscribe(core.ChannelAuthzChanged, func(payload []byte) {
-			v, err := strconv.ParseInt(string(payload), 10, 64)
-			if err != nil {
-				s.refreshVersion(context.Background())
-				return
-			}
-			s.invalidate(v)
-		})
-		go func() { <-ctx.Done(); cancel() }()
+	// Version answers from the first request on, not from the first change.
+	s.refreshVersion(ctx)
+	if s.bus == nil {
+		return nil
 	}
+	cancels := []func(){s.bus.Subscribe(core.ChannelAuthzChanged, func(payload []byte) {
+		v, err := strconv.ParseInt(string(payload), 10, 64)
+		if err != nil {
+			s.refreshVersion(context.Background())
+			return
+		}
+		s.invalidate(v)
+	})}
+	if r, ok := s.bus.(core.BusReconnects); ok {
+		// Broadcasts sent while disconnected are lost: read the version again
+		// (off the bus goroutine, which must not block).
+		cancels = append(cancels, r.OnReconnect(func() { go s.refreshVersion(context.Background()) }))
+	}
+	go func() {
+		<-ctx.Done()
+		for _, cancel := range cancels {
+			cancel()
+		}
+	}()
 	return nil
 }
 
@@ -124,21 +141,23 @@ func (s *Service) OnChange(fn func()) {
 
 // Bump increments the authz version inside tx and returns the new value. It
 // also takes the authz_meta row lock, serializing all authz mutations.
+// Holding the lock, v-1 is the latest committed version, so entries this node
+// cached before it are dropped: checks made inside tx never trust a cache
+// that missed a broadcast.
 func (s *Service) Bump(ctx context.Context, tx pgx.Tx) (int64, error) {
 	var v int64
-	err := tx.QueryRow(ctx, `UPDATE authz_meta SET version = version + 1 WHERE id = 1 RETURNING version`).Scan(&v)
-	return v, err
+	if err := tx.QueryRow(ctx, `UPDATE authz_meta SET version = version + 1 WHERE id = 1 RETURNING version`).Scan(&v); err != nil {
+		return 0, err
+	}
+	s.invalidate(v - 1)
+	return v, nil
 }
 
 // Committed must be called after a transaction that called Bump has
 // committed: it invalidates local caches and broadcasts authz:changed.
 func (s *Service) Committed(ctx context.Context, version int64) {
 	s.invalidate(version)
-	if s.bus != nil {
-		if err := s.bus.Publish(ctx, core.ChannelAuthzChanged, []byte(strconv.FormatInt(version, 10))); err != nil {
-			slog.WarnContext(ctx, "authz: publish authz:changed failed", "err", err)
-		}
-	}
+	core.AnnounceAuthzChanged(ctx, s.bus, version)
 }
 
 // committedLater is used when the transaction belongs to the caller: it waits
@@ -196,6 +215,16 @@ func (s *Service) refreshVersion(ctx context.Context) {
 		return
 	}
 	s.invalidate(v)
+}
+
+// Version implements core.AuthzVersioner: the newest authz version this node
+// has seen (at start, in its own changes, in authz:changed or in the version
+// poll). It reads no database, so it may trail another node's change by the
+// time the broadcast takes.
+func (s *Service) Version() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.minVersion
 }
 
 // invalidate drops cache entries older than version.
@@ -282,30 +311,35 @@ func (s *Service) readSnapshot(ctx context.Context, fn func(tx pgx.Tx) error) (i
 func (s *Service) loadPermissionSet(ctx context.Context, userID int64) (core.PermissionSet, error) {
 	set := core.PermissionSet{Keys: map[string]struct{}{}}
 	v, err := s.readSnapshot(ctx, func(tx pgx.Tx) error {
+		// One row at least for an active user, roles or not: a signed-in
+		// user holds the self permissions (withSelf).
 		rows, err := tx.Query(ctx, `
-SELECT r.superuser, p.key
-FROM user_roles ur
-JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL AND u.status = 'active'
-JOIN roles r ON r.id = ur.role_id
-LEFT JOIN role_permissions rp ON rp.role_id = r.id
-LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status = 'active'
-WHERE ur.user_id = $1`, userID)
+SELECT COALESCE(r.superuser, false), g.key
+FROM users u
+LEFT JOIN user_roles ur ON ur.user_id = u.id
+LEFT JOIN roles r ON r.id = ur.role_id`+roleGrantsJoin(`p.status = 'active'`)+`
+WHERE u.id = $1 AND u.deleted_at IS NULL AND u.status = 'active'`, userID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
+		active := false
 		for rows.Next() {
 			var su bool
 			var key *string
 			if err := rows.Scan(&su, &key); err != nil {
 				return err
 			}
+			active = true
 			if su {
 				set.Superuser = true
 			}
 			if key != nil {
-				set.Keys[*key] = struct{}{}
+				set.Add(*key)
 			}
+		}
+		if active {
+			set = withSelf(set)
 		}
 		return rows.Err()
 	})
@@ -317,47 +351,68 @@ WHERE ur.user_id = $1`, userID)
 }
 
 // RolesPermissions returns the union of all permissions granted by the given
-// role keys. Used for authorization checks when granting roles to others.
+// role keys, in the grant view: disabled (plugin) permissions count, removed
+// ones do not (M6). It also holds the roles they may assign: those listed,
+// never a superuser role, plus, when one of them has assign_custom, every
+// custom role but roleKeys themselves. The wildcard never covers a role the
+// holder holds (CONTRACTS §43.6): a custom role with assign_custom does not
+// manage itself or its peers, nor hand out what does; a role listed by name
+// stays assignable as listed. Used to compare what roles carry in grant
+// checks; the effective set (loadPermissionSet) counts active permissions
+// only.
 func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKeys []string) (core.PermissionSet, error) {
+	set := core.PermissionSet{Keys: map[string]struct{}{}, Assignable: map[string]struct{}{}}
 	if len(roleKeys) == 0 {
-		return core.PermissionSet{Keys: map[string]struct{}{}}, nil
+		return set, nil
 	}
-	set := core.PermissionSet{Keys: map[string]struct{}{}}
 	rows, err := q.Query(ctx, `
-SELECT r.superuser, p.key
-FROM roles r
-LEFT JOIN role_permissions rp ON rp.role_id = r.id
-LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status = 'active'
+SELECT r.superuser, r.assign_custom, g.key
+FROM roles r`+roleGrantsJoin(`p.status <> 'removed'`)+`
 WHERE r.key = ANY($1)`, roleKeys)
 	if err != nil {
 		return core.PermissionSet{}, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var su bool
+		var su, custom bool
 		var key *string
-		if err := rows.Scan(&su, &key); err != nil {
+		if err := rows.Scan(&su, &custom, &key); err != nil {
 			return core.PermissionSet{}, err
 		}
-		if su {
-			set.Superuser = true
-		}
+		set.Superuser = set.Superuser || su
+		set.AssignCustom = set.AssignCustom || custom
 		if key != nil {
-			set.Keys[*key] = struct{}{}
+			set.Add(*key)
 		}
 	}
-	return set, rows.Err()
+	if err := rows.Err(); err != nil {
+		return core.PermissionSet{}, err
+	}
+	var assignable []string
+	if err := q.QueryRow(ctx, `
+SELECT COALESCE(array_agg(key), '{}') FROM (
+    SELECT ar.key FROM role_assignable_roles ra
+    JOIN roles r ON r.id = ra.role_id AND r.key = ANY($1)
+    JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser
+    UNION
+    SELECT c.key FROM roles c WHERE NOT c.builtin AND $2 AND c.key <> ALL($1)) a`, roleKeys, set.AssignCustom).Scan(&assignable); err != nil {
+		return core.PermissionSet{}, err
+	}
+	for _, k := range assignable {
+		set.Assignable[k] = struct{}{}
+	}
+	return set, nil
 }
 
-// ActivePermissionKeys lists every active permission (used for superusers
-// in /me).
+// ActivePermissionKeys lists every active permission, the self ones
+// included (used for superusers in /me).
 func (s *Service) ActivePermissionKeys(ctx context.Context) ([]string, error) {
 	if err := s.ensureCatalog(ctx); err != nil {
 		return nil, err
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]string, 0, len(s.catalog.perms))
+	out := SelfPermissionKeys()
 	for k, m := range s.catalog.perms {
 		if m.status == "active" {
 			out = append(out, k)

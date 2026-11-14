@@ -5,10 +5,11 @@ import { SAlert, SBadge, SCard, SField, SHint, SPagination, SSelect, STable, typ
 import KeyFilters from './KeyFilters.vue'
 import { useCatalog } from './catalog'
 import { describeEvent } from './describe'
-import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, modelCandidates, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
+import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, keyListApi, modelCandidates, seesAllAccounts, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
 
 // Weight events (newest first): degrades, climbs, restores, revivals, cleared
-// sticky sessions and resets, filtered by key and kind.
+// sticky sessions and resets, filtered by key and kind. A viewer of some
+// accounts only (seesAllAccounts) picks an account first.
 const props = defineProps<{ preset?: Filter | null }>()
 const host = useDwHost()
 const t = host.t
@@ -19,7 +20,9 @@ const kind = ref('')
 if (props.preset) Object.assign(filter, filterQuery(props.preset))
 const query = () => ({ ...filterQuery(filter), kind: kind.value })
 
-const list = useList<WeightEvent>(host.pluginApi, '/events', query(), { pageSize: 50 })
+const list = useList<WeightEvent>(keyListApi(), '/events', query(), { pageSize: 50 })
+const allAccounts = seesAllAccounts()
+const needsAccount = computed(() => !allAccounts && !list.filters.account_id)
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
 const models = computed(() => modelCandidates(list.items.value))
 
@@ -69,6 +72,7 @@ const showsWeight = (e: WeightEvent) => e.kind.startsWith('weight_') || (e.kind 
     </SCard>
 
     <SAlert v-if="error" tone="danger" class="dw-section">{{ error }}</SAlert>
+    <SAlert v-else-if="needsAccount" class="dw-section" data-testid="dw-needs-account">{{ t('filter.needsAccount') }}</SAlert>
 
     <SCard :padded="false" class="dw-section">
       <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :empty-text="t('events.empty')" dense>

@@ -101,7 +101,7 @@ tools/sub2api-plugin/sub2api-plugin pack --dir plugins/payment --out payment.s2p
 
 ### Webhook（`routes.webhook`）
 
-- `POST /api/v1/p/payment/webhook/:provider`：支付渠道回调
+- `POST /api/v1/p/payment/webhook/:provider`：支付渠道回调。渠道没有启用的实例回 404；尚未注册验签器（`NotificationVerifier`）回 501，订单不变（当前各渠道均未接入验签）
 
 ## 限制与已知问题
 

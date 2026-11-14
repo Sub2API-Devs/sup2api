@@ -432,10 +432,24 @@ func (h *fakeHook) count() int {
 // ---------------------------------------------------------------- core service fakes
 
 type fakeAuth struct {
+	mu   sync.Mutex
 	keys map[string]*core.APIKeyPrincipal
+	err  error // returned instead of a principal when set
+}
+
+// change edits the fake while requests may be authenticating.
+func (a *fakeAuth) change(fn func(a *fakeAuth)) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	fn(a)
 }
 
 func (a *fakeAuth) Authenticate(_ context.Context, raw string) (*core.APIKeyPrincipal, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.err != nil {
+		return nil, a.err
+	}
 	if p, ok := a.keys[raw]; ok {
 		cp := *p
 		return &cp, nil

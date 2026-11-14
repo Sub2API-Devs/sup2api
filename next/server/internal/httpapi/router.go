@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // APIPrefix is the path of the console API group, the core route
@@ -23,56 +25,229 @@ type Router struct {
 	api    *gin.RouterGroup
 	tokens core.TokenVerifier
 	authz  core.Authorizer
+	stepUp core.StepUpVerifier
+	// sessions keeps the step-up sessions of StepUpSession views.
+	sessions core.StepUpSessions
+	noKeys   bool
+	scope    string // step-up scope of the StepUp or StepUpSession view
+	// session names the step-up session a StepUpSession view's request
+	// continues; nil on other views.
+	session func(*gin.Context) string
+	// routes records every route registered through r and its views
+	// (Routes), shared by all of them.
+	routes *[]*RouteSpec
 }
 
 // NewRouter mounts common middleware on engine and returns the /api/v1 router.
+// tokens spends the step-up proofs of StepUp routes when it implements
+// core.StepUpVerifier, and keeps the sessions of StepUpSession routes when
+// it implements core.StepUpSessions; otherwise those routes fail closed.
 func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authorizer) *Router {
 	engine.Use(RequestContext(), Recover())
-	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz}
+	stepUp, _ := tokens.(core.StepUpVerifier)
+	sessions, _ := tokens.(core.StepUpSessions)
+	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz, stepUp: stepUp, sessions: sessions, routes: new([]*RouteSpec)}
 }
 
-// Public registers an unauthenticated route.
-func (r *Router) Public(method, path string, h ...gin.HandlerFunc) {
+// Public registers an unauthenticated route; on a SessionOnly, StepUp or
+// StepUpSession view it panics, since it would enforce none of them.
+func (r *Router) Public(method, path string, h ...gin.HandlerFunc) *RouteSpec {
+	if r.noKeys || r.scope != "" {
+		panic("httpapi: Public on a SessionOnly, StepUp or StepUpSession view: " + method + " " + path)
+	}
 	r.api.Handle(method, path, h...)
+	return r.record(method, path, ModePublic, nil)
 }
 
-// Authed registers a route for any logged-in user, not for an access key: a
-// route without a permission has nothing to limit a key by, and most of them
-// manage how the user signs in (CONTRACTS §80).
-func (r *Router) Authed(method, path string, h ...gin.HandlerFunc) {
-	chain := []gin.HandlerFunc{r.authenticate(), rejectAccessKey}
-	r.api.Handle(method, path, append(chain, h...)...)
+// Handle registers a route for any logged-in user or access key, without a
+// permission: the handler limits what the caller gets by itself. On a
+// SessionOnly view it is a route for login sessions only (CONTRACTS §80:
+// managing access keys and login sessions).
+func (r *Router) Handle(method, path string, h ...gin.HandlerFunc) *RouteSpec {
+	return r.handle(method, path, ModeAuthed, nil, nil, h)
 }
 
 // AuthedRead registers a read-only route for any logged-in user or access key:
 // who the caller is and what they can see, under the key's own limits.
-func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
-	r.api.Handle(http.MethodGet, path, append([]gin.HandlerFunc{r.authenticate()}, h...)...)
+func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) *RouteSpec {
+	return r.handle(http.MethodGet, path, ModeAuthed, nil, nil, h)
 }
 
-func rejectAccessKey(c *gin.Context) {
-	if _, ok := core.AccessKey(c.Request.Context()); ok {
-		Fail(c, core.ErrPermissionDenied.WithMessage("access keys cannot use this endpoint"))
+// Self registers a route of the caller's own account, under one of the self
+// permissions (authz.SelfPermissionKeys) every signed-in user holds: a login
+// session always passes, an access key only when it was given perm.
+func (r *Router) Self(method, path string, key perm.Key, h ...gin.HandlerFunc) *RouteSpec {
+	if !strings.HasPrefix(string(key), "self:") {
+		panic("httpapi: Self with a permission outside the self module: " + string(key))
 	}
+	return r.Perm(method, path, key, h...)
+}
+
+// SessionOnly returns a view of r whose routes refuse access keys; r itself
+// is unchanged.
+func (r *Router) SessionOnly() *Router {
+	v := *r
+	v.noKeys = true
+	return &v
+}
+
+// StepUp returns a view of r whose routes need, after their permission, a
+// step-up proof for scope bound to the request's operation (header
+// X-Verify-Proof, CONTRACTS §80.2): one the caller got from POST /me/verify
+// with the same session or access key. Without one they answer 403
+// verification_required. r itself is unchanged.
+func (r *Router) StepUp(scope string) *Router {
+	if scope == "" {
+		panic("httpapi: StepUp without a scope")
+	}
+	v := *r
+	v.scope, v.session = scope, nil
+	return &v
+}
+
+// StepUpSession returns a view of r whose routes continue, after their
+// permission, a step-up session opened under scope (OpenStepUpSession) by
+// a route of a StepUp view: session names it from the request. They need no
+// proof of their own; a session that is unknown, idle too long or opened by
+// another user, login session or access key answers 403
+// verification_expired. r itself is unchanged.
+func (r *Router) StepUpSession(scope string, session func(*gin.Context) string) *Router {
+	if scope == "" || session == nil {
+		panic("httpapi: StepUpSession without a scope or a session")
+	}
+	v := *r
+	v.scope, v.session = scope, session
+	return &v
 }
 
 // Perm registers a route requiring permission.
-func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
-	chain := []gin.HandlerFunc{r.authenticate(), r.require(permission)}
-	r.api.Handle(method, path, append(chain, h...)...)
+func (r *Router) Perm(method, path string, permission perm.Key, h ...gin.HandlerFunc) *RouteSpec {
+	return r.handle(method, path, ModePerm, []perm.Key{permission}, r.require(string(permission)), h)
 }
 
-// PermAny registers a route the caller may use with any one of keys, e.g.
-// the "all" key and its "own" counterpart (CONTRACTS §21.1). Every key the
-// caller holds is recorded in the request context (Granted /
-// core.OwnerScope). Without a match the response is permission_denied with
-// details.permission = keys[0].
-func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...string) {
+// PermAny registers a route the caller may use with any one of keys, each
+// unscoped (scoped actions use PermScoped). Every key the caller holds is
+// recorded in the request context (Granted). Without a match the response
+// is permission_denied with details.permission = keys[0].
+func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...perm.Key) *RouteSpec {
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")
 	}
-	chain := []gin.HandlerFunc{r.authenticate(), r.requireAny(keys), handler}
-	r.api.Handle(method, path, chain...)
+	return r.handle(method, path, ModeAny, keys, r.requireAny(perm.Strings(keys)), []gin.HandlerFunc{handler})
+}
+
+// PermScoped registers a route of rows: the caller needs one of actions
+// with any scope (PermissionSet.HasAction), all rows or some (CONTRACTS
+// §21); the handler narrows to the rows it reaches with core.Scope, which
+// the middleware fills for each action held. An action held for every row
+// is also recorded in Granted. Without any, the response is
+// permission_denied with details.permission = actions[0].
+func (r *Router) PermScoped(method, path string, handler gin.HandlerFunc, actions ...perm.Key) *RouteSpec {
+	if len(actions) == 0 {
+		panic("httpapi: PermScoped without an action")
+	}
+	return r.handle(method, path, ModeScoped, actions, r.requireScoped(actions), []gin.HandlerFunc{handler})
+}
+
+func (r *Router) requireScoped(actions []perm.Key) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		uid, _ := core.UserID(ctx)
+		set, err := r.authz.PermissionSet(ctx, uid)
+		if err != nil {
+			Fail(c, err)
+			return
+		}
+		var granted []string
+		held := false
+		for _, a := range actions {
+			// Every action gets its scope, empty when not held.
+			scope := set.DataScope(uid, a)
+			ctx = core.WithScope(ctx, a, scope)
+			held = held || !scope.Empty()
+			if scope.All {
+				granted = append(granted, string(a))
+			}
+		}
+		if !held {
+			Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": string(actions[0])}))
+			return
+		}
+		c.Request = c.Request.WithContext(core.WithGranted(ctx, granted))
+		c.Next()
+	}
+}
+
+// handle registers a route of mode under keys: authentication, then check
+// (the permission, when there is one), then the step-up proof on a StepUp
+// view, then h.
+func (r *Router) handle(method, path string, mode Mode, keys []perm.Key, check gin.HandlerFunc, h []gin.HandlerFunc) *RouteSpec {
+	chain := r.auth()
+	if check != nil {
+		chain = append(chain, check)
+	}
+	switch {
+	case r.session != nil:
+		chain = append(chain, r.continueStepUp(r.scope, r.session))
+	case r.scope != "":
+		chain = append(chain, r.requireStepUp(r.scope))
+	}
+	r.api.Handle(method, path, append(chain, h...)...)
+	return r.record(method, path, mode, keys)
+}
+
+// requireStepUp spends the request's step-up proof on scope.
+func (r *Router) requireStepUp(scope string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if r.stepUp == nil {
+			Fail(c, core.ErrInternal.WithMessage("step-up verification is not available"))
+			return
+		}
+		if err := r.stepUp.ConsumeStepUp(c.Request.Context(), scope); err != nil {
+			Fail(c, err)
+			return
+		}
+		c.Set(spentStepUpKey, spentStepUp{scope: scope, sessions: r.sessions})
+		c.Next()
+	}
+}
+
+// continueStepUp passes a request continuing the step-up session session
+// names under scope.
+func (r *Router) continueStepUp(scope string, session func(*gin.Context) string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if r.sessions == nil {
+			Fail(c, core.ErrInternal.WithMessage("step-up sessions are not available"))
+			return
+		}
+		if err := r.sessions.ContinueStepUpSession(c.Request.Context(), scope, session(c)); err != nil {
+			Fail(c, err)
+			return
+		}
+		c.Next()
+	}
+}
+
+// spentStepUpKey holds, in the gin context of a StepUp view's request, the
+// scope its proof was spent on (spentStepUp).
+const spentStepUpKey = "httpapi.stepUp"
+
+type spentStepUp struct {
+	scope    string
+	sessions core.StepUpSessions
+}
+
+// OpenStepUpSession lets the proof a StepUp view's request spent cover the
+// requests that continue what it started: the routes of a StepUpSession
+// view under the same scope whose request names session. It fails outside
+// a StepUp view's request.
+func OpenStepUpSession(c *gin.Context, session string) error {
+	v, _ := c.Get(spentStepUpKey)
+	spent, ok := v.(spentStepUp)
+	if !ok || spent.sessions == nil {
+		return core.ErrInternal.WithMessage("step-up sessions are not available")
+	}
+	return spent.sessions.OpenStepUpSession(c.Request.Context(), spent.scope, session)
 }
 
 // Granted returns the permission keys the route middleware matched for the
@@ -84,22 +259,66 @@ func Granted(c *gin.Context) []string {
 // Group exposes the raw group for special cases (plugin route proxy).
 func (r *Router) Group() *gin.RouterGroup { return r.api }
 
-func (r *Router) authenticate() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		h := c.GetHeader("Authorization")
-		token, ok := strings.CutPrefix(h, "Bearer ")
-		if !ok || token == "" {
-			Fail(c, core.ErrUnauthenticated)
-			return
+// auth is the authentication chain of r's routes: the bearer check, then,
+// on a SessionOnly view, the access key refusal.
+func (r *Router) auth() []gin.HandlerFunc {
+	chain := []gin.HandlerFunc{func(c *gin.Context) {
+		if Authenticate(c, r.tokens) {
+			StampAuthzVersion(c, r.authz)
+			c.Next()
 		}
-		ctx, _, err := core.AuthenticateBearer(c.Request.Context(), r.tokens, token, c.ClientIP())
-		if err != nil {
-			Fail(c, core.ErrUnauthenticated.WithCause(err))
-			return
-		}
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
+	}}
+	if r.noKeys {
+		chain = append(chain, func(c *gin.Context) {
+			if RejectAccessKey(c) {
+				c.Next()
+			}
+		})
 	}
+	return chain
+}
+
+// HeaderAuthzVersion carries core.AuthzVersioner's version on every
+// authenticated response of the console API.
+const HeaderAuthzVersion = "X-Authz-Version"
+
+// StampAuthzVersion sets HeaderAuthzVersion when the authorizer tells its
+// version. Router does it for its routes; a handler that authenticates by
+// itself (the plugin route proxy) calls it after Authenticate.
+func StampAuthzVersion(c *gin.Context, authz core.Authorizer) {
+	if v, ok := authz.(core.AuthzVersioner); ok {
+		c.Header(HeaderAuthzVersion, strconv.FormatInt(v.Version(), 10))
+	}
+}
+
+// Authenticate resolves the request's bearer token (a JWT or an access key)
+// and stores the caller in the request context, with the step-up proof the
+// request carries (core.WithStepUp). On failure it renders unauthenticated
+// and returns false.
+func Authenticate(c *gin.Context, tokens core.TokenVerifier) bool {
+	token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if !ok || token == "" {
+		Fail(c, core.ErrUnauthenticated)
+		return false
+	}
+	ctx, _, err := core.AuthenticateBearer(c.Request.Context(), tokens, token, c.ClientIP())
+	if err != nil {
+		Fail(c, core.ErrUnauthenticated.WithCause(err))
+		return false
+	}
+	ctx = core.WithStepUp(ctx, c.GetHeader(core.HeaderVerifyProof), c.Request.Method+" "+c.Request.URL.Path)
+	c.Request = c.Request.WithContext(ctx)
+	return true
+}
+
+// RejectAccessKey renders permission_denied and returns false when the
+// caller authenticated with an access key.
+func RejectAccessKey(c *gin.Context) bool {
+	if _, ok := core.AccessKey(c.Request.Context()); ok {
+		Fail(c, core.ErrPermissionDenied.WithMessage("access keys cannot use this endpoint"))
+		return false
+	}
+	return true
 }
 
 func (r *Router) require(permission string) gin.HandlerFunc {

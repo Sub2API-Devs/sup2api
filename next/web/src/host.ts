@@ -1,12 +1,15 @@
 import { computed } from 'vue'
 import type { Router } from 'vue-router'
-import { api, configureHttp, provideHost, startKeepAlive, HOST_UI_VERSION, type HostContext } from '@sub2api/host'
+import { api, configureHttp, provideHost, session, startKeepAlive, HOST_UI_VERSION, type HostContext } from '@sub2api/host'
 import { confirm, toast } from '@sub2api/ui'
 import { addMessages, currentLocale, i18n, lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import { watchPermissions } from '@/stores/authzWatch'
 import { hostComponents } from '@/components/plugin/hostComponents'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
+import { cancelStepUps, requestStepUp } from '@/components/stepUp/stepUp'
+import { patternKey } from '@/authz/implies'
 
 /** Wires the HTTP client and publishes the host context for plugins. */
 export function setupHost(router: Router) {
@@ -21,8 +24,13 @@ export function setupHost(router: Router) {
       if (reason === 'expired') auth.sessionExpired = true
       const cur = router.currentRoute.value
       if (!cur.meta.public) router.replace({ path: '/login', query: { redirect: cur.fullPath } })
-    }
+    },
+    ...watchPermissions(router),
+    // High-risk operations answer 403 verification_required: verify, then replay with the proof.
+    onVerificationRequired: requestStepUp
   })
+  // Signed out (or the session could not be renewed): no verification is left to ask for.
+  session.onChange((s) => !s && cancelStepUps())
   // A login lasts while it is used: renew the access token before it expires.
   startKeepAlive()
 
@@ -42,8 +50,11 @@ export function setupHost(router: Router) {
     },
     permissions: {
       superuser: () => !!auth.me?.superuser,
-      has: k => auth.has(k),
-      any: (...keys) => auth.has(keys)
+      // Plugin keys come from the plugin, unchecked.
+      has: k => auth.hasDynamic(k),
+      any: (...keys) => auth.hasDynamic(keys),
+      hasAction: a => auth.hasAction(a),
+      scope: action => auth.scopes(action).map(scope => patternKey({ action, scope }))
     },
     theme: computed(() => app.theme) as any,
     toast: (m, kind) => toast(m, kind),

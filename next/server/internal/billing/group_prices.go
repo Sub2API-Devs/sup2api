@@ -15,6 +15,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -22,7 +23,7 @@ import (
 func (s *Service) registerPricingRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/groups/:id/model-prices", "group:read", s.showGroupPrices)
 	r.Perm("PUT", "/groups/:id/model-prices", "group:manage", s.saveGroupPrices)
-	r.Perm("POST", "/pricing/quote", "price:read", s.quotePricing)
+	r.Perm("POST", "/pricing/quote", "price:read", s.quotePricing).Uses(perm.GroupRead, perm.UserRead, perm.SegmentRead)
 }
 
 // pricedGroup is what pricing reads of a group.
@@ -374,6 +375,9 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 		if err != nil {
 			return err
 		}
+		if err := segment.GuardOwnSegments(ctx, tx, core.GuardOrDeny(s.Users), segmentsOf(changes)); err != nil {
+			return err
+		}
 		if err := applyChanges(ctx, tx, changes, uid); err != nil {
 			return err
 		}
@@ -389,6 +393,18 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 	}
 	s.changed(ctx, "price_rules")
 	httpapi.OK(c, out)
+}
+
+// segmentsOf is the segments the changes give their own prices (0, the
+// group's own price, is none).
+func segmentsOf(changes []ruleChange) []int64 {
+	ids := []int64{}
+	for _, c := range changes {
+		if c.on.SegmentID != 0 {
+			ids = append(ids, c.on.SegmentID)
+		}
+	}
+	return ids
 }
 
 // applyChanges writes the changes in one round trip. They go in the order of

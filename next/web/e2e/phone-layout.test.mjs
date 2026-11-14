@@ -73,9 +73,6 @@ const BULK_PAGES = ['/accounts', '/me/api-keys']
 /** A page whose tab bar is wider than a phone, opened on its last tabs. */
 const TABS_PAGE = '/plugins/guard?tab=settings'
 
-/** Pages without a menu entry: the balance ledger is opened from a row of the users list. */
-const LINKED_PAGES = ['/ledger']
-
 /**
  * The pages of system settings (CONTRACTS §90): on the settings page the
  * sidebar shows the settings view's menu instead of the console's, with the
@@ -123,12 +120,12 @@ for (const name of DEVICES) {
 
     test('the menu, system settings and the installed plugins list reach the console pages', () => {
       assert.ok(pages.length > 10, `pages: ${pages.join(', ')}`)
-      for (const path of CARD_PAGES.filter(p => !LINKED_PAGES.includes(p))) assert.ok(pages.includes(path), `${path} is not in the menu`)
+      for (const path of CARD_PAGES) assert.ok(pages.includes(path), `${path} is not in the menu`)
       assert.ok(pages.includes('/plugins/guard?tab=settings'), 'the installed plugins list opens no settings form')
     })
 
     test('no page scrolls sideways; list pages show cards, the main ones within the first screen', async t => {
-      for (const path of [...pages, ...LINKED_PAGES]) {
+      for (const path of pages) {
         await t.test(path, async () => {
           await page.goto(`${BASE}${path}`)
           await page.waitForLoadState('networkidle')

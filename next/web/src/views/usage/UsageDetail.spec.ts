@@ -6,7 +6,7 @@ import type { UsageRow } from './usage'
 
 const get = vi.hoisted(() => vi.fn())
 vi.mock('@sub2api/host', () => ({ api: { get } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false, hasAction: () => false }) }))
 vi.mock('@/views/accounts/accountTypes', () => ({ useAccountTypes: () => ({ load: vi.fn() }) }))
 vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (id: string) => id }) }))
 enableAutoUnmount(afterEach)

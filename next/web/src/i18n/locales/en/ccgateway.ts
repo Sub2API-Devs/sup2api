@@ -152,7 +152,7 @@ export default {
     codeLabel: 'Full authorization code (code#state)', codePlaceholder: 'Paste the code, like xxxx#yyyy', codeShape: 'The code normally contains # (code#state); make sure you copied all of it.', submit: 'Complete authorization',
     completeFailed: 'The authorization code was not accepted', notConfirmed: 'The code was accepted, but the container has not confirmed the login yet; retry shortly or request a new link.', regetLink: 'Request a new link', cancel: 'Cancel this authorization',
     authorized: 'Credentials saved', loggedOut: 'No saved credentials', authorizedToast: 'Claude credentials saved', authorizedDraftHint: 'The account can now be saved.', reauthorize: 'Re-authorize',
-    readOnly: 'Starting the container and authorizing need the right to edit this account (or settings:manage); ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
+    readOnly: 'Starting the container and authorizing need the right to edit this account; ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
     saveBlocked: 'The account can be saved once Claude is authorized', saveBlockedFix: 'Show the authorization steps',
     blockedTitle: 'Account container stopped: {reason}', blockedUnknown: 'the core stopped this container',
     blocked: { pickProxy: 'Pick a proxy' },
@@ -507,6 +507,7 @@ export default {
     },
     upstream: {
       hint: 'The request the CLI finally sent upstream; secret header values are masked.',
+      hintSummary: 'The request the CLI finally sent upstream: its host and summary headers only (the rest needs settings:manage).',
       none: 'No request sent upstream was recorded (an older log, the request never reached sending, or the CLI wrote no record).',
       body: 'Upstream request body',
       method: 'Method', url: 'URL', attempts: 'Sends', sentAt: 'Last sent', encoding: 'Body encoding',
@@ -521,7 +522,7 @@ export default {
     contentGone: "This log's content has expired or was deleted.",
     eventFilter: 'Filter by event name',
     eventsTruncated: 'Too many events; only the first part is shown.',
-    eventsBounded: 'Event texts show their first 256 bytes.',
+    eventsBounded: 'Events show their summary fields only; error texts, paths and identities need settings:manage.',
     contentNotice: "Content holds users' conversations; reading and downloading it is audited.",
     kind: { request: 'Request', build: 'Build', history: 'History', cli: 'CLI', upstream: 'Upstream', response: 'Response', other: 'Other' },
     content: {

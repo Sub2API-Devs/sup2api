@@ -30,6 +30,7 @@ import type { Role, User } from '@/api/types'
 import { deleteWithConfirm, useStatusOptions } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useSelection } from '@/composables/useSelection'
+import { SUPPLIER_ROLE, isPlainUser, useAssignableRoles, withSupplierUser } from '@/composables/useAssignableRoles'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -37,10 +38,14 @@ import { applyFormError } from '@/utils/formErrors'
 import { formatMoney } from '@/utils/format'
 import SegmentBadge from '@/components/pricing/SegmentBadge.vue'
 import AdjustBalanceModal from '@/views/ledger/AdjustBalanceModal.vue'
+import ResetPasswordDialog from './ResetPasswordDialog.vue'
+import TransferSuperAdminDialog from './TransferSuperAdminDialog.vue'
 import UserCreateDialog from './UserCreateDialog.vue'
 import UserPricingDrawer from './UserPricingDrawer.vue'
 import UserSegmentMoveDialog from './UserSegmentMoveDialog.vue'
 import { segmentFilterOptions, useNamedSegments } from './userSegments'
+import { useScopeLabels } from '@/views/roles/scopeLabels'
+import type { PermRef } from '@/generated/permissions'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -66,6 +71,13 @@ loadRoles()
 function roleName(key: string) {
   const r = roles.value.find((x) => x.key === key)
   return r ? lt(r.name) || key : key
+}
+
+const scopeLabels = useScopeLabels()
+/** The resource scopes of a role, for its badge's tooltip (CONTRACTS §21); undefined without any. */
+function roleScopes(key: string): string | undefined {
+  const text = scopeLabels.summary(roles.value.find((x) => x.key === key)?.permission_keys ?? [])
+  return text ? t('users.roleScopes', { list: text }) : undefined
 }
 
 // ------------------------------------------------------------------ user groups (segments)
@@ -100,22 +112,37 @@ const columns = computed<TableColumn[]>(() => {
 const statusFilterOptions = useStatusOptions(true)
 const statusOptions = useStatusOptions()
 
-const roleChoices = computed<ChoiceOption[]>(() => roles.value.map((r) => ({ value: r.key, label: lt(r.name) || r.key, description: lt(r.description) || undefined })))
 
 const roleOptions = computed(() => [
   { value: '', label: t('users.allRoles') },
   ...roles.value.map((r) => ({ value: r.key, label: lt(r.name) || r.key }))
 ])
 
+const isSuper = (u: User) => !!u.roles?.includes('super_admin')
+
+// The users the caller may act on (CONTRACTS §43.6): actions that change a
+// user are only offered on them; the server decides either way.
+const managed = useAssignableRoles()
+
+// The super admin can only be changed by itself (CONTRACTS §43.6): no actions
+// on its row for others; its own row only hands the role over.
 function rowActions(u: User): MenuAction[] {
+  const self = u.id === auth.me?.id
+  if (isSuper(u)) return self ? [{ key: 'transfer', label: t('users.transfer.action'), danger: true }] : []
+  const may = (perm: PermRef) => auth.has(perm) && managed.manageable(u.roles)
   return [
-    { key: 'edit', label: t('common.edit'), hidden: !auth.has('user:update') },
-    { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:manage') },
+    { key: 'edit', label: t('common.edit'), hidden: !may('user:update') },
+    { key: 'roles', label: t('users.assignRoles'), hidden: !may('role:assign') },
     { key: 'pricing', label: t('users.pricing.action'), hidden: !auth.has('segment:read') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
-    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:update') || u.id === auth.me?.id },
-    { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
-    { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || u.id === auth.me?.id }
+    // PATCH /users/:id needs user:update, a password for another user also user:password:reset.
+    { key: 'password', label: t('users.resetPassword.action'), hidden: !may('user:update') || !auth.has('user:password:reset') || self },
+    // One's own second factor is reset under /me with a verification.
+    { key: 'security', label: t('users.resetSecurity'), hidden: !may('user:password:reset') || self },
+    // balance:adjust reaches plain users; users holding other roles also take balance:adjust:any.
+    { key: 'balance', label: t('users.adjustBalance'), hidden: !may('balance:adjust') || !(isPlainUser(u.roles) || auth.has('balance:adjust:any')) },
+    // Nobody disables or deletes themselves (a lock-out guard, not a permission).
+    { key: 'delete', label: t('common.delete'), danger: true, hidden: !may('user:delete') || self }
   ]
 }
 
@@ -140,7 +167,9 @@ function onAction(u: User, key: string) {
   else if (key === 'pricing') openPricing(u)
   else if (key === 'ledger') router.push({ path: '/ledger', query: { user_id: String(u.id) } })
   else if (key === 'balance') openBalance(u)
+  else if (key === 'password') openPassword(u)
   else if (key === 'security') resetSecurity(u)
+  else if (key === 'transfer') transferOpen.value = true
   else if (key === 'delete') remove(u)
 }
 
@@ -206,11 +235,35 @@ const rolesOpen = ref(false)
 const rolesUser = ref<User | null>(null)
 const rolesSel = ref<ChoiceOption['value'][]>([])
 
+// The managed roles, plus the roles the user holds that are not: those stay
+// checked and locked and go back unchanged (the server checks the difference).
+// A managed role the caller may not grant can be kept but not added.
+const roleChoices = computed<ChoiceOption[]>(() => {
+  const held = rolesUser.value?.roles || []
+  const locked = held.filter((k) => !managed.get(k))
+  return [
+    ...managed.roles.value.map((r) => ({
+      value: r.key,
+      label: lt(r.name) || r.key,
+      description: r.grantable ? undefined : t('users.roleNotGrantable', { keys: [...(r.missing || []), ...(r.missing_assignable || [])].join(', ') || r.key }),
+      disabled: !r.grantable && !held.includes(r.key)
+    })),
+    ...locked.map((k) => ({ value: k, label: roleName(k), description: t('users.roleLocked'), disabled: true }))
+  ]
+})
+
 function openRoles(u: User) {
   rolesUser.value = u
   rolesSel.value = [...(u.roles || [])]
   loadRoles()
+  void managed.load()
   rolesOpen.value = true
+}
+
+/** Checking supplier checks the default role with it, as when creating a user. */
+function setRolesSel(v: ChoiceOption['value'][]) {
+  const added = v.includes(SUPPLIER_ROLE) && !rolesSel.value.includes(SUPPLIER_ROLE)
+  rolesSel.value = added ? withSupplierUser(v.map(String)) : v
 }
 
 async function submitRoles() {
@@ -246,6 +299,17 @@ const balanceUser = ref<User | null>(null)
 function openBalance(u: User) {
   balanceUser.value = u
   balanceOpen.value = true
+}
+
+// ------------------------------------------------------------------ password reset, super admin transfer
+
+const passwordOpen = ref(false)
+const passwordUser = ref<User | null>(null)
+const transferOpen = ref(false)
+
+function openPassword(u: User) {
+  passwordUser.value = u
+  passwordOpen.value = true
 }
 
 // ------------------------------------------------------------------ delete
@@ -289,10 +353,11 @@ function remove(u: User) {
     <STable v-model:selected="selectionKeys" card :selectable="canManageSegments" :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-email="{ row }">
         <span class="font-medium text-fg">{{ row.email }}</span>
+        <SBadge v-if="isSuper(row)" tone="accent" size="xs" class="ms-2" data-testid="super-admin-badge">{{ t('users.superAdminBadge') }}</SBadge>
       </template>
       <template #cell-roles="{ row }">
         <div class="flex flex-wrap gap-1">
-          <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'accent' : 'primary'">{{ roleName(r) }}</SBadge>
+          <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'accent' : 'primary'" :title="roleScopes(r)">{{ roleName(r) }}</SBadge>
           <SHint v-if="!row.roles || !row.roles.length" inline>—</SHint>
         </div>
       </template>
@@ -334,15 +399,15 @@ function remove(u: User) {
 
     <!-- roles -->
     <SFormModal v-model:open="rolesOpen" :title="t('users.assignRolesTitle', { name: rolesUser?.email || '' })" :loading="saving" :enter-submit="false" @submit="submitRoles">
-      <SChoiceCards v-if="roles.length" v-model="rolesSel" multiple :cols="1" :options="roleChoices" :aria-label="t('users.roles')">
-        <template v-for="r in roles" :key="r.key" #[`option-${r.key}`]>
+      <SChoiceCards v-if="roleChoices.length" :model-value="rolesSel" multiple :cols="1" :options="roleChoices" :aria-label="t('users.roles')" data-testid="user-roles-choices" @update:model-value="setRolesSel($event as ChoiceOption['value'][])">
+        <template v-for="o in roleChoices" :key="o.value" #[`option-${o.value}`]>
           <span class="mt-1 flex items-center gap-2">
-            <SHint inline size="xs" class="font-mono">{{ r.key }}</SHint>
-            <SBadge v-if="r.superuser" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
+            <SHint inline size="xs" class="font-mono">{{ o.value }}</SHint>
+            <SBadge v-if="roles.find((r) => r.key === o.value)?.superuser" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
           </span>
         </template>
       </SChoiceCards>
-      <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
+      <SHint v-else>{{ t('users.noManagedRoles') }}</SHint>
     </SFormModal>
 
     <!-- move to a user group -->
@@ -350,6 +415,10 @@ function remove(u: User) {
 
     <!-- groups and pricing -->
     <UserPricingDrawer v-model:open="pricingOpen" :user="pricingUser" @changed="list.reload()" />
+
+    <!-- password reset, super admin transfer -->
+    <ResetPasswordDialog v-model:open="passwordOpen" :user="passwordUser" />
+    <TransferSuperAdminDialog v-model:open="transferOpen" />
 
     <!-- balance -->
     <AdjustBalanceModal v-model:open="balanceOpen" :user-id="balanceUser?.id ?? null" :current-balance="balanceUser?.balance" @done="list.reload()" />

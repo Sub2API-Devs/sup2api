@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const get = vi.fn()
 const list = vi.fn()
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get, list } }))
+const denied = new Set<string>()
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !denied.has(key) }) }))
 
 // lookups.ts caches module-wide: every test gets a fresh copy (and the
 // ApiError class of that copy, which isApiError checks against).
@@ -128,5 +130,26 @@ describe('groups with the picked ones past the first page', () => {
     ids.value = [900]
     await settled()
     expect(asked()).toEqual(['/groups/900', '/groups/901', '/groups/900'])
+  })
+})
+
+describe('groups without group:read', () => {
+  beforeEach(() => {
+    get.mockReset()
+    list.mockReset()
+    denied.add('group:read')
+    return () => denied.clear()
+  })
+
+  it('asks for nothing (an own-level account editor would get a 403) and keeps the list empty', async () => {
+    const { useGroupsLookup, useGroupsWith } = await fresh()
+    const { groups, ready } = useGroupsLookup()
+    await ready
+    const picked = useGroupsWith(() => [2])
+    await new Promise((resolve) => setTimeout(resolve))
+    expect(groups.value).toEqual([])
+    expect(picked.value).toEqual([])
+    expect(list).not.toHaveBeenCalled()
+    expect(get).not.toHaveBeenCalled()
   })
 })

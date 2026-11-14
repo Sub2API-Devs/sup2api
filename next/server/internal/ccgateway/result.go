@@ -1,11 +1,8 @@
 package ccgateway
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
 	"net/url"
 	"time"
 )
@@ -54,32 +51,4 @@ func sessionResult(raw []byte) (any, error) {
 		return nil, nil
 	}
 	return safeResult("/auth/start", v.Session)
-}
-
-func (s *Service) Ready(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cfg, e := s.Load(ctx)
-	if e != nil || cfg.AdminKey == "" || cfg.APIKey == "" {
-		return errors.New("CCGateway keys are not configured")
-	}
-	client, base, close, e := s.open(ctx, cfg)
-	if e != nil {
-		return e
-	}
-	defer close()
-	req, _ := http.NewRequestWithContext(ctx, "GET", base+"/admin/status", nil)
-	req.Header.Set("Authorization", "Bearer "+cfg.AdminKey)
-	res, e := client.Do(req)
-	if e != nil {
-		return errors.New("CCGateway unavailable")
-	}
-	defer res.Body.Close()
-	var v struct {
-		LoggedIn bool `json:"logged_in"`
-	}
-	if res.StatusCode != 200 || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&v) != nil || !v.LoggedIn {
-		return errors.New("CCGateway is not authorized")
-	}
-	return nil
 }

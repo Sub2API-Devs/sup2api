@@ -57,20 +57,37 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 		return 1, nil
 	case "nobody":
 		return 2, nil
+	case "owner": // account:*:own (see accounts)
+		return 3, nil
+	case "plain": // no account key
+		return 4, nil
 	}
 	return 0, errors.New("bad token")
 }
 
+// VerifyAccessKey accepts any key as the admin's: sak_<permission> carries
+// plugin.demo:<permission>.
+func (tokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	perm := "plugin.demo:" + strings.TrimPrefix(raw, core.AccessKeyPrefix)
+	return core.AccessKeyIdentity{UserID: 1, KeyID: 1, Permissions: []string{perm}}, nil
+}
+
 type authz struct{}
 
-func (authz) Can(_ context.Context, uid int64, perm string) (bool, error) {
-	return uid == 1 && perm == "plugin.demo:rules:read", nil
+// Can grants the demo plugin's keys to every user but "nobody", narrowed by
+// the request's access key as authz does.
+func (authz) Can(ctx context.Context, uid int64, perm string) (bool, error) {
+	set := core.PermissionSetOf()
+	if uid != 2 {
+		set = core.PermissionSetOf("plugin.demo:rules:read", "plugin.demo:reset")
+	}
+	return core.RestrictToAccessKey(ctx, uid, set).Has(perm), nil
 }
 func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
-func (authz) CanActOn(context.Context, int64, []string) error { return nil }
+func (authz) Version() int64                                  { return 42 }
 
 func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
 	return setupManifest(t, registrytest.Manifest("demo", "1.0.0"), opts...)
@@ -105,13 +122,7 @@ func TestPluginAPISelfFencing(t *testing.T) {
 	e, h, _, pkg := setup(t, routes.WithHealth(hc))
 
 	w := do(e, "POST", "/api/v1/p/demo/hook", "", `{}`)
-	var out struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	_ = json.Unmarshal(w.Body.Bytes(), &out)
-	if w.Code != http.StatusServiceUnavailable || out.Error.Code != "unavailable" || h.last != nil {
+	if w.Code != http.StatusServiceUnavailable || errorCode(w) != "unavailable" || h.last != nil {
 		t.Fatalf("unhealthy: %d %s", w.Code, w.Body)
 	}
 	if w.Header().Get("Retry-After") == "" {
@@ -166,11 +177,25 @@ func TestPluginAPIRoutes(t *testing.T) {
 		t.Fatal("plugin responses must be sandboxed")
 	}
 
-	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "", ""); w.Code != 401 {
-		t.Fatalf("no token: %d", w.Code)
+	// Authenticated answers carry the authz version like the core's own.
+	if got := w.Header().Get(httpapi.HeaderAuthzVersion); got != "42" {
+		t.Fatalf("%s = %q", httpapi.HeaderAuthzVersion, got)
 	}
-	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "nobody", ""); w.Code != 403 {
-		t.Fatalf("no permission: %d", w.Code)
+
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "", ""); w.Code != 401 || w.Header().Get(httpapi.HeaderAuthzVersion) != "" {
+		t.Fatalf("no token: %d %v", w.Code, w.Header())
+	}
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "nobody", ""); w.Code != 403 || w.Header().Get(httpapi.HeaderAuthzVersion) != "42" {
+		t.Fatalf("no permission: %d %v", w.Code, w.Header())
+	}
+	// An access key reaches the route with its permission (期 4 S4), as
+	// its user, and not without it.
+	h.last = nil
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", core.AccessKeyPrefix+"reset", ""); w.Code != 403 || errorCode(w) != "permission_denied" || h.last != nil {
+		t.Fatalf("access key without the permission: %d %s", w.Code, w.Body)
+	}
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", core.AccessKeyPrefix+"rules:read", ""); w.Code != 201 || h.last == nil || h.last.Caller.UserId != 1 {
+		t.Fatalf("access key with the permission: %d %s", w.Code, w.Body)
 	}
 	if w := do(e, "POST", "/api/v1/p/demo/echo/42", "admin", ""); w.Code != 405 {
 		t.Fatalf("wrong method: %d", w.Code)
@@ -179,7 +204,7 @@ func TestPluginAPIRoutes(t *testing.T) {
 		t.Fatalf("unknown route: %d", w.Code)
 	}
 	// Webhooks need no login.
-	if w := do(e, "POST", "/api/v1/p/demo/hook", "", `{"a":1}`); w.Code != 201 || h.last.GetCaller().GetUserId() != 0 {
+	if w := do(e, "POST", "/api/v1/p/demo/hook", "", `{"a":1}`); w.Code != 201 || h.last.GetCaller().GetUserId() != 0 || w.Header().Get(httpapi.HeaderAuthzVersion) != "" {
 		t.Fatalf("webhook: %d", w.Code)
 	}
 	// Body limit.
@@ -191,6 +216,29 @@ func TestPluginAPIRoutes(t *testing.T) {
 	if w := do(e, "GET", "/api/v1/p/demo/echo/1", "admin", ""); w.Code != 503 {
 		t.Fatalf("disabled plugin: %d", w.Code)
 	}
+}
+
+// A route without a permission (a package that skipped validation) is
+// denied to everyone rather than open to any signed-in user.
+func TestPluginAPIRouteWithoutPermissionDenied(t *testing.T) {
+	m := registrytest.Manifest("demo", "1.0.0")
+	m.Routes = append(m.Routes, manifest.Route{Method: "GET", Path: "/open", Scope: "admin"})
+	e, h, _, _ := setupManifest(t, m)
+	for _, tok := range []string{"admin", "nobody"} {
+		if w := do(e, "GET", "/api/v1/p/demo/open", tok, ""); w.Code != 403 || errorCode(w) != "permission_denied" || h.last != nil {
+			t.Fatalf("%s: %d %s", tok, w.Code, w.Body)
+		}
+	}
+}
+
+func errorCode(w *httptest.ResponseRecorder) string {
+	var out struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return out.Error.Code
 }
 
 type auditor struct{ writes []core.PluginWrite }

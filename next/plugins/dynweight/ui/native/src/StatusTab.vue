@@ -6,26 +6,30 @@ import KeyFilters from './KeyFilters.vue'
 import KeyStatusTable from './KeyStatusTable.vue'
 import StatsPanel from './StatsPanel.vue'
 import { useCatalog } from './catalog'
-import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, keyOf, modelCandidates, useDwHost, useReset, type Filter, type KeyStatus } from './host'
+import { applyQuery, canReset, emptyFilter, errorMessage, filterQuery, keyListApi, keyOf, modelCandidates, resetsAllAccounts, seesAllAccounts, useDwHost, useReset, type Filter, type KeyStatus } from './host'
 
 // Effective weights per (account, group, model), degraded first, each with
 // its evaluation detail. A key, the selected accounts (optionally in one
 // group / model), or every key of the filtered account / group can be reset
 // to the base. A `preset` (from the page's ?account= …) fills the filter and
-// shows every key of it, not only the degraded ones.
+// shows every key of it, not only the degraded ones. A viewer of some
+// accounts only (seesAllAccounts) picks an account first and gets no node
+// counters.
 const props = defineProps<{ preset?: Filter | null }>()
 const emit = defineEmits<{ (e: 'show-events', f: Filter): void }>()
 const host = useDwHost()
 const t = host.t
 const { EntityPicker } = host.components
-const manage = computed(() => canManage())
+const manage = computed(() => canReset())
 const catalog = useCatalog()
 
 const filter = reactive({ ...emptyFilter(), ...(props.preset ? filterQuery(props.preset) : {}) })
 const degraded = ref(!props.preset)
 const query = () => ({ ...filterQuery(filter), degraded: degraded.value ? '1' : '' })
 
-const list = useList<KeyStatus>(host.pluginApi, '/status', query(), { pageSize: 50 })
+const allAccounts = seesAllAccounts()
+const list = useList<KeyStatus>(keyListApi(), '/status', query(), { pageSize: 50 })
+const needsAccount = computed(() => !allAccounts && !list.filters.account_id)
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('status.loadFailed')) : ''))
 const models = computed(() => modelCandidates(list.items.value))
 
@@ -46,7 +50,8 @@ const resetRow = (r: KeyStatus) =>
   reset({ account_id: r.account_id, group_id: r.group_id, model: r.model }, t('status.resetKeyConfirm', { account: accountLabel(r), group: catalog.groupName(r.group_id), model: r.model }), keyOf(r))
 
 // Reset every key the applied filter's account and/or group covers (not what
-// is typed but not searched yet).
+// is typed but not searched yet). A group alone covers every account: only a
+// holder of the full account:update gets it (the core refuses the others).
 // null when an id is not a positive integer (the list then shows the error).
 const filtered = computed(() => {
   const f = list.filters as Filter
@@ -82,7 +87,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
 <template>
   <div>
     <SHint class="dw-hint">{{ t('status.hint') }}</SHint>
-    <StatsPanel ref="stats" class="dw-block" />
+    <StatsPanel v-if="allAccounts" ref="stats" class="dw-block" />
 
     <SCard>
       <KeyFilters v-model="filter" :loading="list.loading.value" :models="models" @search="search" @clear="clear">
@@ -92,13 +97,14 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
       </KeyFilters>
     </SCard>
 
-    <div v-if="manage && filtered" class="dw-toolbar">
+    <div v-if="manage && filtered && (filtered.account_id || resetsAllAccounts())" class="dw-toolbar">
       <SButton variant="danger" icon="refresh" :loading="busy === 'filter'" @click="resetFiltered">
         {{ t('status.resetFiltered') }}
       </SButton>
     </div>
 
     <SAlert v-if="error" tone="danger" class="dw-section">{{ error }}</SAlert>
+    <SAlert v-else-if="needsAccount" class="dw-section" data-testid="dw-needs-account">{{ t('filter.needsAccount') }}</SAlert>
 
     <SBulkBar v-if="manage" class="dw-section" :count="selected.length" :page-selected="pageKeys.length > 0 && pageKeys.every((k) => selected.includes(k))" @select-page="selected = pageKeys" @clear="selected = []">
       <SBadge :tone="tooMany ? 'danger' : 'gray'" size="xs">{{ t('status.selectedAccounts', { n: selectedAccounts.length, max: MAX_ACCOUNT_BATCH }) }}</SBadge>

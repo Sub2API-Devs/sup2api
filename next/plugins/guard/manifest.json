@@ -6,12 +6,12 @@
     "en": "Blocks gateway requests whose prompt matches keyword or regex rules, counts traffic from usage events, and shows a dashboard.",
     "zh": "按关键词或正则规则拦截网关请求，基于用量事件统计流量，并提供统计大盘。"
   },
-  "version": "0.2.8",
+  "version": "0.2.9",
   "publisher": "sub2api",
   "icon": "text:G",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.229 <0.2.0",
+  "hostCompat": ">=0.1.286 <0.2.0",
   "hostUICompat": "^3.4",
 
   "capabilities": [
@@ -45,9 +45,9 @@
   "database": { "schema": "plg_guard", "migrations": "migrations/" },
 
   "userPermissions": [
-    { "key": "rules:read", "label": { "en": "View guard rules", "zh": "查看拦截规则" } },
-    { "key": "rules:manage", "label": { "en": "Manage guard rules", "zh": "管理拦截规则" } },
-    { "key": "stats:read", "label": { "en": "View guard statistics", "zh": "查看拦截统计" } }
+    { "key": "rules:read", "defaultRoles": ["admin"], "label": { "en": "View guard rules", "zh": "查看拦截规则" } },
+    { "key": "rules:manage", "defaultRoles": ["admin"], "label": { "en": "Manage guard rules", "zh": "管理拦截规则" } },
+    { "key": "stats:read", "defaultRoles": ["admin"], "label": { "en": "View guard statistics", "zh": "查看拦截统计" } }
   ],
 
   "routes": [

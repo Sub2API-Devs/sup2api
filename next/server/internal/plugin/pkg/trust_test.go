@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
@@ -101,6 +102,66 @@ func TestTrustVerify(t *testing.T) {
 	}
 	if _, err := ts.Verify(ctx, db.Pool, open(pkgtest.Build(pkgtest.Guard("guard", "0.1.2", "sub2api"), root))); err == nil {
 		t.Fatal("revoked official publisher accepted")
+	}
+}
+
+// TestTrustOfficialConcurrentFirstRegistration: two plugins verifying with
+// a new official key at the same time must not trip the publisher or key
+// unique constraints; the second waits for the first and reuses its rows.
+func TestTrustOfficialConcurrentFirstRegistration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	root := pkgtest.NewKey("root-race")
+	ts, err := NewTrustStore([]string{root.ID + "=" + root.PubB64()}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verify := func(q store.Querier, version string) (*Verification, error) {
+		p, err := Open(pkgtest.Build(pkgtest.Guard("guard", version, "sub2api"), root), Limits{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ts.Verify(ctx, q, p)
+	}
+
+	first, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Rollback(ctx)
+	a, err := verify(first, "0.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		v   *Verification
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		second, err := db.Pool.Begin(ctx)
+		if err != nil {
+			done <- result{err: err}
+			return
+		}
+		defer second.Rollback(ctx)
+		v, err := verify(second, "0.1.1")
+		if err == nil {
+			err = second.Commit(ctx)
+		}
+		done <- result{v, err}
+	}()
+	time.Sleep(200 * time.Millisecond) // let the second verification reach the insert and wait on the first
+	if err := first.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	b := <-done
+	if b.err != nil {
+		t.Fatalf("concurrent official registration: %v", b.err)
+	}
+	if *b.v.PublisherID != *a.PublisherID || b.v.Trust != TrustOfficial {
+		t.Fatalf("second verification = %+v, first publisher %d", b.v, *a.PublisherID)
 	}
 }
 

@@ -23,6 +23,8 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
@@ -79,6 +81,9 @@ type row struct {
 	// AutoDisabledSource says who wrote an automatic disable (0070):
 	// usageLimitSource or '' (plugins and failure policies).
 	AutoDisabledSource string
+	// AdminLocked: disabled by a caller with the full scope who did not
+	// create the account (migration 0097); see checkAdminLock.
+	AdminLocked bool
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -88,7 +93,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.spm_window_seconds, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override,a.conversion_loss_policy
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override,a.conversion_loss_policy,a.admin_locked
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -98,7 +103,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.SPMWindowSeconds, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride, &a.LossPolicy)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride, &a.LossPolicy, &a.AdminLocked)
 	return &a, err
 }
 
@@ -144,22 +149,37 @@ func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "account not found", "账号不存在"))
 }
 
-// scoped is the ownership condition every scoped statement carries on the
-// bigint parameter param (e.g. "$2"): nil for the "all" permission (every
-// row), otherwise the caller id (rows the caller created; created_by NULL
-// never matches). CONTRACTS §21.1.
-func scoped(param string) string {
-	return "(" + param + "::bigint IS NULL OR a.created_by = " + param + ")"
+// scopeOf is the accounts the caller reaches with action (core.Scope,
+// CONTRACTS §21); an error reaches none (logged). Every scoped statement
+// carries core.AccountRows with it.
+func (s *Service) scopeOf(ctx context.Context, action perm.Key) core.DataScope {
+	scope, err := core.Scope(ctx, s.d.Authorizer, action)
+	if err != nil {
+		slog.WarnContext(ctx, "account scope", "action", action, "err", err)
+	}
+	return scope
 }
 
-// loadRow returns one live account visible in scope (nil = all); rows
-// outside the scope are 404 like missing ones.
-func (s *Service) loadRow(ctx context.Context, q store.Querier, id int64, scope *int64, lock bool) (*row, error) {
-	sql := selectRow + ` WHERE a.id = $1 AND a.deleted_at IS NULL AND ` + scoped("$2")
+// inScope reports whether account id is in scope now, its groups as they
+// are in q (a transaction's included).
+func inScope(ctx context.Context, q store.Querier, id int64, scope core.DataScope) (bool, error) {
+	if scope.All {
+		return true, nil
+	}
+	var ok bool
+	err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM accounts a WHERE a.id = $1 AND `+core.AccountRows.SQL(2)+`)`,
+		append([]any{id}, core.AccountRows.Args(scope)...)...).Scan(&ok)
+	return ok, err
+}
+
+// loadRow returns one live account in scope; rows outside the scope are
+// 404 like missing ones.
+func (s *Service) loadRow(ctx context.Context, q store.Querier, id int64, scope core.DataScope, lock bool) (*row, error) {
+	sql := selectRow + ` WHERE a.id = $1 AND a.deleted_at IS NULL AND ` + core.AccountRows.SQL(2)
 	if lock {
 		sql += ` FOR UPDATE OF a`
 	}
-	a, err := scanRow(q.QueryRow(ctx, sql, id, scope))
+	a, err := scanRow(q.QueryRow(ctx, sql, append([]any{id}, core.AccountRows.Args(scope)...)...))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -181,14 +201,17 @@ type View struct {
 	Type            string                          `json:"type"`
 	// TypeLabel is the account type label; null when the type is no longer
 	// registered (plugin disabled or uninstalled).
-	TypeLabel         manifest.LocalizedText `json:"type_label"`
-	GroupIDs          []int64                `json:"group_ids"`
-	Groups            []GroupRef             `json:"groups"`
-	ProxyID           *int64                 `json:"proxy_id"`
-	Status            string                 `json:"status"`
-	StatusReason      string                 `json:"status_reason"`
-	AutoDisabledUntil *time.Time             `json:"auto_disabled_until"`
-	Schedulable       bool                   `json:"schedulable"`
+	TypeLabel    manifest.LocalizedText `json:"type_label"`
+	GroupIDs     []int64                `json:"group_ids"`
+	Groups       []GroupRef             `json:"groups"`
+	ProxyID      *int64                 `json:"proxy_id"`
+	Status       string                 `json:"status"`
+	StatusReason string                 `json:"status_reason"`
+	// AdminLocked: an administrator disabled the account; its creator cannot
+	// enable it or reset its status until an administrator does.
+	AdminLocked       bool       `json:"admin_locked"`
+	AutoDisabledUntil *time.Time `json:"auto_disabled_until"`
+	Schedulable       bool       `json:"schedulable"`
 	// AutoDisable lets the gateway disable the account on credential or quota
 	// failures; false only cools it down (CONTRACTS §42).
 	AutoDisable    bool `json:"auto_disable"`
@@ -296,7 +319,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		v := &View{
 			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
-			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
+			StatusReason: a.StatusReason, AdminLocked: a.AdminLocked, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, SPMWindowSeconds: a.SPMWindowSeconds, ModelLimits: a.modelLimits(), Environment: a.Environment,
 			HeaderPassthrough: passthrough, ParamOverride: a.ParamOverride, ConversionLossPolicy: a.LossPolicy,
@@ -472,7 +495,7 @@ func (s *Service) credentialView(a *row) (json.RawMessage, error) {
 
 // fullView is the single-account view (with credentials) of an account
 // visible in scope.
-func (s *Service) fullView(ctx context.Context, id int64, scope *int64) (*View, error) {
+func (s *Service) fullView(ctx context.Context, id int64, scope core.DataScope) (*View, error) {
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		return nil, err
@@ -501,25 +524,22 @@ func (s *Service) list(c *gin.Context) {
 	page, size := httpapi.Pagination(c)
 	var filter store.Filter
 	filter.And("a.deleted_at IS NULL")
-	// Visible range: the caller's own rows unless account:read was granted;
-	// mine=true narrows to own rows either way; created_by=<id> filters
-	// within the "all" range and is ignored under the own range (§21.2).
-	scope := core.OwnerScope(ctx, "account:read")
+	// Visible range: the caller's account:read scope (CONTRACTS §21);
+	// mine=true narrows to own rows and created_by=<id> to that creator's,
+	// both within it.
+	filter.And(core.AccountRows.Cond(), core.AccountRows.Args(s.scopeOf(ctx, perm.AccountRead))...)
 	if mine, _ := strconv.ParseBool(c.Query("mine")); mine {
 		uid, _ := core.UserID(ctx)
-		scope = &uid
+		filter.And("a.created_by = ?", uid)
 	}
-	if v := c.Query("created_by"); v != "" && scope == nil {
+	if v := c.Query("created_by"); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
 			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "created_by", Code: "invalid",
 				Message: t(ctx, "created_by must be a user id", "created_by 必须是用户 ID")}))
 			return
 		}
-		scope = &id
-	}
-	if scope != nil {
-		filter.And("a.created_by = ?", *scope)
+		filter.And("a.created_by = ?", id)
 	}
 	// Accounts of a disabled or uninstalled plugin are hidden by default
 	// (their rows stay); orphaned=true lists only them, orphaned=all both.
@@ -640,7 +660,7 @@ func (s *Service) get(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	v, err := s.fullView(ctx, id, core.OwnerScope(ctx, "account:read"))
+	v, err := s.fullView(ctx, id, s.scopeOf(ctx, perm.AccountRead))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -782,8 +802,8 @@ const (
 // defaultConcurrency is the max concurrency of a new account that does not
 // set one: unlimited (0), or ownDefaultConcurrency for an own-level caller,
 // who cannot set unlimited.
-func defaultConcurrency(scope *int64) int {
-	if scope != nil {
+func defaultConcurrency(scope core.DataScope) int {
+	if scope.Restricted() {
 		return ownDefaultConcurrency
 	}
 	return 0
@@ -964,63 +984,212 @@ func normalizeMapping(ctx context.Context, in map[string]string) (map[string]str
 	return out, fe
 }
 
-// checkRefs verifies that the proxy (within the caller's proxy range) and
-// the groups exist. A proxy outside the range is reported as not found, like
-// a missing one.
-func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, pr proxyRange, groupIDs []int64) error {
-	if proxyID != nil {
-		var ok bool
-		err := q.QueryRow(ctx, `SELECT true FROM proxies p WHERE p.id = $1 AND NOT $2::boolean
-			AND ($3::bigint IS NULL OR p.created_by = $3)`, *proxyID, pr.none, pr.scope).Scan(&ok)
-		if err != nil {
-			if store.IsNoRows(err) {
-				return core.InvalidFields(core.FieldError{Field: "proxy_id", Code: "not_found",
-					Message: t(ctx, "proxy not found", "代理不存在")})
+// checkRefs verifies that the proxy exists within the caller's proxy range.
+// A proxy outside the range is reported as not found, like a missing one.
+func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, refs core.DataScope) error {
+	if proxyID == nil {
+		return nil
+	}
+	var ok bool
+	err := q.QueryRow(ctx, `SELECT true FROM proxies p WHERE p.id = $1 AND `+core.ProxyRows.SQL(2),
+		append([]any{*proxyID}, core.ProxyRows.Args(refs)...)...).Scan(&ok)
+	if store.IsNoRows(err) {
+		return core.InvalidFields(core.FieldError{Field: "proxy_id", Code: "not_found",
+			Message: t(ctx, "proxy not found", "代理不存在")})
+	}
+	return err
+}
+
+// groupDiff is how a write changes an account's groups.
+type groupDiff struct{ added, removed, unbindable []int64 }
+
+func (d groupDiff) changed() bool { return len(d.added)+len(d.removed) > 0 }
+
+// outside is d without the groups scope reaches as a whole (group/G,
+// group/*): a group-range caller binds and unbinds those without
+// account:group:bind (CONTRACTS §21.0); whether the account stays in
+// range is checked after the write (stillInScope).
+func (d groupDiff) outside(scope core.DataScope) groupDiff {
+	keep := func(ids []int64) []int64 { return slices.DeleteFunc(slices.Clone(ids), scope.HasGroup) }
+	return groupDiff{added: keep(d.added), removed: keep(d.removed), unbindable: keep(d.unbindable)}
+}
+
+// errNotInScope: a restricted caller creates an account outside its
+// account:create scope (no own part, and none of its groups).
+func errNotInScope(ctx context.Context) error {
+	return core.InvalidFields(core.FieldError{Field: "group_ids", Code: "not_in_scope",
+		Message: t(ctx, "bind the account to a group you manage", "账号必须绑定到你管理的分组")})
+}
+
+// createInScope fails unless a new account bound to groupIDs is in scope:
+// every row, own (the caller creates it), or one of its groups.
+func createInScope(ctx context.Context, scope core.DataScope, groupIDs []int64) error {
+	if !scope.Restricted() || scope.Owner != 0 || slices.ContainsFunc(groupIDs, scope.HasGroup) {
+		return nil
+	}
+	return errNotInScope(ctx)
+}
+
+// errWouldLeaveScope: a restricted caller's update would move the account
+// out of its own account:update scope.
+var errWouldLeaveScope = core.NewError(403, "would_leave_scope", "")
+
+// stillInScope fails, inside the update's transaction, when the account
+// left the caller's scope.
+func stillInScope(ctx context.Context, tx pgx.Tx, id int64, scope core.DataScope) error {
+	ok, err := inScope(ctx, tx, id, scope)
+	if err == nil && !ok {
+		err = errWouldLeaveScope.WithMessage(t(ctx, "the change would move the account out of your range", "修改后账号将不在你的管理范围内"))
+	}
+	return err
+}
+
+// loadGroupDiff compares want (deduplicated; nil = not sent) with the groups
+// of accountID (0 on create) and marks the added groups uid may not bind
+// (segment.UsableGroupSQL). Groups of want that do not exist fail group_ids
+// not_found.
+func loadGroupDiff(ctx context.Context, q store.Querier, accountID int64, want []int64, uid int64) (groupDiff, error) {
+	var d groupDiff
+	if want == nil {
+		return d, nil
+	}
+	rows, err := q.Query(ctx, `SELECT g.id, ag.account_id IS NOT NULL, `+segment.UsableGroupSQL("g", "$3")+`
+		FROM groups g LEFT JOIN account_groups ag ON ag.group_id = g.id AND ag.account_id = $1
+		WHERE g.id = ANY($2) OR ag.account_id IS NOT NULL`, accountID, want, uid)
+	if err != nil {
+		return d, err
+	}
+	var id int64
+	var bound, bindable bool
+	found := 0
+	_, err = pgx.ForEachRow(rows, []any{&id, &bound, &bindable}, func() error {
+		switch {
+		case !slices.Contains(want, id): // bound, not wanted
+			d.removed = append(d.removed, id)
+			return nil
+		case !bound:
+			d.added = append(d.added, id)
+			if !bindable {
+				d.unbindable = append(d.unbindable, id)
 			}
+		}
+		found++
+		return nil
+	})
+	if err == nil && found != len(want) {
+		err = core.InvalidFields(core.FieldError{Field: "group_ids", Code: "not_found",
+			Message: t(ctx, "some groups do not exist", "部分分组不存在")})
+	}
+	return d, err
+}
+
+// ownChange is what a write by an own-level caller changes; cur is nil on
+// create.
+type ownChange struct {
+	bt     core.AccountTypeBinding
+	cur    *row
+	in     *input
+	groups groupDiff
+	// upstreamChanged: the write moves an upstream address field (prepare).
+	upstreamChanged bool
+}
+
+// checkOwnChange enforces the own-level restrictions (SEC-H3) on what the
+// write changes, so values an administrator set do not block saving the
+// form as is: group changes (G1, M10), capped fields (W2-G4), a new or
+// moved custom upstream (G2) and enabling an account an administrator
+// disabled (W1-F10).
+func (s *Service) checkOwnChange(ctx context.Context, scope core.DataScope, ch ownChange) error {
+	if !scope.Restricted() {
+		return nil
+	}
+	if err := s.checkGroupBind(ctx, ch.groups.outside(scope)); err != nil {
+		return err
+	}
+	for _, f := range ownCapped {
+		if err := f.restricted(ctx, ch.in, ch.cur); err != nil {
 			return err
 		}
 	}
-	if len(groupIDs) > 0 {
-		var n int
-		if err := q.QueryRow(ctx, `SELECT count(*) FROM groups WHERE id = ANY($1)`, groupIDs).Scan(&n); err != nil {
+	if ch.cur == nil || ch.upstreamChanged {
+		if err := s.checkCustomUpstream(ctx, scope, ch.bt); err != nil {
 			return err
 		}
-		if n != len(groupIDs) {
-			return core.InvalidFields(core.FieldError{Field: "group_ids", Code: "not_found",
-				Message: t(ctx, "some groups do not exist", "部分分组不存在")})
-		}
+	}
+	return checkAdminLock(ctx, ch.cur, ch.in.Status)
+}
+
+// errAdminLocked answers an own-level caller who tries to bring back an
+// account an administrator disabled.
+var errAdminLocked = core.NewError(403, "account_locked_by_admin", "the account was disabled by an administrator")
+
+// checkAdminLock refuses an own-level caller moving a locked account (cur,
+// nil on create) to active. The lock is set with disabled and every way the
+// full scope brings the account back clears it (automatic states never
+// apply to a disabled account), so a locked account is a disabled one.
+func checkAdminLock(ctx context.Context, cur *row, status *string) error {
+	if cur == nil || !cur.AdminLocked || status == nil || *status != "active" {
+		return nil
+	}
+	return errAdminLocked.WithMessage(t(ctx,
+		"this account was disabled by an administrator; only an administrator can enable it",
+		"该账号已被管理员禁用，只有管理员可以重新启用"))
+}
+
+// adminLockAfter is what a requested status does to the lock, nil for no
+// change: the full scope locks when it disables an account somebody else
+// created and unlocks when it enables. A restricted caller never changes
+// it (checkAdminLock already refused enabling a locked account).
+func adminLockAfter(scope core.DataScope, uid int64, cur *row, status string) *bool {
+	switch {
+	case scope.Restricted():
+		return nil
+	case status == "active":
+		return new(false)
+	case status == "disabled" && (cur.CreatedBy == nil || *cur.CreatedBy != uid):
+		return new(true)
 	}
 	return nil
 }
 
-// checkOwnLevelRestrictions enforces H3 restrictions for own-level users (SEC-H3).
-func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, in *input, isRelay bool) error {
-	if scope == nil {
-		return nil // "all" level users have no restrictions
+// disabledReason is the status_reason of a manual disable.
+func disabledReason(scope core.DataScope) string {
+	if scope.Restricted() {
+		return "disabled by owner"
 	}
-	// H3.1: Binding to groups requires group:manage or account:group:bind
-	if in.GroupIDs != nil && len(*in.GroupIDs) > 0 {
-		if !s.can(ctx, "group:manage") && !s.can(ctx, "account:group:bind") {
-			return core.ErrPermissionDenied.WithMessage(t(ctx,
-				"binding accounts to groups requires group:manage or account:group:bind permission",
-				"将账号绑定到分组需要 group:manage 或 account:group:bind 权限")).
-				WithDetails(map[string]any{"required_permission": "group:manage or account:group:bind"})
-		}
+	return "disabled by administrator"
+}
+
+// checkGroupBind lets a changed group list (unbinding included) through
+// with group:manage, or with account:group:bind when every added group is
+// one the caller can use.
+func (s *Service) checkGroupBind(ctx context.Context, d groupDiff) error {
+	if !d.changed() || core.Can(ctx, s.d.Authorizer, "group:manage") {
+		return nil
 	}
-	// H3.2: Scheduling fields restricted for own-level users
-	for _, f := range ownCapped {
-		if err := f.restricted(ctx, in); err != nil {
-			return err
-		}
-	}
-	// H3.3: Relay type accounts require account:relay permission
-	if isRelay && !s.can(ctx, "account:relay") {
+	if !core.Can(ctx, s.d.Authorizer, "account:group:bind") {
 		return core.ErrPermissionDenied.WithMessage(t(ctx,
-			"creating or managing relay accounts requires account:relay permission",
-			"创建或管理中继账号需要 account:relay 权限")).
-			WithDetails(map[string]any{"required_permission": "account:relay"})
+			"changing the groups of an account requires group:manage or account:group:bind permission",
+			"修改账号的分组需要 group:manage 或 account:group:bind 权限")).
+			WithDetails(map[string]any{"required_permission": "group:manage or account:group:bind"})
+	}
+	if len(d.unbindable) > 0 {
+		return core.InvalidFields(core.FieldError{Field: "group_ids", Code: "not_bindable",
+			Message: t(ctx, "only groups you can use can be bound", "只能绑定你自己可用的分组")})
 	}
 	return nil
+}
+
+// checkCustomUpstream refuses an own-level caller without account:relay a
+// type whose upstream address can be set freely (G2).
+func (s *Service) checkCustomUpstream(ctx context.Context, scope core.DataScope, bt core.AccountTypeBinding) error {
+	if !scope.Restricted() || !bt.Type.CustomUpstream() || core.Can(ctx, s.d.Authorizer, "account:relay") {
+		return nil
+	}
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"accounts with a custom upstream address require account:relay permission",
+		"自定义上游地址的账号需要 account:relay 权限")).
+		WithDetails(map[string]any{"required_permission": "account:relay"})
 }
 
 func uniqueIDs(in []int64) []int64 { return x.Unique(in) }
@@ -1049,29 +1218,29 @@ func statusPayload(id int64, pluginKey, typ, name, status, reason string, until 
 	return p
 }
 
-// proxyByURL is a proxy_url accepted for saving: the parsed address and the
-// range FindOrCreate may match in (CONTRACTS §21.4).
+// proxyByURL is a proxy_url the caller may use: the parsed address and the
+// caller's proxy write range, which FindOrCreate matches in and which
+// decides allow_private of a row it creates (CONTRACTS §21.4).
 type proxyByURL struct {
 	spec  core.ProxySpec
-	scope *int64
+	scope core.DataScope
 }
 
-// parseProxyURL checks that the caller may link proxies by address
-// (proxy:manage or proxy:own:manage) and parses raw. Errors are 403
-// permission_denied (details.permission = proxy:own:manage) or the
+// parseProxyURL checks that the caller may link proxies by address (any
+// proxy:manage scope; a new proxy needs every row or own, FindOrCreate) and
+// parses raw. Errors are 403 permission_denied (details.permission =
+// proxy:manage:own) or the
 // invalid_argument of core.ParseProxyURL (never echoing the address).
 func (s *Service) parseProxyURL(ctx context.Context, raw string) (*proxyByURL, error) {
-	if s.d.Resolver == nil {
-		return nil, core.ErrUnsupported.WithMessage("proxy_url is not supported")
-	}
-	if !s.can(ctx, "proxy:manage") && !s.can(ctx, "proxy:own:manage") {
-		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:own:manage"})
+	scope := s.scopeOf(ctx, perm.ProxyManage)
+	if scope.Empty() {
+		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:manage:own"})
 	}
 	spec, err := core.ParseProxyURL(raw)
 	if err != nil {
 		return nil, err
 	}
-	return &proxyByURL{spec: spec, scope: s.proxyRangeOf(ctx).scope}, nil
+	return &proxyByURL{spec: spec, scope: scope}, nil
 }
 
 // resolveProxy runs FindOrCreate for a proxy_url inside the account's
@@ -1092,20 +1261,24 @@ func (s *Service) auditProxy(ctx context.Context, tx pgx.Tx, created bool, proxy
 }
 
 // resolveWriteRefs normalizes the group list and proxy references shared by
-// create and update: deduplicate groups, check the caller may reference both,
-// and resolve a proxy_url to a spec (created later inside the transaction).
-func (s *Service) resolveWriteRefs(ctx context.Context, in *input, perm string) (groupIDs []int64, proxyID *int64, byURL *proxyByURL, err error) {
+// create and update: deduplicate groups (checked by loadGroupDiff), check the
+// caller may reference the proxy, and resolve a proxy_url to a spec (created
+// later inside the transaction).
+func (s *Service) resolveWriteRefs(ctx context.Context, in *input, action perm.Key) (groupIDs []int64, proxyID *int64, byURL *proxyByURL, err error) {
 	if in.GroupIDs != nil {
 		groupIDs = uniqueIDs(*in.GroupIDs)
 	}
 	if in.ProxyID.Valid {
 		proxyID = &in.ProxyID.V
 	}
-	// Under the own key proxy_id must be a proxy the caller can see (§21.2).
-	if err = checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, perm), groupIDs); err != nil {
+	// A restricted caller references only proxies it can see (§21.2).
+	if err = checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRefs(ctx, action)); err != nil {
 		return nil, nil, nil, err
 	}
 	if in.ProxyURL != nil {
+		if s.d.Resolver == nil {
+			return nil, nil, nil, core.ErrUnsupported.WithMessage("proxy_url is not supported")
+		}
 		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
 			return nil, nil, nil, err
 		}
@@ -1129,7 +1302,7 @@ func (s *Service) create(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
-	scope := core.OwnerScope(ctx, "account:create")
+	scope := s.scopeOf(ctx, perm.AccountCreate)
 	controls, err := planControls(ctx, bt.Type)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -1139,12 +1312,21 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fields...))
 		return
 	}
-	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, "account:create")
+	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, perm.AccountCreate)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
+	uid, _ := core.UserID(ctx)
+	groups, err := loadGroupDiff(ctx, s.d.DB.Pool, 0, groupIDs, uid)
+	if err == nil {
+		err = createInScope(ctx, scope, groupIDs)
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	p, err := s.prepare(ctx, bt, in.Credentials, nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1154,7 +1336,7 @@ func (s *Service) create(c *gin.Context) {
 		return
 	}
 	controls.clampOwnDefaults(&in, bt.Type.DefaultLimits, scope)
-	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, len(bt.Type.GuardedSettings) == 0); err != nil {
+	if err := s.checkOwnChange(ctx, scope, ownChange{bt: bt, in: &in, groups: groups}); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -1182,7 +1364,6 @@ func (s *Service) create(c *gin.Context) {
 	mapping := *in.ModelMapping
 	rpm, tpm, spm, spmWindow := *in.RPMLimit, *in.TPMLimit, *in.SPMLimit, *in.SPMWindowSeconds
 	modelLimits, environment, headerPassthrough := *in.ModelLimits, *in.Environment, *in.HeaderPassthrough
-	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
 			Status: status, Schedulable: sched, AutoDisable: autoDisable, Priority: int32(prio), Weight: int32(weight), MaxConcurrency: int32(maxc),
@@ -1277,7 +1458,7 @@ func (s *Service) create(c *gin.Context) {
 	s.changed(ctx, id)
 	s.kickCCGateway(id, bt.Plugin.Key, bt.Type.ID)
 	// The row was just created by the caller: no scope needed.
-	v, err := s.fullView(ctx, id, nil)
+	v, err := s.fullView(ctx, id, core.AllScope)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1306,7 +1487,7 @@ func (s *Service) update(c *gin.Context) {
 		enabled := true
 		in.Schedulable = &enabled
 	}
-	scope := core.OwnerScope(ctx, "account:update")
+	scope := s.scopeOf(ctx, perm.AccountUpdate)
 	cur, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -1317,7 +1498,7 @@ func (s *Service) update(c *gin.Context) {
 		return
 	}
 	featureOnly := in.CCFeaturePolicy != nil && len(in.changedFields()) == 1
-	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, "account:update")
+	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, perm.AccountUpdate)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1332,24 +1513,19 @@ func (s *Service) update(c *gin.Context) {
 				"提供该账号类型的插件未启用，无法修改凭证")))
 			return
 		}
-		plain, err := s.decrypt(cur.PluginKey, cur.CredEnc)
+		base, err := s.credBase(ctx, cur)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
-		old, err := merge(plain, cur.Settings)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if p, err = s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx)); err != nil {
+		if p, err = s.prepare(ctx, bt, in.Credentials, base); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
 		// Unchanged credentials keep their ciphertext: a fresh nonce would
 		// look like a credential change to whatever compares the stored bytes
 		// (CCGateway reapplies the account runtime on it).
-		if stored, err := parseObject(plain); err == nil && bytes.Equal(mustJSON(stored), p.secret) {
+		if stored, err := parseObject(base.secret); err == nil && bytes.Equal(mustJSON(stored), p.secret) {
 			p.enc = cur.CredEnc
 		}
 	}
@@ -1375,11 +1551,6 @@ func (s *Service) update(c *gin.Context) {
 		}
 		value := string(merged)
 		extensionSettings = &value
-	}
-	isUnguarded := bt.Plugin.Key == "" || len(bt.Type.GuardedSettings) == 0
-	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, isUnguarded); err != nil {
-		httpapi.Fail(c, err)
-		return
 	}
 	controls.converge(&in, cur)
 	lifecycleSettings := extensionSettings
@@ -1443,12 +1614,22 @@ func (s *Service) update(c *gin.Context) {
 		value := string(settings)
 		extensionSettings = &value
 	}
-	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)
 	setProxy, proxyCreated, usageLimitConverged := in.ProxyID.Set, false, false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		locked, err := s.loadRow(ctx, tx, id, scope, true)
 		if err != nil {
+			return err
+		}
+		statusChanged := in.Status != nil && *in.Status != locked.Status
+		// Judged against the locked row, in the transaction that saves the
+		// groups.
+		groups, err := loadGroupDiff(ctx, tx, id, groupIDs, uid)
+		if err != nil {
+			return err
+		}
+		if err := s.checkOwnChange(ctx, scope, ownChange{bt: bt, cur: locked, in: &requested, groups: groups,
+			upstreamChanged: p != nil && p.addressChanged}); err != nil {
 			return err
 		}
 		if fields := controls.check(ctx, &requested, locked, scope); len(fields) > 0 {
@@ -1482,9 +1663,18 @@ func (s *Service) update(c *gin.Context) {
 		if statusChanged {
 			r := ""
 			if *in.Status == "disabled" {
-				r = "disabled by administrator"
+				r = disabledReason(scope)
 			}
 			reason = &r
+		}
+		// Judged on the requested status, changed or not: an administrator
+		// disabling an account its owner already disabled takes it over.
+		var adminLocked *bool
+		if in.Status != nil {
+			adminLocked = adminLockAfter(scope, uid, locked, *in.Status)
+		}
+		if reason == nil && adminLocked != nil && *adminLocked && !locked.AdminLocked {
+			reason = new(disabledReason(scope))
 		}
 		var mapping, limits *string
 		if in.ModelMapping != nil {
@@ -1511,20 +1701,21 @@ func (s *Service) update(c *gin.Context) {
 			model_mapping = COALESCE($14::jsonb, model_mapping),
 			rpm_limit = COALESCE($15, rpm_limit),
 			tpm_limit = COALESCE($16, tpm_limit),
-			auto_disable = COALESCE($18, auto_disable),
-			auto_models = COALESCE($19, auto_models),
-			model_limits = COALESCE($20::jsonb, model_limits),
-			spm_limit = COALESCE($21, spm_limit),
-			environment = COALESCE($22, environment),
-			header_passthrough = COALESCE($23::text[], header_passthrough),
-			param_override = CASE WHEN $24 THEN $25::jsonb ELSE param_override END,
-			conversion_loss_policy = CASE WHEN $26 THEN $27 ELSE conversion_loss_policy END,
-			spm_window_seconds = COALESCE($28, spm_window_seconds),
+			auto_disable = COALESCE($17, auto_disable),
+			auto_models = COALESCE($18, auto_models),
+			model_limits = COALESCE($19::jsonb, model_limits),
+			spm_limit = COALESCE($20, spm_limit),
+			environment = COALESCE($21, environment),
+			header_passthrough = COALESCE($22::text[], header_passthrough),
+			param_override = CASE WHEN $23 THEN $24::jsonb ELSE param_override END,
+			conversion_loss_policy = CASE WHEN $25 THEN $26 ELSE conversion_loss_policy END,
+			spm_window_seconds = COALESCE($27, spm_window_seconds),
+			admin_locked = COALESCE($28, admin_locked),
 			updated_at = clock_timestamp()
-			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
-			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
+			WHERE a.id = $1 AND `+core.AccountRows.SQL(29), append([]any{id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
+			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit,
 			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough,
-			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored(), in.SPMWindowSeconds); err != nil {
+			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored(), in.SPMWindowSeconds, adminLocked}, core.AccountRows.Args(scope)...)...); err != nil {
 			return err
 		}
 		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {
@@ -1534,6 +1725,9 @@ func (s *Service) update(c *gin.Context) {
 		}
 		if in.GroupIDs != nil {
 			if err := setGroups(ctx, tx, id, groupIDs); err != nil {
+				return err
+			}
+			if err := stillInScope(ctx, tx, id, scope); err != nil {
 				return err
 			}
 		}
@@ -1613,7 +1807,7 @@ func (s *Service) resetStatus(c *gin.Context) {
 	if !ok {
 		return
 	}
-	scope := core.OwnerScope(ctx, "account:update")
+	scope := s.scopeOf(ctx, perm.AccountUpdate)
 	uid, _ := core.UserID(ctx)
 	var a *row
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
@@ -1622,13 +1816,22 @@ func (s *Service) resetStatus(c *gin.Context) {
 			return err
 		}
 		a = loaded
+		// Resetting brings the account back: refused like enabling it.
+		if scope.Restricted() {
+			if err := checkAdminLock(ctx, a, new("active")); err != nil {
+				return err
+			}
+		}
 		cleared, err := s.clearCooldown(ctx, id)
 		if err != nil {
 			return err
 		}
 		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
 		if statusReset {
-			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL, updated_at = clock_timestamp()
+			// A reset unlocks (an own-level reset of a locked account was
+			// refused above).
+			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL,
+				admin_locked = false, updated_at = clock_timestamp()
 				WHERE id = $1`, id); err != nil {
 				return err
 			}
@@ -1691,12 +1894,14 @@ func (s *Service) delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	scope := core.OwnerScope(ctx, "account:delete")
+	scope := s.scopeOf(ctx, perm.AccountDelete)
 	uid, _ := core.UserID(ctx)
+	var authzVersion int64
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var pk, typ, name string
 		err := tx.QueryRow(ctx, `UPDATE accounts a SET deleted_at = now(), updated_at = now()
-			WHERE a.id = $1 AND a.deleted_at IS NULL AND `+scoped("$2")+` RETURNING plugin_key, type, name`, id, scope).Scan(&pk, &typ, &name)
+			WHERE a.id = $1 AND a.deleted_at IS NULL AND `+core.AccountRows.SQL(2)+` RETURNING plugin_key, type, name`,
+			append([]any{id}, core.AccountRows.Args(scope)...)...).Scan(&pk, &typ, &name)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -1704,6 +1909,9 @@ func (s *Service) delete(c *gin.Context) {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
+			return err
+		}
+		if authzVersion, err = core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefAccount, []int64{id}); err != nil {
 			return err
 		}
 		retainUntil, err := s.markResourcesDeleted(ctx, tx, id, pk, typ, retain)
@@ -1723,6 +1931,7 @@ func (s *Service) delete(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	core.AnnounceAuthzChanged(ctx, s.d.Bus, authzVersion)
 	if s.d.Redis != nil {
 		_ = s.d.Redis.Del(ctx, cooldownKey(id)).Err()
 	}
@@ -1755,7 +1964,7 @@ func (s *Service) reveal(c *gin.Context) {
 	if !ok {
 		return
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:credential:view"), false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountCredentialView), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

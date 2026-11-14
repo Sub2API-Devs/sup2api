@@ -26,7 +26,12 @@ var entities = []*Entity{
 		// Groups have no platform column: the platforms of a group follow
 		// from its accounts' types (CONTRACTS §13), so there is no hint.
 		Kind: "groups", From: "groups g", ID: "g.id", Name: "g.name", Status: "g.status",
-		Read: "group:read",
+		// account:group:bind alone finds the groups the caller can use: the
+		// groups an "own" account holder may bind.
+		Read: "group:read", OwnRead: "account:group:bind",
+		// A group-scoped grant (account:read:group/G) shows its group by
+		// name to a holder of neither.
+		Named: core.PermissionSet.ScopeGroups,
 		// GET /me/groups.
 		Mine: &Mine{Scope: callerIs(groupOpenTo)},
 	},
@@ -49,8 +54,8 @@ var entities = []*Entity{
 		// plugin are found too: the usage log still has their requests.
 		Kind: "accounts", From: "accounts a", ID: "a.id", Name: "a.name", Hint: "a.plugin_key", Status: "a.status",
 		Live: "a.deleted_at IS NULL",
-		Read: "account:read", OwnRead: "account:own:read",
-		Mine:   &Mine{Perms: []string{"account:read", "account:own:read"}, Scope: callerIs("a.created_by = ?")},
+		Read: "account:read", Table: &core.AccountRows,
+		Mine:   &Mine{Scope: callerIs("a.created_by = ?")},
 		Prefer: []Ref{{Param: "prefer_group_id", Cond: "EXISTS (SELECT 1 FROM account_groups ag WHERE ag.account_id = a.id AND ag.group_id = ?)"}},
 	},
 	{
@@ -64,14 +69,14 @@ var entities = []*Entity{
 		// GET /proxies.
 		Kind: "proxies", From: "proxies p", ID: "p.id", Name: "p.name",
 		Hint: "p.protocol || '://' || p.host || ':' || p.port", Status: "p.status",
-		Read: "proxy:read", OwnRead: "proxy:own:read",
-		Mine: &Mine{Perms: []string{"proxy:read", "proxy:own:read"}, Scope: callerIs("p.created_by = ?")},
+		Read: "proxy:read", Table: &core.ProxyRows,
+		Mine: &Mine{Scope: callerIs("p.created_by = ?")},
 	},
 }
 
-// groupOpenTo holds for the groups a user ("?") can use: active, and public or
-// granted to the user's segment. It is the range of GET /me/groups.
-var groupOpenTo = `g.status = 'active' AND ` + segment.OpenToUserSQL("g", "?")
+// groupOpenTo holds for the groups a user ("?") can use: the range of GET
+// /me/groups.
+var groupOpenTo = segment.UsableGroupSQL("g", "?")
 
 // callerIs is the Scope of a kind whose own rows one condition selects; its
 // "?" takes the caller's id.

@@ -224,10 +224,16 @@ type totpSetupPayload struct {
 	Sealed string `json:"sealed"`
 }
 
-// StartTwoFactor checks the password and starts enrolment: the secret stays in
-// a flow until a code from it proves the authenticator app has it.
-func (s *Service) StartTwoFactor(ctx context.Context, userID int64, password, ip string) (*TwoFactorSetup, error) {
-	email, err := s.confirmPassword(ctx, userID, password, ip)
+// StartTwoFactor starts enrolment: the secret stays in a flow until a code
+// from it proves the authenticator app has it. Adding a factor is a step-up
+// operation (self.2fa.enable, verified by the route): a password alone must
+// not add a factor that then passes every step-up of a passkey-only user.
+func (s *Service) StartTwoFactor(ctx context.Context, userID int64) (*TwoFactorSetup, error) {
+	var email string
+	err := s.db.Pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&email)
+	if store.IsNoRows(err) {
+		return nil, core.ErrUnauthenticated
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -320,32 +326,19 @@ func (s *Service) EnableTwoFactor(ctx context.Context, userID int64, flowToken, 
 	return codes, nil
 }
 
-// withConfirmedFactors runs fn after checking the password and a second factor,
-// for the changes that weaken or replace the factor.
-func (s *Service) withConfirmedFactors(ctx context.Context, userID int64, password, code, ip string, fn func(tx pgx.Tx) error) error {
-	if _, err := s.confirmPassword(ctx, userID, password, ip); err != nil {
-		return err
-	}
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+// DisableTwoFactor turns the factor off; the route has verified the caller
+// (step-up self.2fa.disable).
+func (s *Service) DisableTwoFactor(ctx context.Context, userID int64) error {
+	return s.db.Tx(ctx, func(tx pgx.Tx) error {
 		if err := lockRefreshUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		if err := s.checkSecondFactor(ctx, tx, userID, code); err != nil {
+		if err := s.keepLastFactor(ctx, tx, userID, core.StepUpSelf2FADisable); err != nil {
 			return err
 		}
-		return fn(tx)
-	})
-	if isBadSecondFactor(err) {
-		if ferr := s.recordSecondFactorFailure(ctx, userID); ferr != nil {
-			return ferr
+		if err := requireTwoFactor(ctx, tx, userID); err != nil {
+			return err
 		}
-	}
-	return err
-}
-
-// DisableTwoFactor turns the factor off after the password and a code.
-func (s *Service) DisableTwoFactor(ctx context.Context, userID int64, password, code, ip string) error {
-	return s.withConfirmedFactors(ctx, userID, password, code, ip, func(tx pgx.Tx) error {
 		if err := removeTwoFactor(ctx, tx, userID); err != nil {
 			return err
 		}
@@ -353,10 +346,17 @@ func (s *Service) DisableTwoFactor(ctx context.Context, userID int64, password, 
 	})
 }
 
-// RegenerateBackupCodes replaces the backup codes after the password and a code.
-func (s *Service) RegenerateBackupCodes(ctx context.Context, userID int64, password, code, ip string) ([]string, error) {
+// RegenerateBackupCodes replaces the backup codes; the route has verified
+// the caller (step-up self.2fa.backup_codes).
+func (s *Service) RegenerateBackupCodes(ctx context.Context, userID int64) ([]string, error) {
 	var codes []string
-	err := s.withConfirmedFactors(ctx, userID, password, code, ip, func(tx pgx.Tx) error {
+	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := lockRefreshUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		if err := requireTwoFactor(ctx, tx, userID); err != nil {
+			return err
+		}
 		var err error
 		if codes, err = s.issueBackupCodes(ctx, tx, userID); err != nil {
 			return err
@@ -364,6 +364,18 @@ func (s *Service) RegenerateBackupCodes(ctx context.Context, userID int64, passw
 		return audit.Audit(ctx, tx, userID, "user.two_factor.backup_codes", "user", strconv.FormatInt(userID, 10), nil)
 	})
 	return codes, err
+}
+
+// requireTwoFactor fails with conflict unless userID has two-factor enabled.
+func requireTwoFactor(ctx context.Context, tx pgx.Tx, userID int64) error {
+	var enabled bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1)`, userID).Scan(&enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return core.ErrConflict.WithMessage("two-factor authentication is not enabled")
+	}
+	return nil
 }
 
 func removeTwoFactor(ctx context.Context, tx pgx.Tx, userID int64) error {
@@ -375,23 +387,14 @@ func removeTwoFactor(ctx context.Context, tx pgx.Tx, userID int64) error {
 }
 
 // ResetSecurity is the operator's way back in for a user who lost their
-// factors: it removes the user's two-factor and passkeys. A non-superuser
-// cannot do this to a superuser, nor to a user whose roles grant more than
-// the operator holds; a user resetting their own factors proves them first
-// (confirm, under the login rate limit for ip).
-func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64, confirm SelfConfirmation, ip string) error {
-	if err := s.guardTarget(ctx, actorID, targetID); err != nil {
-		return err
-	}
-	if actorID == targetID {
-		// SEC-H3: one's own factors go only with proof of them, as on
-		// /me/two-factor/disable; a user who lost them needs an operator.
-		if err := s.confirmSelf(ctx, targetID, confirm, ip); err != nil {
-			return err
-		}
-	} else if err := s.authz.CanActOnUser(ctx, actorID, targetID); err != nil {
-		// SEC-H2: removing the factors of a user with higher privileges
-		// would leave that account one password away from takeover.
+// factors: it removes the user's two-factor and passkeys, only of a user the
+// operator manages (authz.CanActOnUsers; oneself only as the super admin,
+// FU6). Over HTTP the route has verified the caller (step-up
+// user.security.reset), the super admin resetting its own factors included.
+func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64) error {
+	// SEC-H2: removing the factors of a user one does not manage would leave
+	// that account one password away from takeover.
+	if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, targetID); err != nil {
 		return err
 	}
 	return s.db.Tx(ctx, func(tx pgx.Tx) error {

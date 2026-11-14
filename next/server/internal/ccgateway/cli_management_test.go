@@ -15,7 +15,7 @@ func TestCLIManagementRoutesRequirePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, method := range []string{"GET", "POST", "PUT"} {
 		engine := gin.New()
-		auth := ccgRouteAuth{false}
+		auth := ccgRouteAuth{allowed: false}
 		(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 		request := httptest.NewRequest(method, "/api/v1/system/ccgateway/cli/22", strings.NewReader(`{"action":"check"}`))
 		request.Header.Set("Authorization", "Bearer fixture")

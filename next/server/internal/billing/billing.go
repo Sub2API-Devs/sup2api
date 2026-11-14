@@ -45,6 +45,8 @@ type Service struct {
 	// Authz tells whether a caller may read users, which decides how the
 	// pricing endpoints name a personal segment; nil counts as "no".
 	Authz core.Authorizer
+	// Users decides whose balance an operator may adjust; nil refuses all.
+	Users core.UserGuard
 
 	unsubscribe func()
 }

@@ -2,21 +2,17 @@ package account
 
 import (
 	"context"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
-// fillActions populates the actions field for each view.
+// fillActions populates the actions field for each view; out already has
+// its groups, which the caller's update scope may depend on.
 func (s *Service) fillActions(ctx context.Context, rows []*row, out []*View) {
+	update := s.scopeOf(ctx, perm.AccountUpdate)
 	for i, a := range rows {
-		actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
-		// Filter by permission.
-		filtered := make([]AccountAction, 0, len(actions))
-		for _, action := range actions {
-			if action.Permission == "" || s.can(ctx, action.Permission) || s.can(ctx, "account:own:update") {
-				filtered = append(filtered, action)
-			}
-		}
-		if len(filtered) > 0 {
-			out[i].Actions = filtered
+		if actions := s.visibleActions(ctx, a, update.AllowsRow(a.ID, a.CreatedBy, out[i].GroupIDs)); len(actions) > 0 {
+			out[i].Actions = actions
 		}
 	}
 }

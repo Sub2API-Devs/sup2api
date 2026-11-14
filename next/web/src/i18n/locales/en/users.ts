@@ -11,7 +11,9 @@ export default {
   passwordTooShort: 'Password must be at least 8 characters',
   roles: 'Roles',
   allRoles: 'All roles',
-  rolesUnavailable: 'Roles could not be loaded (requires role:read).',
+  roleNotGrantable: 'Cannot be added: beyond your permissions ({keys})',
+  roleLocked: 'Not among your managed roles; kept as is',
+  noManagedRoles: 'You have no managed roles.',
   superuser: 'Superuser',
   balance: 'Balance',
   lastLogin: 'Last login',
@@ -57,5 +59,23 @@ export default {
   adjustBalance: 'Adjust balance',
   resetSecurity: 'Reset two-factor and passkeys',
   resetSecurityConfirm: 'This removes two-factor and every passkey of {name}, who can then sign in with the password alone. Continue?',
-  resetSecurityDone: 'Reset'
+  resetSecurityDone: 'Reset',
+  superAdminBadge: 'Super admin',
+  resetPassword: {
+    action: 'Reset password',
+    title: 'Reset the password of {name}',
+    hint: 'At least 8 characters. They sign in again with the new password.',
+    done: 'Password reset'
+  },
+  transfer: {
+    action: 'Transfer super admin',
+    title: 'Transfer super admin',
+    warning: 'There is only one super admin. After the transfer you become an admin, both of you sign in again, and you cannot undo it yourself.',
+    target: 'New super admin',
+    targetHint: 'Pick an active user. They should turn on two-factor authentication or add a passkey first.',
+    inactive: 'Only an active user can become the super admin',
+    submit: 'Transfer',
+    done: 'Super admin transferred. Sign in again.'
+  },
+  roleScopes: 'Scopes of this role: {list}'
 }

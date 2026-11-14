@@ -20,6 +20,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -465,7 +466,7 @@ func (s *Service) getUsage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if _, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:read"), false); err != nil {
+	if _, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountRead), false); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -521,7 +522,7 @@ func (s *Service) getUsageLimit(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if _, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:read"), false); err != nil {
+	if _, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountRead), false); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -719,7 +720,7 @@ func (s *Service) putUsageLimit(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	scope := core.OwnerScope(ctx, "account:update")
+	scope := s.scopeOf(ctx, perm.AccountUpdate)
 	uid, _ := core.UserID(ctx)
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		a, err := s.loadRow(ctx, tx, id, scope, true)

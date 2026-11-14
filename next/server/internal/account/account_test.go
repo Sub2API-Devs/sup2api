@@ -352,32 +352,33 @@ func (fakeSlots) InUseMany(_ context.Context, kind string, ids []int64) (map[int
 	return result, nil
 }
 
-type fakeTokens struct{}
+type fakeTokens struct{ testutil.StepUpPassed }
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
 
+// VerifyAccessKey reads "sak_<uid>" as an access key acting for uid.
+func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	uid, err := strconv.ParseInt(strings.TrimPrefix(raw, core.AccessKeyPrefix), 10, 64)
+	return core.AccessKeyIdentity{UserID: uid, KeyID: 1}, err
+}
+
 // fakeAuthz grants each user a fixed key set; a nil map allows everything.
 type fakeAuthz struct{ keys map[int64][]string }
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
-	if a.keys == nil {
-		return true, nil
-	}
-	for _, k := range a.keys[uid] {
-		if k == key {
-			return true, nil
-		}
-	}
-	return false, nil
+func (a fakeAuthz) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
 }
 
-func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
+	if a.keys == nil {
+		return core.PermissionSet{Superuser: true}, nil
+	}
+	return core.RestrictToAccessKey(ctx, uid, core.PermissionSetOf(a.keys[uid]...)), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fakeConverters converts openai.chat requests to anthropic.messages, and
 // (unused, the platform is unavailable) openai.embeddings to ghost.embed.
@@ -789,12 +790,18 @@ func (e *env) doAs(uid int64, method, path string, body any) (int, map[string]an
 // doRaw calls the API as uid and returns the raw body.
 func (e *env) doRaw(uid int64, method, path string, body any) (int, []byte) {
 	e.t.Helper()
+	return e.callRaw(fmt.Sprintf("u%d", uid), method, path, body)
+}
+
+// callRaw calls the API with bearer as the token and returns the raw body.
+func (e *env) callRaw(bearer, method, path string, body any) (int, []byte) {
+	e.t.Helper()
 	var b []byte
 	if body != nil {
 		b, _ = json.Marshal(body)
 	}
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(b))
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer u%d", uid))
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	w := httptest.NewRecorder()
 	e.h.ServeHTTP(w, req)
 	return w.Code, w.Body.Bytes()
@@ -835,7 +842,7 @@ func TestAccountTypes(t *testing.T) {
 	ty := list[0].(map[string]any)
 	if len(list) != 3 || ty["plugin_key"] != "anthropic" || ty["type"] != "apikey" || ty["form"].(map[string]any)["mode"] != "schema" ||
 		ty["plugin_name"].(map[string]any)["en"] != "Anthropic" || ty["sensitive_fields"].([]any)[0] != "api_key" ||
-		ty["trust"] != "official" || ty["protocols"] != nil || ty["platform"] != nil ||
+		ty["trust"] != "official" || ty["protocols"] != nil || ty["platform"] != nil || ty["custom_upstream"] != false ||
 		ty["platforms"].([]any)[0].(map[string]any)["id"] != "anthropic" {
 		t.Fatalf("type view: %v", ty)
 	}
@@ -844,7 +851,7 @@ func TestAccountTypes(t *testing.T) {
 		eps[2].(map[string]any)["platform"] != "openai" || eps[0].(map[string]any)["native"] != true {
 		t.Fatalf("endpoints: %v", eps)
 	}
-	if rl := list[1].(map[string]any); rl["plugin_key"] != "relay" || rl["type"] != "relay_key" {
+	if rl := list[1].(map[string]any); rl["plugin_key"] != "relay" || rl["type"] != "relay_key" || rl["custom_upstream"] != true {
 		t.Fatalf("relay type: %v", rl)
 	}
 	code, out = e.do("GET", "/account-types/anthropic/apikey/form", nil)
@@ -967,9 +974,15 @@ func TestAccountLifecycle(t *testing.T) {
 	if plain["api_key"] != "sk-good-key-123" || plain["base_url"] != "https://b.example.com" {
 		t.Fatalf("reveal: %v", plain)
 	}
+	key := core.AccessKeyPrefix + strconv.FormatInt(e.uid, 10)
+	// An access key with the permission reveals too, after the step-up
+	// (passed here; iam tests the proofs).
+	if code, raw := e.callRaw(key, "POST", fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil); code != 200 {
+		t.Fatalf("access key reveal: %d %s", code, raw)
+	}
 	var audits int
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'account.credentials.reveal'`).Scan(&audits)
-	if audits != 1 {
+	if audits != 2 {
 		t.Fatal("reveal not audited")
 	}
 	// Resubmitting the same credentials keeps the stored ciphertext; a real
@@ -1323,9 +1336,10 @@ func TestCredentialHelpers(t *testing.T) {
 		gjson.GetBytes(masked, "nested.x").Int() != 1 || gjson.GetBytes(masked, "missing").Exists() {
 		t.Fatalf("mask: %s", masked)
 	}
-	back := unmask(masked, mustJSON(all), []string{"api_key", "nested.token"})
-	if gjson.GetBytes(back, "api_key").String() != "k" || gjson.GetBytes(back, "nested.token").String() != "t" {
-		t.Fatalf("unmask: %s", back)
+	back, restored := unmask(masked, mustJSON(all), []string{"api_key", "nested.token"})
+	if gjson.GetBytes(back, "api_key").String() != "k" || gjson.GetBytes(back, "nested.token").String() != "t" ||
+		!slices.Equal(restored, []string{"api_key", "nested.token"}) {
+		t.Fatalf("unmask: %s %v", back, restored)
 	}
 }
 

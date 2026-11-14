@@ -13,6 +13,7 @@ export default {
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM / Sessions',
     numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter', idsTruncated: '{label} (first {n})',
     enableAccount: 'Enable: {name}', disableAccount: 'Disable: {name}', disableHint: 'Disable the account: it is no longer scheduled',
+    adminLockedHint: 'Disabled by an administrator. Only an administrator can enable it',
     enableHint: 'Enable the account',
     enableAutoHint: 'Not enabled (automatically disabled or scheduling off). Enabling it by hand clears the automatic disable and its reason and turns scheduling back on; a cooldown stays (Reset status clears it)',
     enabledDone: '"{name}" enabled', disabledDone: '"{name}" disabled', disableByHand: 'Disable by hand'
@@ -110,6 +111,9 @@ export default {
   createdBy: 'Created by',
   proxyPickExisting: 'Pick existing',
   proxyPasteUrl: 'Paste proxy URL',
+  groupsLocked: 'Changing the groups needs group:manage or account:group:bind.',
+  guardedSettingsHint: 'Restricted settings (such as the base URL) can only use the official values; other values need account:settings:custom.',
+  typeNeedsRelay: 'Needs account:relay: this type can point at any upstream.',
   proxyUrlProbeHint: 'Without a scheme (host:port:user:pass and similar), click Test: socks5, http and https are tried in turn',
   proxyProbeCreated: 'Works over {protocol}, exit IP {ip}; created proxy #{id} and selected it',
   proxyProbeReused: 'Works over {protocol}, exit IP {ip}; selected existing proxy #{id}',
@@ -597,5 +601,9 @@ export default {
     refreshThrottled: 'Too many requests, try again in {n} seconds',
     updatedAt: 'updated {time}',
     error: 'Query failed: {error}'
+  },
+  scopeErrors: {
+    notInScope: 'Bind the account to a group you manage',
+    wouldLeaveScope: 'The change would move the account out of your range'
   }
 }

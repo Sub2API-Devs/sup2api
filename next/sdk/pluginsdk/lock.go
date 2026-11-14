@@ -2,8 +2,6 @@ package pluginsdk
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"sync"
 	"time"
@@ -263,13 +261,8 @@ func checkLock(name string, ttl time.Duration) error {
 }
 
 // newLockToken returns 16 random bytes as unpadded URL-safe base64 (22
-// characters, protocol.LockTokenPattern). crypto/rand.Read never fails
-// (it crashes the program instead, since Go 1.24).
-func newLockToken() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return base64.RawURLEncoding.EncodeToString(b)
-}
+// characters, protocol.LockTokenPattern).
+func newLockToken() string { return randomToken(16) }
 
 // acquireSettled reports whether a LockAcquire error proves the lock was not
 // taken: the host refused the request before touching Redis.

@@ -36,5 +36,6 @@ export default {
     port: 'A port (1–65535) is required',
     extra: 'A proxy URL cannot have a path, query or fragment',
     invalid: 'Cannot parse the proxy URL'
-  }
+  },
+  cannotCreate: 'Creating a proxy needs proxy management for every proxy or for your own'
 }

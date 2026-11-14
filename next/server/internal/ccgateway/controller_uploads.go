@@ -63,7 +63,13 @@ func uploadID(c *gin.Context) (string, bool) {
 	return id, true
 }
 
-// uploadCreate serves POST /system/ccgateway/runtime/uploads.
+// uploadSession names the step-up session of an upload
+// (httpapi.Router.StepUpSession): opened by its creation, continued by its
+// other requests.
+func uploadSession(id string) string { return "ccgateway.upload/" + id }
+
+// uploadCreate serves POST /system/ccgateway/runtime/uploads; the proof it
+// spends covers the upload (uploadSession).
 func (s *Service) uploadCreate(c *gin.Context) {
 	httpapi.NoStore(c)
 	var in struct {
@@ -98,6 +104,11 @@ func (s *Service) uploadCreate(c *gin.Context) {
 	}
 	if !uploadIDPattern.MatchString(out.UploadID) {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "controller_unhealthy"))
+		return
+	}
+	if err := httpapi.OpenStepUpSession(c, uploadSession(out.UploadID)); err != nil {
+		// The controller drops the upload nobody continues (an hour untouched).
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, gin.H{"upload_id": out.UploadID, "offset": out.Offset, "size": out.Size})

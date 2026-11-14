@@ -6,6 +6,7 @@ import { SButton, SDropdown, SIcon, useViewport, type MenuAction } from '@sub2ap
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
+import { mayOpen } from '@/router/guard'
 import { setLocale, currentLocale } from '@/i18n'
 import { formatMoney } from '@/utils/format'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
@@ -36,7 +37,7 @@ const crumbs = computed(() => {
   while (parent && !seen.has(parent) && out.length < 4) {
     seen.add(parent)
     const meta = router.resolve(parent).meta
-    out.unshift({ path: parent, label: meta.title ? t(meta.title) : parent, link: !meta.perm || auth.has(meta.perm) })
+    out.unshift({ path: parent, label: meta.title ? t(meta.title) : parent, link: mayOpen(meta) })
     parent = meta.parent
   }
   return out

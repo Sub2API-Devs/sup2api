@@ -201,21 +201,6 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 		return nil, 0, err
 	}
 
-	// SEC-H1: check authorization to grant the requested roles
-	if actorID != 0 && !IsDefaultRoles(in.RoleKeys) {
-		requestedPerms, err := s.authz.RolesPermissions(ctx, s.db.Pool, in.RoleKeys)
-		if err != nil {
-			return nil, 0, err
-		}
-		var permKeys []string
-		for k := range requestedPerms.Keys {
-			permKeys = append(permKeys, k)
-		}
-		if err := s.authz.CanGrant(ctx, actorID, permKeys); err != nil {
-			return nil, 0, err
-		}
-	}
-
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), s.cost)
 	if err != nil {
 		return nil, 0, err
@@ -234,6 +219,7 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 	if len(roles) == 0 {
 		roles = []string{authz.RoleUser}
 	}
+	// SetUserRoles checks the actor may grant the roles (SEC-H1).
 	v, err := s.authz.SetUserRoles(ctx, tx, actorID, id, roles)
 	if err != nil {
 		return nil, 0, err
@@ -275,88 +261,22 @@ type UpdateUserInput struct {
 	DisplayName *string `json:"display_name"`
 	Status      *string `json:"status"`
 	Password    *string `json:"password"`
-	// SelfConfirmation is required when a user changes their own email or
-	// password through this operator route (SEC-H3).
-	SelfConfirmation
 }
 
-// SelfConfirmation re-authenticates a user who changes their own sign-in
-// through an operator route (PATCH /users/:id, DELETE /users/:id/security):
-// the current password, and a verification code (TOTP or backup code) when
-// two-factor authentication is enabled - the same proof /me/password and
-// /me/two-factor/disable ask for. Without it a stolen access token, or an
-// access key granted only user:update, could set a new password and drop the
-// second factor, and so turn into a full session (SEC-H3).
-type SelfConfirmation struct {
-	CurrentPassword *string `json:"current_password"`
-	Code            string  `json:"code"`
-}
-
-var (
-	errCurrentPasswordRequired = core.InvalidFields(core.FieldError{Field: "current_password", Code: "required", Message: "enter your current password to change your own sign-in"})
-	errSecondFactorRequired    = core.InvalidFields(core.FieldError{Field: "code", Code: "required", Message: "enter a verification code: two-factor authentication is enabled"})
-)
-
-// confirmSelf checks a SelfConfirmation for userID: the password under the
-// login rate limit, then the second factor when one is enrolled (a wrong
-// code counts towards the TOTP lockout, as everywhere else).
-func (s *Service) confirmSelf(ctx context.Context, userID int64, in SelfConfirmation, ip string) error {
-	if in.CurrentPassword == nil || *in.CurrentPassword == "" {
-		return errCurrentPasswordRequired
-	}
-	if _, err := s.confirmPassword(ctx, userID, *in.CurrentPassword, ip); err != nil {
-		return err
-	}
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := lockRefreshUser(ctx, tx, userID); err != nil {
-			return err
-		}
-		var enrolled bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1)`, userID).Scan(&enrolled); err != nil {
-			return err
-		}
-		if !enrolled {
-			return nil
-		}
-		if strings.TrimSpace(in.Code) == "" {
-			return errSecondFactorRequired
-		}
-		return s.checkSecondFactor(ctx, tx, userID, in.Code)
-	})
-	if isBadSecondFactor(err) {
-		if ferr := s.recordSecondFactorFailure(ctx, userID); ferr != nil {
-			return ferr
-		}
-	}
-	return err
-}
-
-var (
-	errSelfDisable     = core.ErrConflict.WithMessage("you cannot disable or delete yourself")
-	errProtectedTarget = core.ErrPermissionDenied.WithMessage("only a super admin can modify a super admin")
-)
-
-// guardTarget rejects changes to a superuser by a non-superuser.
-func (s *Service) guardTarget(ctx context.Context, actorID, targetID int64) error {
-	if actorID == 0 || actorID == targetID {
-		return nil
-	}
-	targetSuper, err := s.authz.IsSuperuser(ctx, s.db.Pool, targetID)
-	if err != nil {
-		return err
-	}
-	if !targetSuper {
-		return nil
-	}
-	actor, err := s.authz.PermissionSet(ctx, actorID)
-	if err != nil {
-		return err
-	}
-	if !actor.Superuser {
-		return errProtectedTarget
+// consumeSelfChange spends the step-up proof a change of one's own sign-in
+// needs: the password scope when it changes the password, the email one
+// when only the email.
+func (s *Service) consumeSelfChange(ctx context.Context, in UpdateUserInput) error {
+	switch {
+	case in.Password != nil:
+		return s.ConsumeStepUp(ctx, core.StepUpSelfPassword)
+	case in.Email != nil:
+		return s.ConsumeStepUp(ctx, core.StepUpSelfEmail)
 	}
 	return nil
 }
+
+var errSelfDisable = core.ErrConflict.WithMessage("you cannot disable or delete yourself")
 
 // validateUpdate normalizes the partial update in place (email casing,
 // display-name trimming) and collects field errors in response order.
@@ -381,53 +301,37 @@ func validateUpdate(in UpdateUserInput) (email string, fields []core.FieldError)
 	return email, fields
 }
 
-// assertTargetPermissionsWithinActor is SEC-H2: the actor may not touch a
-// target whose roles grant any permission the actor does not hold. The roles
-// are measured, not the effective set, so that a disabled target (whose
-// effective set is empty) stays as protected as an active one.
-func (s *Service) assertTargetPermissionsWithinActor(ctx context.Context, actorID, id int64) error {
-	return s.authz.CanActOnUser(ctx, actorID, id)
-}
-
-// UpdateUser applies a partial update. ip is the caller's address, for the
-// login rate limit when a user confirms a change to their own sign-in.
-func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput, ip string) (*User, error) {
+// UpdateUser applies a partial update.
+func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput) (*User, error) {
 	email, fields := validateUpdate(in)
 	if len(fields) > 0 {
 		return nil, core.InvalidFields(fields...)
 	}
-	if err := s.guardTarget(ctx, actorID, id); err != nil {
+	// SEC-H3: a user's own email or password changes only with a step-up
+	// proof (the password one: the password and a second factor), as on
+	// /me/password; this route must not be the way around it for an access
+	// key or a stolen token. Spent before the guard, which then lets the
+	// super admin's own access key through on it.
+	if actorID == id {
+		if err := s.consumeSelfChange(ctx, in); err != nil {
+			return nil, err
+		}
+	}
+	// SEC-H1, FU6: the target, oneself included, must be a user the actor
+	// manages (its roles within the actor's and assignable by it).
+	if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, id); err != nil {
 		return nil, err
 	}
 
-	// SEC-H1: check authorization to modify target user
-	if actorID != id {
-		if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
-			return nil, err
+	// SEC-H1: password reset for others requires user:password:reset and a
+	// step-up proof; the system (actor 0, the server CLI) holds no roles and
+	// is not checked.
+	if in.Password != nil && actorID != id && actorID != 0 {
+		if !core.Can(core.WithUserID(ctx, actorID), s.authz, "user:password:reset") {
+			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset").
+				WithDetails(map[string]any{"permission": "user:password:reset"})
 		}
-	}
-
-	// SEC-H3: a user's own email or password changes only with proof of the
-	// current sign-in, as on /me/password; this route must not be the way
-	// around it for an access key or a stolen token.
-	if actorID == id && (in.Password != nil || in.Email != nil) {
-		if err := s.confirmSelf(ctx, id, in.SelfConfirmation, ip); err != nil {
-			return nil, err
-		}
-	}
-
-	// SEC-H1: password reset for others requires user:password:reset
-	changingOthersPassword := in.Password != nil && actorID != id
-	if changingOthersPassword {
-		actor, err := s.authz.PermissionSet(ctx, actorID)
-		if err != nil {
-			return nil, err
-		}
-		if !actor.Has("user:password:reset") {
-			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset")
-		}
-		// SEC-H2: target permissions must not exceed actor's
-		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
+		if err := s.ConsumeStepUp(ctx, core.StepUpUserPasswordReset); err != nil {
 			return nil, err
 		}
 	}
@@ -449,7 +353,7 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	if err != nil {
 		return nil, err
 	}
-	s.forgetStatus(id)
+	s.sessionsChanged(ctx, id)
 	if v != 0 {
 		s.authz.Committed(ctx, v)
 	}
@@ -486,21 +390,14 @@ func (s *Service) applyUpdateTx(ctx context.Context, tx pgx.Tx, actorID, id int6
 		// SEC-H2: target permissions must not exceed actor's - in both
 		// directions. Re-enabling a disabled account hands its holder every
 		// permission its roles grant, so it is as sensitive as disabling.
-		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
+		// Checked again after Bump, which holds role changes off until commit.
+		if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, id); err != nil {
 			return 0, nil, err
 		}
 		if *in.Status == StatusDisabled {
 			if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
 				return 0, nil, err
 			}
-		}
-	}
-
-	// SEC-M1: increment token_version when password changes or user is disabled
-	bumpTokenVersion := hash != nil || (statusChange && *in.Status == StatusDisabled)
-	if bumpTokenVersion {
-		if _, err := tx.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, id); err != nil {
-			return 0, nil, err
 		}
 	}
 
@@ -518,8 +415,9 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, nilBytes(hash))
 	if err != nil {
 		return 0, nil, err
 	}
-	if bumpTokenVersion {
-		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
+	// SEC-M1: a new password or disabling ends every session
+	if hash != nil || (statusChange && *in.Status == StatusDisabled) {
+		if _, err := invalidateSessions(ctx, tx, id, allSessions); err != nil {
 			return 0, nil, err
 		}
 	}
@@ -551,17 +449,14 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, nilBytes(hash))
 	return v, u, nil
 }
 
-// DeleteUser soft-deletes a user and revokes their refresh tokens.
+// DeleteUser soft-deletes a user and ends their sessions.
 func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	if actorID == id {
 		return errSelfDisable
 	}
-	if err := s.guardTarget(ctx, actorID, id); err != nil {
-		return err
-	}
 
 	// SEC-H1: check authorization to delete target user
-	if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+	if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, id); err != nil {
 		return err
 	}
 
@@ -592,7 +487,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 		if dropped, err = segment.DropPersonal(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
+		if _, err := invalidateSessions(ctx, tx, id, allSessions); err != nil {
 			return err
 		}
 		// The user's API keys go with the user: authentication already
@@ -611,7 +506,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	if err != nil {
 		return err
 	}
-	s.forgetStatus(id)
+	s.sessionsChanged(ctx, id)
 	s.authz.Committed(ctx, v)
 	if dropped {
 		s.priceRulesChanged(ctx)
@@ -619,7 +514,9 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	return nil
 }
 
-// SetUserRoles replaces a user's roles (PUT /users/:id/roles).
+// SetUserRoles replaces a user's roles (PUT /users/:id/roles). An access
+// key assigns no roles (it has no assignable list, §43.6), so the super
+// admin's own roles never reach the step-up of the guard through one.
 func (s *Service) SetUserRoles(ctx context.Context, actorID, id int64, roleKeys []string) (*User, error) {
 	var v int64
 	var u *User
@@ -688,14 +585,6 @@ func lockRefreshUser(ctx context.Context, tx pgx.Tx, userID int64) error {
 	if store.IsNoRows(err) {
 		return errBadRefresh
 	}
-	return err
-}
-
-func revokeAllRefreshTokens(ctx context.Context, tx pgx.Tx, userID int64) error {
-	if err := lockRefreshUser(ctx, tx, userID); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
 	return err
 }
 

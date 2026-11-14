@@ -1,11 +1,24 @@
-import { ApiError, isApiError } from '@sub2api/host'
+import { ApiError, VERIFICATION_CANCELLED, isApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import { toast } from '@sub2api/ui'
+
+/**
+ * Refusals the console words itself whatever the server's message: by code,
+ * or by code and the permission a permission_denied names (resource scopes,
+ * CONTRACTS §21).
+ */
+const KNOWN_ERRORS: Record<string, string> = {
+  would_leave_scope: 'accounts.scopeErrors.wouldLeaveScope',
+  package_gone: 'plugins.errors.packageGone',
+  'permission_denied proxy:manage:own': 'proxies.cannotCreate'
+}
 
 /** Human readable, localized error message. */
 export function errorMessage(e: unknown): string {
   const t = i18n.global.t
   if (isApiError(e)) {
+    const known = KNOWN_ERRORS[e.code] ?? KNOWN_ERRORS[`${e.code} ${e.details.permission}`]
+    if (known) return t(known)
     const fallback = t(`auth.errors.${e.code}`)
     const base = e.message && e.message !== e.code ? e.message : fallback
     return base
@@ -15,9 +28,13 @@ export function errorMessage(e: unknown): string {
   return String(e)
 }
 
-/** Shows an error toast unless it is an auth redirect or an aborted request. */
+/** The user dismissed the step-up verification of the request: nothing to report. */
+export const verificationCancelled = (e: unknown) => isApiError(e) && e.code === VERIFICATION_CANCELLED
+
+/** Shows an error toast unless it is an auth redirect, a dismissed verification or an aborted request. */
 export function notifyError(e: unknown) {
   if (isApiError(e) && e.code === 'unauthenticated') return
+  if (verificationCancelled(e)) return
   if (e instanceof DOMException && e.name === 'AbortError') return
   toast(errorMessage(e), 'error')
 }

@@ -1,7 +1,8 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
+import { SCOPABLE, canonicalPermission, parsePermission } from '../src/authz/implies'
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, stepUp, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
 import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, moveUser, rateOf, rulesWhere, segmentOfUser, segmentRef, type RuleRow } from './pricingStore'
@@ -15,8 +16,8 @@ export function match(q: string | undefined, ...fields: Array<string | undefined
   return fields.some((f) => (f || '').toLowerCase().includes(s))
 }
 
-export function invalid(field: string, message: string) {
-  return fail(400, 'invalid_argument', message, { fields: [{ field, code: 'invalid', message }] })
+export function invalid(field: string, message: string, code = 'invalid') {
+  return fail(400, 'invalid_argument', message, { fields: [{ field, code, message }] })
 }
 
 // ------------------------------------------------------------------ permissions
@@ -39,11 +40,13 @@ interface ModuleDef {
 const MODULES: ModuleDef[] = [
   { module: 'user', label: L('Users', '用户'), source: 'core', status: 'active', permissions: [
     { key: 'user:read', label: L('View', '查看') }, { key: 'user:create', label: L('Create', '新建') },
-    { key: 'user:update', label: L('Edit', '编辑') }, { key: 'user:delete', label: L('Delete', '删除'), sensitive: true }] },
+    { key: 'user:update', label: L('Edit', '编辑') }, { key: 'user:delete', label: L('Delete', '删除'), sensitive: true },
+    { key: 'user:password:reset', label: L('Reset passwords and 2FA', '重置密码与两步验证'), sensitive: true }] },
   { module: 'segment', label: L('User groups', '用户组'), source: 'core', status: 'active', permissions: [
     { key: 'segment:read', label: L('View', '查看') }, { key: 'segment:manage', label: L('Manage', '管理') }] },
   { module: 'role', label: L('Roles', '角色'), source: 'core', status: 'active', permissions: [
-    { key: 'role:read', label: L('View', '查看') }, { key: 'role:manage', label: L('Manage', '管理'), sensitive: true }] },
+    { key: 'role:read', label: L('View', '查看') }, { key: 'role:define', label: L('Define', '定义'), sensitive: true },
+    { key: 'role:assign', label: L('Assign', '分配'), sensitive: true }] },
   { module: 'apikey', label: L('API keys', 'API Key'), source: 'core', status: 'active', permissions: [
     { key: 'apikey:self:manage', label: L('Manage own', '管理自己的') }] },
   { module: 'group', label: L('Groups', '分组'), source: 'core', status: 'active', permissions: [
@@ -52,20 +55,20 @@ const MODULES: ModuleDef[] = [
     { key: 'account:read', label: L('View', '查看') }, { key: 'account:create', label: L('Create', '新建') },
     { key: 'account:update', label: L('Edit', '编辑') }, { key: 'account:delete', label: L('Delete', '删除'), sensitive: true },
     { key: 'account:test', label: L('Test', '测试') }, { key: 'account:credential:view', label: L('View credentials', '查看凭证'), sensitive: true },
-    { key: 'account:own:read', label: L('View own', '查看自己的') }, { key: 'account:own:create', label: L('Create own', '新建自己的') },
-    { key: 'account:own:update', label: L('Edit own', '编辑自己的') }, { key: 'account:own:delete', label: L('Delete own', '删除自己的') },
-    { key: 'account:own:test', label: L('Test own', '测试自己的') }, { key: 'account:own:credential:view', label: L('View own credentials', '查看自己的凭证'), sensitive: true },
-    { key: 'account:settings:custom', label: L('Custom restricted settings', '自定义受限设置') }] },
+    { key: 'account:settings:custom', label: L('Custom restricted settings', '自定义受限设置') },
+    { key: 'account:group:bind', label: L('Bind accounts to groups (own level)', '将账号绑定到分组（own 级）') },
+    { key: 'account:relay', label: L('Create relay-type accounts with custom upstream', '创建自定义上游的 relay 类账号'), sensitive: true }] },
   { module: 'proxy', label: L('Proxies', '代理'), source: 'core', status: 'active', permissions: [
-    { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') },
-    { key: 'proxy:own:read', label: L('View own', '查看自己的') }, { key: 'proxy:own:manage', label: L('Manage own', '管理自己的') }] },
+    { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') }] },
   { module: 'price', label: L('Prices', '价格'), source: 'core', status: 'active', permissions: [
     { key: 'price:read', label: L('View', '查看') }, { key: 'price:manage', label: L('Manage', '管理') }] },
   { module: 'balance', label: L('Balance', '余额'), source: 'core', status: 'active', permissions: [
     { key: 'balance:self:read', label: L('View own', '查看自己的') }, { key: 'balance:all:read', label: L('View all', '查看全部') },
-    { key: 'balance:adjust', label: L('Adjust', '调整'), sensitive: true }] },
+    { key: 'balance:adjust', label: L('Adjust plain users', '调整普通用户'), sensitive: true },
+    { key: 'balance:adjust:any', label: L('Adjust any managed user', '调整任意可管理用户'), sensitive: true }] },
   { module: 'usage', label: L('Usage', '使用记录'), source: 'core', status: 'active', permissions: [
-    { key: 'usage:self:read', label: L('View own', '查看自己的') }, { key: 'usage:all:read', label: L('View all', '查看全部') }] },
+    { key: 'usage:self:read', label: L('View own', '查看自己的') }, { key: 'usage:all:read', label: L('View all', '查看全部') },
+    { key: 'usage:settle', label: L('Settle usage', '结算用量'), sensitive: true }] },
   { module: 'sticky', label: L('Sticky sessions', '粘性会话'), source: 'core', status: 'active', permissions: [
     { key: 'sticky:read', label: L('View', '查看') }, { key: 'sticky:manage', label: L('Manage', '管理') }] },
   { module: 'plugin', label: L('Plugins', '插件管理'), source: 'core', status: 'active', permissions: [
@@ -73,14 +76,19 @@ const MODULES: ModuleDef[] = [
     { key: 'plugin:manage', label: L('Manage', '管理') }, { key: 'plugin:uninstall', label: L('Uninstall', '卸载'), sensitive: true },
     { key: 'plugin:grant:high', label: L('Grant high risk', '授予高风险权限') },
     { key: 'plugin:grant:critical', label: L('Grant critical risk', '授予极高风险权限'), sensitive: true },
+    { key: 'plugin:grant:db_schema_unconfined', label: L('Grant db.schema without role isolation', '无角色隔离时授予 db.schema'), sensitive: true },
     { key: 'plugin:egress:read', label: L('View egress', '查看出口流量') }, { key: 'plugin:market:read', label: L('Browse market', '浏览市场') }] },
   { module: 'publisher', label: L('Publishers', '发布者'), source: 'core', status: 'active', permissions: [
     { key: 'publisher:read', label: L('View', '查看') }, { key: 'publisher:manage', label: L('Manage', '管理'), sensitive: true }] },
   { module: 'node', label: L('Cluster', '集群'), source: 'core', status: 'active', permissions: [{ key: 'node:read', label: L('View nodes', '查看节点') }] },
-  { module: 'task', label: L('Scheduled tasks', '定时任务'), source: 'core', status: 'active', permissions: [{ key: 'task:read', label: L('View scheduled tasks', '查看定时任务') }, { key: 'task:run', label: L('Run scheduled tasks manually', '手动运行定时任务') }] },
+  { module: 'audit', label: L('Audit logs', '审计日志'), source: 'core', status: 'active', permissions: [{ key: 'audit:read', label: L('View audit logs', '查看审计日志') }] },
+  { module: 'task', label: L('Scheduled tasks', '定时任务'), source: 'core', status: 'active', permissions: [{ key: 'task:read', label: L('View scheduled tasks', '查看定时任务') }, { key: 'task:run', label: L('Run scheduled tasks manually', '手动运行定时任务') }, { key: 'task:manage', label: L('Manage scheduled tasks', '管理定时任务'), sensitive: true }] },
   { module: 'gateway', label: L('Gateway', '网关'), source: 'core', status: 'active', permissions: [{ key: 'gateway:use', label: L('Call gateway', '调用网关') }] },
   { module: 'settings', label: L('Settings', '系统设置'), source: 'core', status: 'active', permissions: [
     { key: 'settings:read', label: L('View', '查看') }, { key: 'settings:manage', label: L('Manage', '管理') }] },
+  { module: 'system', label: L('Core updates', '核心升级'), source: 'core', status: 'active', permissions: [
+    { key: 'system:update:read', label: L('View', '查看') }, { key: 'system:update:execute', label: L('Upgrade', '升级'), sensitive: true },
+    { key: 'system:update:recover', label: L('Recover', '恢复'), sensitive: true }] },
   { module: 'plugin.anthropic', label: L('Anthropic', 'Anthropic'), source: 'plugin', plugin_key: 'anthropic', status: 'active', permissions: [
     { key: 'plugin.anthropic:model_catalog:read', label: L('View model catalog', '查看模型目录') }] },
   { module: 'plugin.guard', label: L('Guard', 'Guard'), source: 'plugin', plugin_key: 'guard', status: 'active', permissions: [
@@ -94,7 +102,8 @@ on('GET', '/permissions', () =>
   MODULES.map((m) => ({
     ...m,
     plugin_key: m.plugin_key ?? null,
-    permissions: m.permissions.map((p) => ({ key: p.key, label: p.label, sensitive: !!p.sensitive, status: p.status || m.status }))
+    // scope_type: the account and proxy actions take a scope (CONTRACTS §21).
+    permissions: m.permissions.map((p) => ({ key: p.key, label: p.label, sensitive: !!p.sensitive, scope_type: SCOPABLE[p.key] ?? '', status: p.status || m.status }))
   }))
 )
 
@@ -108,29 +117,55 @@ interface MockRole {
   builtin: boolean
   superuser: boolean
   permission_keys: string[]
+  assignable_role_keys: string[]
+  assign_custom: boolean
   created_at: string
   updated_at: string
 }
 
 const CORE_KEYS = ALL_PERMISSIONS.filter((k) => !k.startsWith('plugin.'))
-// Built-in defaults (CONTRACTS §4); operator lacks settings and plugin pages.
-const OPERATOR_KEYS = CORE_KEYS.filter((k) => !/^(settings|sticky|plugin|publisher):/.test(k))
-const BUILTIN_DEFAULTS: Record<string, { name: L; description: string; keys: string[] }> = {
-  admin: { name: L('Admin', '管理员'), description: 'All core permissions by default', keys: CORE_KEYS },
-  operator: { name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', keys: OPERATOR_KEYS },
-  user: { name: L('User', '普通用户'), description: 'Own API keys, usage and balance; gateway access', keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'] }
+// Built-in defaults (CONTRACTS §4, authz/catalog.go): admin has every core
+// permission but the super-only ones; operator and supplier are explicit lists.
+const SUPER_ONLY = ['balance:adjust:any', 'plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'publisher:manage', 'system:update:execute', 'system:update:recover']
+const USER_KEYS = ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use']
+const SUPPLIER_KEYS = ['account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own', 'proxy:read:own', 'proxy:manage:own', 'usage:self:read']
+const OPERATOR_KEYS = [
+  'user:read', 'user:create', 'user:update', 'role:read', 'role:assign', 'group:read', 'group:manage', 'segment:read', 'segment:manage',
+  'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'proxy:read', 'proxy:manage', 'price:read',
+  'balance:all:read', 'usage:all:read', 'node:read', 'audit:read', 'task:read', 'task:run', ...SUPPLIER_KEYS.filter((k) => !USER_KEYS.includes(k)), ...USER_KEYS
+]
+const ADMIN_KEYS = CORE_KEYS.filter((k) => !SUPER_ONLY.includes(k))
+const BUILTIN_DEFAULTS: Record<string, { name: L; description: string; keys: string[]; assignable: string[]; assignCustom: boolean }> = {
+  admin: { name: L('Admin', '管理员'), description: 'Every core permission except the super-only ones', keys: ADMIN_KEYS, assignable: ['operator', 'supplier', 'user'], assignCustom: true },
+  operator: { name: L('Operator', '运维'), description: 'Users, accounts, proxies and operations', keys: OPERATOR_KEYS, assignable: ['supplier', 'user'], assignCustom: false },
+  supplier: { name: L('Supplier', '供应商'), description: 'Own accounts, proxies and usage (an add-on to user)', keys: SUPPLIER_KEYS, assignable: [], assignCustom: false },
+  user: { name: L('User', '普通用户'), description: 'Own API keys, usage and balance; gateway access', keys: USER_KEYS, assignable: [], assignCustom: false }
 }
+const at = (days: number) => now(-86400 * days)
+const builtin = (id: number, key: string, extra: string[] = []): MockRole => {
+  const d = BUILTIN_DEFAULTS[key]
+  return { id, key, name: d.name, description: d.description, builtin: true, superuser: false, permission_keys: [...d.keys, ...extra], assignable_role_keys: [...d.assignable], assign_custom: d.assignCustom, created_at: at(90), updated_at: at(10) }
+}
+/** Keys canonical, without duplicates (perm.CanonicalSet); a key that does not parse is dropped. */
+const canonicalSet = (keys: string[]) => [...new Set(keys.map(canonicalPermission).filter((k): k is string => !!k))].sort()
+const custom = (id: number, key: string, name: L, description: string, keys: string[]): MockRole => ({ id, key, name, description, builtin: false, superuser: false, permission_keys: canonicalSet(keys), assignable_role_keys: [], assign_custom: false, created_at: at(5), updated_at: at(1) })
 const roles: MockRole[] = [
-  { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
-  { id: 2, key: 'admin', name: L('Administrator', '管理员'), description: 'All core permissions', builtin: true, superuser: false, permission_keys: [...CORE_KEYS], created_at: now(-86400 * 90), updated_at: now(-86400 * 10) },
-  { id: 3, key: 'user', name: L('User', '普通用户'), description: 'Own keys, usage and balance', builtin: true, superuser: false, permission_keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
-  { id: 4, key: 'operator', name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', builtin: true, superuser: false, permission_keys: [...OPERATOR_KEYS, 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], assignable_role_keys: [], assign_custom: false, created_at: at(90), updated_at: at(90) },
+  builtin(2, 'admin'),
+  builtin(3, 'user'),
+  builtin(4, 'operator', ['plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read']),
+  builtin(9, 'supplier'),
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
-  { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 7, key: 'moderator', name: L('Moderator', '审核员'), description: 'Runs the moderation plugin; looks up no user, group or account', builtin: false, superuser: false, permission_keys: [...moderatorUser.permissions], created_at: now(-86400 * 2), updated_at: now(-86400) },
+  custom(5, 'vendor', L('Vendor', '供应商（自定义）'), 'Maintains only the accounts and proxies it created', vendorUser.permissions),
+  custom(6, 'readonly', L('Read only', '只读'), 'Sees every account and proxy, changes nothing', readonlyUser.permissions),
+  custom(7, 'moderator', L('Moderator', '审核员'), 'Runs the moderation plugin; looks up no user, group or account', moderatorUser.permissions),
   // Group pricing without users (CONTRACTS §97.6): personal user groups go by "#<user id>".
-  { id: 8, key: 'pricer', name: L('Pricer', '定价员'), description: 'Prices groups and user groups, sees no users', builtin: false, superuser: false, permission_keys: [...pricerUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
+  custom(8, 'pricer', L('Pricer', '定价员'), 'Prices groups and user groups, sees no users', pricerUser.permissions),
+  // Resource scopes (CONTRACTS §21): the accounts of group 1, one more account of group 2, one proxy.
+  custom(10, 'group_ops', L('Group operator', '分组运维'), 'Runs the accounts of group 1', [
+    'account:read:group/1', 'account:create:group/1', 'account:update:group/1', 'account:test:group/1', 'account:update:group/2/account/13',
+    'proxy:read:proxy/1', 'proxy:manage:proxy/1', 'group:read', 'gateway:use'
+  ])
 ]
 
 function roleOut(r: MockRole) {
@@ -140,9 +175,10 @@ function roleOut(r: MockRole) {
 on('GET', '/roles', (req) => paginate(roles.map(roleOut), req.query))
 on('POST', '/roles', (req) => {
   const b = req.body || {}
-  if (!/^[a-z][a-z0-9_]{1,63}$/.test(b.key || '')) return invalid('key', 'invalid role key')
+  if (!/^[a-z][a-z0-9_]{1,49}$/.test(b.key || '')) return invalid('key', 'invalid role key')
+  if (BUILTIN_DEFAULTS[b.key] || b.key === 'super_admin') return invalid('key', 'key is reserved for a built-in role', 'reserved')
   if (roles.some((r) => r.key === b.key)) return fail(409, 'conflict', 'role key already exists')
-  const r: MockRole = { id: nextId(), key: b.key, name: b.name || L(b.key, b.key), description: b.description || '', builtin: false, superuser: false, permission_keys: [], created_at: now(), updated_at: now() }
+  const r: MockRole = { id: nextId(), key: b.key, name: b.name || L(b.key, b.key), description: b.description || '', builtin: false, superuser: false, permission_keys: [], assignable_role_keys: [], assign_custom: false, created_at: now(), updated_at: now() }
   roles.push(r)
   return roleOut(r)
 })
@@ -169,12 +205,36 @@ on('PUT', '/roles/:id/permissions', (req) => {
   if (r.superuser) return fail(403, 'permission_denied', 'superuser role cannot be edited')
   const known = new Set(MODULES.flatMap((m) => m.permissions.map((p) => p.key)))
   const keys: string[] = Array.isArray(req.body?.permission_keys) ? req.body.permission_keys : []
-  const bad = keys.find((k) => !known.has(k))
-  if (bad) return invalid('permission_keys', `unknown permission ${bad}`)
-  r.permission_keys = [...new Set(keys)]
+  // Any spelling (aliases, trailing /*) is taken and stored canonical; the actions must be in the catalog.
+  const bad = keys.find((k) => !known.has(parsePermission(k)?.action ?? ''))
+  if (bad) return invalid('permission_keys', `invalid permission key ${bad}`)
+  const canonical = canonicalSet(keys)
+  // Only keys the editor's own imply can be granted (Missing: the canonical keys refused).
+  const missing = canonical.filter((k) => !hasPerm(caller(req), k))
+  if (missing.length) return fail(403, 'permission_denied', 'you can only grant permissions you hold', { missing })
+  r.permission_keys = canonical
   r.updated_at = now()
   return roleOut(r)
 })
+on('PUT', '/roles/:id/assignable', (req) => {
+  const r = roles.find((x) => x.id === Number(req.params.id))
+  if (!r) return fail(404, 'not_found', 'role not found')
+  if (r.superuser) return fail(409, 'conflict', 'superuser role cannot be edited')
+  const keys: string[] = Array.isArray(req.body?.role_keys) ? req.body.role_keys : []
+  const bad = keys.find((k) => !roles.some((x) => x.key === k && !x.superuser))
+  if (bad) return invalid('role_keys', `unknown role ${bad}`, 'unknown')
+  r.assignable_role_keys = [...new Set(keys)].sort()
+  r.assign_custom = !!req.body?.assign_custom
+  r.updated_at = now()
+  return roleOut(r)
+})
+// The caller's managed roles (CONTRACTS §43.6): every role but super_admin for the super admin, none for the other mock identities.
+on('GET', '/me/assignable-roles', (req) =>
+  (caller(req).superuser ? roles : [])
+    .filter((r) => !r.superuser)
+    .sort((a, b) => Number(b.builtin) - Number(a.builtin))
+    .map((r) => ({ key: r.key, name: r.name, builtin: r.builtin, grantable: true, missing: [], missing_assignable: [], missing_assign_custom: false }))
+)
 on('POST', '/roles/:id/reset', (req) => {
   const r = roles.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'role not found')
@@ -183,6 +243,8 @@ on('POST', '/roles/:id/reset', (req) => {
   if (d) {
     // Plugin permissions on the role are kept.
     r.permission_keys = [...d.keys, ...r.permission_keys.filter((k) => k.startsWith('plugin.'))]
+    r.assignable_role_keys = [...d.assignable]
+    r.assign_custom = d.assignCustom
     r.name = d.name
     r.description = d.description
   }
@@ -414,14 +476,14 @@ on('PATCH', '/users/:id', (req) => {
   u.updated_at = now()
   return userOut(u)
 })
-on('DELETE', '/users/:id', (req) => {
+on('DELETE', '/users/:id', stepUp('user.delete', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
   if (u.roles.includes('super_admin') && users.filter((x) => x.roles.includes('super_admin')).length <= 1) return fail(409, 'conflict', 'at least one super_admin must remain')
   users.splice(users.indexOf(u), 1)
   forgetUser(u.id)
   return noContent()
-})
+}))
 on('PUT', '/users/:id/roles', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
@@ -593,12 +655,12 @@ on('PATCH', '/me/api-keys/:id', (req) => {
   if (b.allowed_ips !== undefined) k.allowed_ips = b.allowed_ips
   return keyOut(k)
 })
-on('POST', '/me/api-keys/:id/reveal', (req) => {
+on('POST', '/me/api-keys/:id/reveal', stepUp('apikey.reveal', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')
   if (legacyKeyIds.has(k.id)) return fail(409, 'conflict', 'This legacy key cannot be recovered. Create a new key to enable copying.')
   return { key: plaintextOf(k) }
-})
+}))
 on('POST', '/me/api-keys/:id/rotate', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')
@@ -653,16 +715,16 @@ function validateProxy(b: any, partial: boolean) {
   return null
 }
 
-/** Owner scope of the caller for proxies: proxy:read / proxy:own:read (read) or proxy:manage / proxy:own:manage (manage). */
+/** The caller's reach for a proxy action: proxy:read or proxy:manage at any scope. */
 function proxyScope(req: MockRequest, action: 'read' | 'manage') {
   const who = caller(req)
-  return { who, scope: ownerScope(who, `proxy:${action}`, `proxy:own:${action}`) }
+  return { who, scope: ownerScope(who, `proxy:${action}`) }
 }
 
-/** The proxy of :id within the caller's manage scope: 403 without proxy:manage / proxy:own:manage, 404 when missing or not the caller's. */
+/** The proxy of :id within the caller's manage scope: 403 without proxy:manage at any scope, 404 when missing or out of it. */
 function managedProxy(req: MockRequest): { p: MockProxy } | { __status: number; body: unknown } {
   const { who, scope } = proxyScope(req, 'manage')
-  if (!scope) return fail(403, 'permission_denied', 'proxy:manage or proxy:own:manage is required', { permission: 'proxy:own:manage' })
+  if (!scope) return fail(403, 'permission_denied', 'proxy:manage is required', { permission: 'proxy:manage' })
   const p = proxies.find((x) => x.id === Number(req.params.id))
   return p && inScope(scope, who, p) ? { p } : fail(404, 'not_found', 'proxy not found')
 }
@@ -710,23 +772,25 @@ export function validateProxyURL(raw: string) {
 
 /**
  * CONTRACTS §21.4 find-or-create for POST/PATCH /accounts proxy_url: needs
- * proxy:manage or proxy:own:manage; matches protocol/host/port/username/
+ * proxy:manage at any scope, and its own scope or more to create one; matches protocol/host/port/username/
  * password among the proxies the caller can see (skipping disabled ones) or
  * creates one owned by the caller.
  */
 export function resolveProxyURL(req: MockRequest, raw: string): { id: number; created: boolean } | { __status: number; body: unknown } {
   const who = caller(req)
-  if (!hasPerm(who, ['proxy:manage', 'proxy:own:manage'])) {
-    return fail(403, 'permission_denied', 'proxy:own:manage is required to attach a proxy by URL', { permission: 'proxy:own:manage' })
-  }
+  const reach = ownerScope(who, 'proxy:manage')
+  if (!reach) return fail(403, 'permission_denied', 'proxy:manage is required to attach a proxy by URL', { permission: 'proxy:manage:own' })
   const spec = parseProxyURL(raw)
   if (!spec) return validateProxyURL(raw)!
-  const visible = hasPerm(who, 'proxy:read') ? 'all' : 'own'
   const hit = proxies
-    .filter((p) => inScope(visible, who, p) && p.status !== 'disabled')
+    .filter((p) => inScope(reach, who, p) && p.status !== 'disabled')
     .filter((p) => p.protocol === spec.protocol && p.host.toLowerCase() === spec.host && p.port === spec.port && p.username === spec.username && p.password === spec.password)
     .sort((a, b) => a.id - b.id)[0]
   if (hit) return { id: hit.id, created: false }
+  // Creating one takes the own scope or more: proxy/<id> reaches existing proxies only.
+  if (!hasPerm(who, 'proxy:manage:own')) {
+    return fail(403, 'permission_denied', 'creating a proxy requires proxy:manage for every proxy or your own', { permission: 'proxy:manage:own' })
+  }
   const p: MockProxy = {
     id: nextId(),
     name: `${spec.protocol}://${spec.host}:${spec.port}`.slice(0, 100),
@@ -754,6 +818,10 @@ on('GET', '/proxies/:id', (req) => {
 })
 on('POST', '/proxies', (req) => {
   const b = req.body || {}
+  // proxy/<id> scopes reach existing proxies only (CONTRACTS §21).
+  if (!hasPerm(caller(req), 'proxy:manage:own')) {
+    return fail(403, 'permission_denied', 'creating a proxy requires proxy:manage for every proxy or your own', { permission: 'proxy:manage:own' })
+  }
   const err = validateProxy(b, false)
   if (err) return err
   const p: MockProxy = { id: nextId(), name: b.name, protocol: b.protocol, host: b.host, port: Number(b.port), username: b.username || '', password: b.password || '', status: 'active', created_by: caller(req).id, created_at: now() }
@@ -783,14 +851,14 @@ on('DELETE', '/proxies/:id', (req) => {
   proxies.splice(proxies.indexOf(p), 1)
   return noContent()
 })
-on('POST', '/proxies/:id/reveal-url', (req) => {
+on('POST', '/proxies/:id/reveal-url', stepUp('proxy.reveal', (req) => {
   const r = managedProxy(req)
   if (!('p' in r)) return r
   const p = r.p
   const host = p.host.includes(':') ? `[${p.host}]` : p.host
   const cred = p.username || p.password ? `${encodeURIComponent(p.username)}:${encodeURIComponent(p.password)}@` : ''
   return { url: `${p.protocol}://${cred}${host}:${p.port}` }
-})
+}))
 on('POST', '/proxies/:id/test', async (req) => {
   const r = managedProxy(req)
   if (!('p' in r)) return r
@@ -885,7 +953,7 @@ function b64Len(s: string) {
 }
 
 on('GET', '/publishers', (req) => paginate(publishers, req.query))
-on('POST', '/publishers', (req) => {
+on('POST', '/publishers', stepUp('publisher.manage', (req) => {
   const b = req.body || {}
   if (!String(b.name || '').trim()) return invalid('name', 'name is required')
   if (!['official', 'verified', 'community'].includes(b.trust_level)) return invalid('trust_level', 'invalid trust level')
@@ -893,8 +961,8 @@ on('POST', '/publishers', (req) => {
   const p: MockPublisher = { id: nextId(), name: b.name, trust_level: b.trust_level, status: 'active', created_at: now(), revoked_at: null, keys: [] }
   publishers.push(p)
   return p
-})
-on('POST', '/publishers/:id/keys', (req) => {
+}))
+on('POST', '/publishers/:id/keys', stepUp('publisher.manage', (req) => {
   const p = publishers.find((x) => x.id === Number(req.params.id))
   if (!p) return fail(404, 'not_found', 'publisher not found')
   const b = req.body || {}
@@ -904,16 +972,16 @@ on('POST', '/publishers/:id/keys', (req) => {
   const k: MockPublisherKey = { key_id: b.key_id, public_key: b.public_key, status: 'active', not_before: b.not_before || null, not_after: b.not_after || null, created_at: now() }
   p.keys.push(k)
   return k
-})
-on('POST', '/publishers/:id/revoke', (req) => {
+}))
+on('POST', '/publishers/:id/revoke', stepUp('publisher.manage', (req) => {
   const p = publishers.find((x) => x.id === Number(req.params.id))
   if (!p) return fail(404, 'not_found', 'publisher not found')
   p.status = 'revoked'
   p.revoked_at = now()
   p.keys.forEach((k) => (k.status = 'revoked'))
   return p
-})
-on('POST', '/publisher-keys/:key_id/revoke', (req) => {
+}))
+on('POST', '/publisher-keys/:key_id/revoke', stepUp('publisher.manage', (req) => {
   for (const p of publishers) {
     const k = p.keys.find((x) => x.key_id === req.params.key_id)
     if (k) {
@@ -922,4 +990,4 @@ on('POST', '/publisher-keys/:key_id/revoke', (req) => {
     }
   }
   return fail(404, 'not_found', 'key not found')
-})
+}))

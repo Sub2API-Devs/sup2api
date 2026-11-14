@@ -1,17 +1,21 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router'
 import { session } from '@sub2api/host'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, PROXY_ACTIONS } from '@/composables/useScope'
 import AppLayout from '@/layouts/AppLayout.vue'
 import type { SidebarViewKey } from '@/layouts/sidebarViews'
 import { CCGATEWAY_PAGE, isPluginKey, pluginSettingsPath } from '@/views/plugins/pluginUtil'
 import { settingsLanding } from '@/views/settings/settingsNav'
 import { closeLayersOnBack } from './layerBack'
+import { deniedRoute } from './guard'
+import type { PermRef, ScopableKey } from '@/generated/permissions'
 
 declare module 'vue-router' {
   interface RouteMeta {
     /** Required permission(s): any of them grants access. */
-    perm?: string | string[]
+    perm?: PermRef | PermRef[]
+    /** Scoped action(s) (CONTRACTS §21): holding any of them at any scope grants access too; the page lists the rows in reach. */
+    action?: ScopableKey | ScopableKey[]
     /** i18n key of the page title. */
     title?: string
     /**
@@ -51,8 +55,8 @@ const children: RouteRecordRaw[] = [
   { path: 'api-keys', redirect: '/me/api-keys' },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },
   { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups', parent: '/settings' } },
-  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies' } },
-  { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.accounts' } },
+  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { action: PROXY_ACTIONS.read, title: 'nav.items.proxies' } },
+  { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { action: ACCOUNT_ACTIONS.read, title: 'nav.items.accounts' } },
   // The old platforms page.
   { path: 'platforms', redirect: '/accounts' },
 
@@ -70,8 +74,8 @@ const children: RouteRecordRaw[] = [
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   // The old usage statistics page.
   { path: 'me/stats', redirect: '/me/usage/overview' },
-  // Opened from a row of the users list.
-  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger', parent: '/users' } },
+  // Its own entry in the finance section; a row of the users list opens it filtered.
+  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: '/me/wallet' },
   { path: 'me/balance', redirect: '/me/wallet' },
   { path: 'sticky', redirect: { path: '/settings', query: { tab: 'sticky' } } },
@@ -88,7 +92,8 @@ const children: RouteRecordRaw[] = [
     }
   },
 
-  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', title: 'ccgateway.title', parent: '/plugins' } },
+  // The settings, or the account containers alone for an account reader (the core checks them by account:*, not settings:*).
+  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', action: ACCOUNT_ACTIONS.read, title: 'ccgateway.title', parent: '/plugins' } },
   { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
   {
     path: 'plugins/:key/versions/:version/consent',
@@ -109,7 +114,8 @@ const children: RouteRecordRaw[] = [
   },
   // ccgateway's settings are a core page of its own.
   { path: 'plugins/ccgateway/settings', redirect: CCGATEWAY_PAGE },
-  // Access is the plugin's settings permission or plugin:read, checked by the core.
+  // Access is the plugin's settings permission or plugin:read, checked by the core: no meta.perm
+  // here or on p/:plugin/:page, whose views handle 403 and hidden pages themselves.
   {
     path: 'plugins/:key/settings',
     component: () => import('@/views/plugins/PluginSettingsView.vue'),
@@ -151,15 +157,11 @@ router.beforeEach(async (to) => {
       await auth.loadMe()
     } catch {
       if (!session.get()) return { path: '/login', query: { redirect: to.fullPath } }
+      // The session is still there: a failed load (network, server) is no missing permission.
+      if (to.path !== '/forbidden') return { path: '/forbidden', query: { reason: 'load_failed', redirect: to.fullPath } }
     }
   }
   const moved = to.meta.movedTo?.(to)
   if (moved) return moved
-  if (to.meta.perm && !auth.has(to.meta.perm)) {
-    const redirect = to.meta.deniedRedirect?.(to)
-    if (redirect) return redirect
-    const perm = Array.isArray(to.meta.perm) ? to.meta.perm.join(' / ') : to.meta.perm
-    return { path: '/forbidden', query: { perm } }
-  }
-  return true
+  return deniedRoute(to) ?? true
 })

@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 )
 
 // startCoordinator runs the coordinator loop for a rollout this node leads
@@ -296,9 +297,8 @@ func (c *Controller) migrate(ctx context.Context, r *rolloutRow) error {
 	if pkg.Manifest.Database == nil {
 		return nil
 	}
-	var granted bool
-	if err := c.o.DB.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugin_permission_grants
-		WHERE plugin_key = $1 AND permission = 'db.schema' AND status = 'granted')`, r.key).Scan(&granted); err != nil {
+	granted, err := grants.Holds(ctx, c.o.DB.Pool, r.key, *r.target, "db.schema", nil)
+	if err != nil {
 		return err
 	}
 	if !granted {
@@ -391,6 +391,9 @@ func (c *Controller) commit(ctx context.Context, r *rolloutRow) error {
 			updated_at = now(), row_version = row_version + 1 WHERE key = $1`, r.key, target); err != nil {
 			return err
 		}
+		if err := grants.Promote(ctx, tx, r.key, target); err != nil {
+			return err
+		}
 		upgraded := r.action == "upgrade" || (prevActive != nil && *prevActive != target)
 		if upgraded && c.o.Defaults != nil {
 			pkg, err := c.o.Packages.Open(ctx, r.key, target)
@@ -401,17 +404,19 @@ func (c *Controller) commit(ctx context.Context, r *rolloutRow) error {
 				return fmt.Errorf("apply defaults: %w", err)
 			}
 		}
-		if r.action == "enable" {
-			if c.o.Perms != nil {
-				if err := c.o.Perms.SetPluginActive(ctx, tx, r.key, true); err != nil {
-					return err
-				}
+		// Every activation turns the plugin's permissions on, an upgrade too:
+		// a key registered while the plugin was not counted as running (a
+		// version approved between the commit and the end of an enable) is
+		// inserted disabled and nothing else would turn it on.
+		if c.o.Perms != nil {
+			if err := c.o.Perms.SetPluginActive(ctx, tx, r.key, true); err != nil {
+				return err
 			}
-			if c.o.Events != nil {
-				if err := c.o.Events.Emit(ctx, tx, core.Event{Type: core.EventPluginEnabled,
-					Payload: map[string]any{"plugin_key": r.key, "version": target}}); err != nil {
-					return err
-				}
+		}
+		if r.action == "enable" && c.o.Events != nil {
+			if err := c.o.Events.Emit(ctx, tx, core.Event{Type: core.EventPluginEnabled,
+				Payload: map[string]any{"plugin_key": r.key, "version": target}}); err != nil {
+				return err
 			}
 		}
 		c.log.Info("plugin rollout committed", "rollout_id", r.id, "plugin", r.key, "version", target)
