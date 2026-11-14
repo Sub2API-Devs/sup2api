@@ -9,6 +9,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,7 +25,8 @@ type AccountAction struct {
 	PluginKey string `json:"plugin_key"`
 	// AccountType restricts the action to a specific account type; empty means all types of the plugin.
 	AccountType string `json:"account_type,omitempty"`
-	// Permission is the required permission to see and invoke the action.
+	// Permission is what seeing and invoking the action takes: empty for
+	// nothing, otherwise account:update with a scope reaching the account.
 	Permission string `json:"permission,omitempty"`
 }
 
@@ -44,7 +46,7 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 		return
 	}
 
-	scope := core.OwnerScope(ctx, "account:update")
+	scope := s.scopeOf(ctx, perm.AccountUpdate)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -89,7 +91,7 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 	}
 	// Special handling for ccgateway refresh_auth action.
 	if pluginKey == "ccgateway" && actionID == "refresh_auth" {
-		s.handleCCGatewayRefreshAuth(c, ctx, id, scope)
+		s.handleCCGatewayRefreshAuth(c, ctx, id)
 		return
 	}
 
@@ -101,17 +103,15 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 
 // handleCCGatewayRefreshAuth handles the refresh_auth action for CCGateway accounts
 // by initiating a re-authorization flow.
-func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context, id int64, scope *int64) {
+func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context, id int64) {
 	if s.d.CCGateway == nil {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Account runtimes are not configured.").
 			WithDetails(map[string]any{"reason": "not_configured"}))
 		return
 	}
 
-	uid, _ := core.UserID(ctx)
-
-	// Start a re-authorization draft (or return the existing one).
-	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	// Re-authorization runs in place: this returns the account's runtime.
+	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -133,7 +133,7 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 
 // listAccountActions returns the available actions for an account type.
 func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType string) []AccountAction {
-	var actions []AccountAction
+	actions := []AccountAction{}
 	if binding, ok := s.accountType(pluginKey, accountType); ok && binding.Type.Lifecycle != nil {
 		for _, action := range binding.Type.Lifecycle.Actions {
 			actions = append(actions, AccountAction{ID: action.ID, Label: action.Label, Icon: action.Icon, PluginKey: pluginKey, AccountType: accountType, Permission: "account:update"})
@@ -156,6 +156,18 @@ func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType
 	return actions
 }
 
+// visibleActions are the actions of account a that the caller may invoke:
+// every action when the caller may update that account (mayUpdate: a is in
+// its account:update scope; declared actions all require account:update),
+// otherwise only the ones that require nothing. Never nil.
+func (s *Service) visibleActions(ctx context.Context, a *row, mayUpdate bool) []AccountAction {
+	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
+	if mayUpdate {
+		return actions
+	}
+	return slices.DeleteFunc(actions, func(action AccountAction) bool { return action.Permission != "" })
+}
+
 // getAccountActions serves GET /accounts/:id/actions: lists available actions for an account.
 func (s *Service) getAccountActions(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -164,22 +176,15 @@ func (s *Service) getAccountActions(c *gin.Context) {
 		return
 	}
 
-	scope := core.OwnerScope(ctx, "account:read")
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountRead), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-
-	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
-
-	// Filter by permission.
-	filtered := make([]AccountAction, 0, len(actions))
-	for _, action := range actions {
-		if action.Permission == "" || s.can(ctx, action.Permission) || s.can(ctx, "account:own:update") {
-			filtered = append(filtered, action)
-		}
+	mayUpdate, err := inScope(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountUpdate))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
-
-	httpapi.OK(c, gin.H{"actions": filtered})
+	httpapi.OK(c, gin.H{"actions": s.visibleActions(ctx, a, mayUpdate)})
 }

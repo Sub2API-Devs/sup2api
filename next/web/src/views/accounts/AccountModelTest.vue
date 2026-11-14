@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SHint, SIcon, SInput, SLink, SModal, STable, toast, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
 import { confirmAction } from '@/composables/crud'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { copyText } from '@/utils/format'
@@ -27,7 +27,7 @@ const emit = defineEmits<{
   (e: 'updated', a: Account): void
 }>()
 const { t } = useI18n()
-const own = useOwnership()
+const scope = useScope()
 
 const rows = ref<TestRow[]>([])
 /** The "plugin default model" probe (no model sent), pinned above the list once run. */
@@ -40,8 +40,8 @@ const fetching = ref(false)
 const running = ref(false)
 let ctrl: AbortController | null = null
 
-const canFetch = computed(() => !!props.account && !props.account.orphaned && own.can(props.account, ACCOUNT_KEYS.test))
-const canUpdate = computed(() => !!props.account && !props.account.orphaned && own.can(props.account, ACCOUNT_KEYS.update))
+const canFetch = computed(() => !!props.account && !props.account.orphaned && scope.can(props.account, ACCOUNT_ACTIONS.test))
+const canUpdate = computed(() => !!props.account && !props.account.orphaned && scope.can(props.account, ACCOUNT_ACTIONS.update))
 
 function load() {
   stop()

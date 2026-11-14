@@ -574,3 +574,43 @@ func TestSegmentsMigrationBackfill(t *testing.T) {
 	_, err = db.Pool.Exec(ctx, `UPDATE segments SET discount = 0 WHERE is_default`)
 	require.Error(t, err, "a discount of 0")
 }
+
+// Two transactions each adding a different holder and committing together:
+// the advisory lock makes the later commit count the earlier holder, so
+// exactly one commits. Both commits are held at the lock until both wait.
+func TestOneSuperAdminConcurrentCommits(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	_, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name, builtin, superuser) VALUES ('super_admin', '{}', true, true);
+		INSERT INTO users (email, password_hash) VALUES ('a@su', ''), ('b@su', '')`)
+	require.NoError(t, err)
+	const lock = `hashtext('user_roles_one_superuser')`
+	gate, err := db.Pool.Acquire(ctx)
+	require.NoError(t, err)
+	defer gate.Release()
+	_, err = gate.Exec(ctx, `SELECT pg_advisory_lock(`+lock+`)`)
+	require.NoError(t, err)
+
+	errs := make(chan error, 2)
+	for _, email := range []string{"a@su", "b@su"} {
+		tx, err := db.Pool.Begin(ctx)
+		require.NoError(t, err)
+		_, err = tx.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) SELECT u.id, r.id FROM users u, roles r WHERE r.superuser AND u.email = $1`, email)
+		require.NoError(t, err)
+		go func() { errs <- tx.Commit(ctx) }()
+	}
+	require.Eventually(t, func() bool {
+		var n int
+		return gate.QueryRow(ctx, `SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+			AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`).Scan(&n) == nil && n == 2
+	}, 10*time.Second, 20*time.Millisecond, "both commits wait on the lock")
+	_, err = gate.Exec(ctx, `SELECT pg_advisory_unlock(`+lock+`)`)
+	require.NoError(t, err)
+
+	first, second := <-errs, <-errs
+	if first != nil {
+		first, second = second, first
+	}
+	require.NoError(t, first)
+	require.True(t, store.IsUniqueViolation(second, "user_roles_one_superuser"), "the second holder: %v", second)
+}

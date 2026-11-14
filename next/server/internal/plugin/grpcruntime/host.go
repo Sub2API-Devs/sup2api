@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -17,8 +18,10 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 )
 
 // Limits enforced by HostService. The rules of the kv calls (the limits of
@@ -63,8 +66,7 @@ func (h *hostServer) require(ctx context.Context, permission string) error {
 	// after an emergency revocation has committed in PG. Also reject a stale
 	// broader scope until the local settings have refreshed.
 	if db := h.i.rt.o.DB; db != nil {
-		var allowed bool
-		err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_permission_grants WHERE plugin_key=$1 AND permission=$2 AND status='granted' AND scope=$3::jsonb)`, h.key(), permission, []byte(h.i.Grants()[permission])).Scan(&allowed)
+		allowed, err := grants.Holds(ctx, db.Pool, h.key(), h.i.pkg.Version, permission, h.i.Grants()[permission])
 		if err != nil {
 			return status.Error(codes.Unavailable, "cannot verify current plugin grant")
 		}
@@ -374,6 +376,9 @@ func (h *hostServer) GetDSN(ctx context.Context, _ *pluginv1.GetDSNRequest) (*pl
 
 // ------------------------------------------------------------------ authz
 
+// AuthzCheck answers for the plugin's own permissions without a grant; asking
+// about any other key reads the deployment's role assignments and needs the
+// "authz.read" grant.
 func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequest) (*pluginv1.AuthzCheckResponse, error) {
 	if in.GetUserId() <= 0 || in.GetPermission() == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id and permission are required")
@@ -381,26 +386,64 @@ func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequ
 	if h.i.rt.o.Authorizer == nil {
 		return nil, status.Error(codes.Unavailable, "authorizer unavailable")
 	}
-	ok, err := h.i.rt.o.Authorizer.Can(ctx, in.GetUserId(), h.qualify(in.GetPermission()))
+	key, own := h.qualify(in.GetPermission())
+	if !own {
+		if err := h.require(ctx, "authz.read"); err != nil {
+			return nil, err
+		}
+	}
+	ok, err := h.i.rt.o.Authorizer.Can(h.i.callers.narrow(ctx, in.GetUserId()), in.GetUserId(), key)
 	if err != nil {
 		return nil, toStatus(err)
 	}
 	return &pluginv1.AuthzCheckResponse{Allowed: ok}, nil
 }
 
-// qualify turns a plugin-local permission key into "plugin.<key>:<local>".
-// Keys already starting with "plugin." and keys the plugin does not declare
-// (core permissions such as "user:read") are used as given.
-func (h *hostServer) qualify(perm string) string {
-	if strings.HasPrefix(perm, "plugin.") {
-		return perm
+// AccountScopeCheck answers which accounts the caller of a request may act
+// on: core.AccountAccess, the rule the core proxy enforces on plugin routes,
+// with its errors mapped like every other core error. It needs the
+// "accounts.read" grant, and user_id must be the caller of an HTTP request
+// this plugin is serving right now, so a plugin cannot survey other users.
+func (h *hostServer) AccountScopeCheck(ctx context.Context, in *pluginv1.AccountScopeCheckRequest) (*pluginv1.AccountScopeCheckResponse, error) {
+	if err := h.require(ctx, "accounts.read"); err != nil {
+		return nil, err
 	}
+	ids := in.GetAccountIds()
+	if in.GetUserId() <= 0 || in.GetAction() == "" || len(ids) > manifest.MaxAccountBatch ||
+		slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) {
+		return nil, status.Errorf(codes.InvalidArgument, "user_id, action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
+	}
+	if !h.i.callers.has(in.GetUserId()) {
+		return nil, status.Error(codes.PermissionDenied, "user_id is not the caller of a request in flight")
+	}
+	access, ok := h.i.rt.o.Accounts.(core.AccountAccess)
+	if !ok {
+		return nil, status.Error(codes.Unavailable, "account access unavailable")
+	}
+	all, allowed, err := access.AccountsInScope(h.i.callers.narrow(ctx, in.GetUserId()), in.GetUserId(), in.GetAction(), ids)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.AccountScopeCheckResponse{All: all, AllowedIds: allowed}, nil
+}
+
+// qualify resolves the permission a plugin asks about to its RBAC key. own
+// reports that the key belongs to this plugin: its fully qualified key, or a
+// local key its manifest declares, which becomes "plugin.<key>:<local>". Every
+// other key (a core permission such as "user:read", another plugin's key) is
+// used as given and is not the plugin's own.
+func (h *hostServer) qualify(perm string) (key string, own bool) {
+	if _, ok := manifest.LocalPermission(h.key(), perm); ok {
+		return perm, true
+	}
+	// A declared key never contains a ".", so another plugin's qualified key
+	// cannot match here and falls through as not own.
 	for _, up := range h.i.pkg.Manifest.UserPermissions {
 		if up.Key == perm {
-			return "plugin." + h.key() + ":" + perm
+			return manifest.PermissionKey(h.key(), perm), true
 		}
 	}
-	return perm
+	return perm, false
 }
 
 // ------------------------------------------------------------------ ledger

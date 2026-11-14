@@ -219,3 +219,139 @@ describe('keep-alive', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 })
+
+describe('authz hooks', () => {
+  afterEach(() => http.configureHttp({ onAuthzVersion: undefined, onForbidden: undefined }))
+
+  it('reports X-Authz-Version of success and error responses, and 403 errors', async () => {
+    const onAuthzVersion = vi.fn()
+    const onForbidden = vi.fn()
+    http.configureHttp({ onAuthzVersion, onForbidden })
+    stubFetch((url) => {
+      if (url.endsWith('/ok')) return json(1, 200, { 'X-Authz-Version': '7' })
+      if (url.endsWith('/denied')) return json({ code: 'permission_denied', message: 'no' }, 403, { 'X-Authz-Version': '8' })
+      return json(1)
+    })
+    await http.api.get('/ok')
+    await expect(http.api.get('/denied')).rejects.toMatchObject({ status: 403, code: 'permission_denied' })
+    await http.api.get('/plain')
+    expect(onAuthzVersion.mock.calls).toEqual([[7], [8]])
+    expect(onForbidden).toHaveBeenCalledTimes(1)
+    expect(onForbidden.mock.calls[0][0]).toBeInstanceOf(http.ApiError)
+  })
+
+  it('does not report a verification_required answered by a step-up as forbidden', async () => {
+    const onForbidden = vi.fn()
+    const onAuthzVersion = vi.fn()
+    http.configureHttp({ onForbidden, onAuthzVersion, onVerificationRequired: async () => 'p' })
+    stubFetch((_url, init) =>
+      init.headers['X-Verify-Proof']
+        ? json(1, 200, { 'X-Authz-Version': '4' })
+        : json({ code: 'verification_required', message: 'verify', details: { scope: 'user.delete', context: 'DELETE /api/v1/users/5' } }, 403, { 'X-Authz-Version': '3' })
+    )
+    expect(await http.api.del('/users/5')).toBe(1)
+    expect(onForbidden).not.toHaveBeenCalled()
+    expect(onAuthzVersion.mock.calls).toEqual([[3], [4]])
+    http.configureHttp({ onVerificationRequired: undefined })
+  })
+})
+
+describe('step-up verification', () => {
+  const required = (details: Record<string, unknown> = {}) =>
+    json({ code: 'verification_required', message: 'verify', details: { scope: 'user.delete', context: 'DELETE /api/v1/users/5', methods: [], password_required: false, ...details } }, 403)
+
+  it('asks for a proof and replays the request once with X-Verify-Proof', async () => {
+    const ask = vi.fn(async (_c: unknown, _s?: AbortSignal) => 'proof-1')
+    http.configureHttp({ onVerificationRequired: ask })
+    const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? new Response(null, { status: 204 }) : required()))
+    const form = new FormData()
+    form.append('f', 'x')
+    expect(await http.api.upload('/users/5', form)).toBeNull()
+    expect(ask.mock.calls[0][0]).toEqual({ scope: 'user.delete', context: 'DELETE /api/v1/users/5', password_required: false })
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(spy.mock.calls[1][1].headers['X-Verify-Proof']).toBe('proof-1')
+    expect(spy.mock.calls[1][1].body).toBe(form)
+  })
+
+  it('replays a JSON body unchanged and returns the replayed response', async () => {
+    http.configureHttp({ onVerificationRequired: async () => 'p' })
+    const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? json({ ok: 1 }) : required({ password_required: true })))
+    expect(await http.api.put('/me/password', { new_password: 'n' })).toEqual({ ok: 1 })
+    expect(spy.mock.calls.map((c) => c[1].body)).toEqual(['{"new_password":"n"}', '{"new_password":"n"}'])
+  })
+
+  it('fails with verification_cancelled when the user dismisses it', async () => {
+    http.configureHttp({ onVerificationRequired: async () => null })
+    const spy = stubFetch(() => required())
+    await expect(http.api.del('/users/5')).rejects.toMatchObject({ status: 403, code: http.VERIFICATION_CANCELLED })
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask twice: a replay still refused is the error', async () => {
+    const ask = vi.fn(async () => 'p')
+    http.configureHttp({ onVerificationRequired: ask })
+    stubFetch(() => required())
+    await expect(http.api.del('/users/5')).rejects.toMatchObject({ code: 'verification_required' })
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
+  it('renews the session when the replay meets an expired token, keeping the proof', async () => {
+    http.session.set({ access_token: 'old', refresh_token: 'r1', expires_at: Date.now() + 3600_000 })
+    http.configureHttp({ onVerificationRequired: async () => 'p' })
+    const spy = stubFetch((url, init) => {
+      if (url.includes('/auth/refresh')) return json({ access_token: 'new', refresh_token: 'r2', expires_in: 7200 })
+      if (!init.headers['X-Verify-Proof']) return required()
+      return init.headers.Authorization === 'Bearer new' ? json({ ok: 1 }) : json({ code: 'unauthenticated', message: 'expired' }, 401)
+    })
+    expect(await http.api.del('/users/5')).toEqual({ ok: 1 })
+    expect(spy.mock.calls.at(-1)![1].headers['X-Verify-Proof']).toBe('p')
+  })
+
+  it('gives the hook the request signal and fails as aborted once it aborts', async () => {
+    const ctrl = new AbortController()
+    let seen: AbortSignal | undefined
+    http.configureHttp({
+      onVerificationRequired: async (_c, signal) => {
+        seen = signal
+        ctrl.abort()
+        return null
+      }
+    })
+    const spy = stubFetch(() => required())
+    await expect(http.api.del('/users/5', undefined, { signal: ctrl.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(seen).toBe(ctrl.signal)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds each send by timeoutMs, not the verification in between', async () => {
+    let seen: AbortSignal | undefined = new AbortController().signal
+    http.configureHttp({
+      onVerificationRequired: async (_c, signal) => {
+        seen = signal
+        // The user takes longer than the limit: the dialog is not closed under them.
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        return signal?.aborted ? null : 'p'
+      }
+    })
+    const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? json({ ok: 1 }) : required()))
+    expect(await http.api.put('/system/ccgateway/remote-config', {}, { timeoutMs: 20 })).toEqual({ ok: 1 })
+    expect(seen).toBeUndefined()
+    // The replay gets a limit of its own.
+    const signals = spy.mock.calls.map((c) => c[1].signal as AbortSignal)
+    expect(signals).toHaveLength(2)
+    expect(signals[1]).not.toBe(signals[0])
+  })
+
+  it('aborts a send that outlives timeoutMs', async () => {
+    stubFetch((_url, init) => new Promise((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason))))
+    await expect(http.api.get('/slow', undefined, { timeoutMs: 20 })).rejects.toMatchObject({ name: 'TimeoutError' })
+  })
+
+  it('leaves other 403s alone', async () => {
+    const ask = vi.fn(async () => 'p')
+    http.configureHttp({ onVerificationRequired: ask })
+    stubFetch(() => json({ code: 'permission_denied', message: 'no' }, 403))
+    await expect(http.api.del('/users/5')).rejects.toMatchObject({ code: 'permission_denied' })
+    expect(ask).not.toHaveBeenCalled()
+  })
+})

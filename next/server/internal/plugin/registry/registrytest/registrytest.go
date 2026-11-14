@@ -99,8 +99,20 @@ func Manifest(key, version string) *manifest.Manifest {
 			{Method: "GET", Path: "/dsn", Scope: "public"},
 			{Method: "POST", Path: "/credit", Scope: "public"},
 		},
-		Icon: "ui/icon.svg",
+		Icon:            "ui/icon.svg",
+		HostPermissions: Declare(DefaultGrants()),
 	}
+}
+
+// Declare asks for each granted host permission (sorted), as a manifest
+// must for its instances to be granted it.
+func Declare(grants map[string]string) []manifest.HostPermission {
+	out := make([]manifest.HostPermission, 0, len(grants))
+	for id := range grants {
+		out = append(out, manifest.HostPermission{ID: id})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // TestEndpoint is the endpoint of the test platform "p_<key>": POST

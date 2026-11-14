@@ -8,12 +8,14 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SFilterBar, SAlert, SButton, SDateRange, SEmpty, SGrid, SIcon, SSegmented, SSkeleton, SStatCard, rangeBounds, type RangeKey } from '@sub2api/ui'
-import type { UsageLog, UsageOverview } from '@/api/types'
+import type { AccountCounts, UsageLog, UsageOverview } from '@/api/types'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import UsageCharts from '@/components/stats/UsageCharts.vue'
 import { autoGranularity, browserTZ, formatMs, formatTokens, hitRate, hourAllowed, num, rowTokens, type Granularity } from '@/components/stats/stats'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
+import AccountStatusCard from './AccountStatusCard.vue'
 import { lt } from '@/i18n'
 import { errorMessage } from '@/utils/errors'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
@@ -27,6 +29,22 @@ const app = useAppStore()
 const canUsage = computed(() => auth.has('usage:self:read'))
 const canKeys = computed(() => auth.has('apikey:self:manage'))
 const canLedger = computed(() => auth.has('balance:self:read'))
+/** A supplier (own-level accounts) or any reader of accounts: the accounts in its scope by status. */
+const canAccounts = computed(() => auth.hasAction(ACCOUNT_ACTIONS.read))
+
+const accounts = ref<AccountCounts | null>(null)
+const loadingAccounts = ref(false)
+async function loadAccounts() {
+  if (!canAccounts.value) return
+  loadingAccounts.value = true
+  try {
+    accounts.value = await api.get<AccountCounts>('/accounts/summary')
+  } catch {
+    accounts.value = null
+  } finally {
+    loadingAccounts.value = false
+  }
+}
 
 // Today's figures.
 const overview = ref<UsageOverview | null>(null)
@@ -114,13 +132,14 @@ const quick = computed(() => {
 const chartsRevision = ref(0)
 function reload() {
   loadOverview()
+  loadAccounts()
   loadRecent()
   auth.refreshBalance()
   chartsRevision.value++
 }
 watch(() => props.revision, reload)
 reload()
-watch(() => loadingOverview.value || loadingRecent.value, (v) => emit('update:loading', v), { immediate: true })
+watch(() => loadingOverview.value || loadingRecent.value || loadingAccounts.value, (v) => emit('update:loading', v), { immediate: true })
 </script>
 
 <template>
@@ -139,6 +158,7 @@ watch(() => loadingOverview.value || loadingRecent.value, (v) => emit('update:lo
         :tone="Number(auth.balance) < 0 ? 'danger' : 'success'"
         :to="canLedger ? '/me/wallet' : undefined"
       />
+      <AccountStatusCard v-if="canAccounts" :counts="accounts" :loading="loadingAccounts && !accounts" />
       <template v-if="canUsage">
         <SStatCard
           v-if="canKeys"

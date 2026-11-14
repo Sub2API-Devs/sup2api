@@ -28,6 +28,7 @@ func declaredManifest(key, version string) *manifest.Manifest {
 			Platforms: []manifest.AccountPlatform{{Platform: manifest.PlatformOpenAI}},
 			Upstream:  &manifest.Upstream{Preset: "openai"},
 		}},
+		HostPermissions: []manifest.HostPermission{{ID: "kv"}, {ID: "platform.register"}},
 	}
 }
 

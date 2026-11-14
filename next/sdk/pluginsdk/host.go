@@ -63,7 +63,8 @@ type Host interface {
 	DB(ctx context.Context) (*pgxpool.Pool, error)
 
 	// AuthzCheck asks whether a console user holds a permission (plugin-local
-	// key like "rules:manage" or a fully qualified key).
+	// key like "rules:manage" or a fully qualified key). The plugin's own keys
+	// need no grant; a core key or another plugin's key needs "authz.read".
 	AuthzCheck(ctx context.Context, userID int64, permission string) (bool, error)
 
 	// LedgerCredit / LedgerDebit change a user's balance (grants

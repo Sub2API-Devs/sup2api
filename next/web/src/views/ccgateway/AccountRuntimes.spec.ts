@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import AccountRuntimes from './AccountRuntimes.vue'
@@ -6,10 +6,15 @@ import AccountRuntimes from './AccountRuntimes.vue'
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), confirm: vi.fn(), manage: true }))
+// manage: the caller holds settings:manage and account:update (besides account:read); granted: the exact keys instead.
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), confirm: vi.fn(), manage: true, granted: null as string[] | null }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: (...a: unknown[]) => mocks.confirm(...a), toast: vi.fn() }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => key === 'settings:manage' ? mocks.manage : key === 'account:read', me: { id: 1 } }) }))
+const granted = () => mocks.granted ?? ['account:read', ...(mocks.manage ? ['settings:manage', 'account:update'] : [])]
+vi.mock('@/stores/auth', async () => {
+  const { grantedAuth } = await import('@/testing/authMock')
+  return { useAuthStore: () => ({ ...grantedAuth(granted), me: { id: 1 } }) }
+})
 
 describe('account runtime debug log switches', () => {
   beforeEach(() => {
@@ -268,6 +273,31 @@ describe('account runtime debug log levels', () => {
       expect(w.get('[data-testid="request-log-full-25"]').text()).toBe(text)
       w.unmount()
     }
+  })
+
+  it('gives a settings administrator without account:update no row action', async () => {
+    mocks.granted = ['settings:manage', 'account:read']
+    try {
+      worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
+      const w = await render()
+      expect(w.get('[data-testid="request-log-level-25"]').findAll('input').every(i => i.element.disabled)).toBe(true)
+      expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+      expect(w.find('[data-testid="ccgateway-runtime-refresh-25"]').exists()).toBe(false)
+      w.unmount()
+    } finally { mocks.granted = null }
+  })
+
+  it('leaves an own-level caller the level as read only, without the clear action', async () => {
+    mocks.granted = ['account:read:own', 'account:update:own']
+    try {
+      worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
+      const w = await render()
+      const inputs = w.get('[data-testid="request-log-level-25"]').findAll('input')
+      expect(inputs.length).toBeGreaterThan(0)
+      expect(inputs.every(i => i.element.disabled)).toBe(true)
+      expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+      w.unmount()
+    } finally { mocks.granted = null }
   })
 
   it('deletes the full content with clear_full after confirmation', async () => {
@@ -605,6 +635,47 @@ describe('account request log settings of the core', () => {
     expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/accounts/25/sync', {}, expect.objectContaining({ signal: expect.any(AbortSignal) }))
     expect(w.text()).toContain('已就绪')
     expect(w.find('[data-testid="ccgateway-runtime-start-25"]').exists()).toBe(false)
+    w.unmount()
+  })
+})
+
+describe('account runtime actions of an own-level caller', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.granted = ['account:read:own', 'account:update:own']
+    mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'mine', type: 'managed', created_by: 1 }, { id: 26, name: 'theirs', type: 'managed', created_by: 2 }] })
+    mocks.get.mockImplementation(async (path: string) => path.endsWith('/status') ? { status: 'blocked', reason: 'account_parked', container: 'cc' } : { enabled: true })
+    i18n.global.locale.value = 'zh'
+  })
+  afterEach(() => { mocks.granted = null })
+
+  it('starts and re-authorizes only its own rows, and still links to the editor of every row', async () => {
+    const w = mount(AccountRuntimes, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    await flushPromises()
+    const shown = (id: string) => w.find(`[data-testid="${id}"]`).exists()
+    expect([shown('ccgateway-runtime-start-25'), shown('ccgateway-runtime-refresh-25')]).toEqual([true, true])
+    expect([shown('ccgateway-runtime-start-26'), shown('ccgateway-runtime-refresh-26')]).toEqual([false, false])
+    expect(w.findAll('[data-testid="ccgateway-runtime-edit"]')).toHaveLength(2)
+    w.unmount()
+  })
+})
+
+describe('account runtimes of a settings administrator without account read', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.granted = ['settings:read', 'settings:manage']
+    mocks.get.mockResolvedValue({ runtimes: [] })
+    i18n.global.locale.value = 'zh'
+  })
+  afterEach(() => { mocks.granted = null })
+
+  it('keeps the cleanup and the retained runtimes, without the list the core would refuse', async () => {
+    const w = mount(AccountRuntimes, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    await flushPromises()
+    expect(mocks.list).not.toHaveBeenCalled()
+    expect(mocks.get.mock.calls.map(c => c[0])).toEqual(['/system/ccgateway/runtimes/retained'])
+    expect(w.find('[data-testid="ccgateway-runtimes"]').exists()).toBe(false)
+    expect(w.find('[data-testid="ccgateway-cleanup"]').exists()).toBe(true)
     w.unmount()
   })
 })

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -22,24 +23,18 @@ import (
 // /accounts adopts it. A draft is only visible to its creator unless the
 // caller holds settings:manage.
 
-// draftKeys are the permissions of the draft endpoints. account:own:create
-// is accepted besides the contract's settings:manage / account:create:
-// own-level users may create accounts (POST /accounts), so they must be
-// able to prepare the runtime of a Claude Code account too.
-var draftKeys = []string{"settings:manage", "account:create", "account:own:create"}
-
-// draftUseKeys are the permissions of the endpoints addressing one draft:
-// besides draftKeys, whoever may re-authorize an account (account:update,
-// account:own:update, §49.17) drives the re-authorization draft it started.
-// Visibility stays the creator or settings:manage either way.
-var draftUseKeys = append(append([]string{}, draftKeys...), "account:update", "account:own:update")
+// draftActions are the permissions of the draft endpoints: settings:manage,
+// or account:create with any scope: whoever may create some accounts (POST
+// /accounts) must be able to prepare the runtime of a Claude Code account
+// too.
+var draftActions = []perm.Key{perm.SettingsManage, perm.AccountCreate}
 
 func (s *Service) registerDraftRoutes(r *httpapi.Router) {
-	r.PermAny("POST", "/system/ccgateway/drafts", s.draftCreate, draftKeys...)
-	r.PermAny("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftUseKeys...)
-	r.PermAny("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftUseKeys...)
-	r.PermAny("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftUseKeys...)
-	r.PermAny("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftUseKeys...)
+	r.PermScoped("POST", "/system/ccgateway/drafts", s.draftCreate, draftActions...)
+	r.PermScoped("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftActions...)
+	r.PermScoped("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftActions...)
+	r.PermScoped("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftActions...)
+	r.PermScoped("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftActions...)
 }
 
 func newDraftKey() string {
@@ -53,7 +48,11 @@ func newDraftKey() string {
 // draftScope is nil for settings administrators (every draft), otherwise
 // the caller id (only drafts it created).
 func draftScope(ctx context.Context) *int64 {
-	return core.OwnerScope(ctx, "settings:manage")
+	if core.HasGranted(ctx, perm.SettingsManage) {
+		return nil
+	}
+	uid, _ := core.UserID(ctx)
+	return &uid
 }
 
 func draftNotFound(base *core.Error) *core.Error { return reasonError(base, "draft_not_found") }
@@ -88,32 +87,6 @@ func (s *Service) touchDraftOf(ctx context.Context, key string, scope *int64, ki
 	return tag.RowsAffected() == 1, nil
 }
 
-// canProxies is the proxy range of a draft caller, the account module's
-// rule for POST /accounts (proxyRangeFor "account:create", CONTRACTS
-// §21.4): account:create may use every proxy; otherwise proxy:read sees
-// every proxy, proxy:own:read / proxy:own:manage the caller's own, anything
-// else none.
-func (s *Service) canProxies(ctx context.Context) (scope *int64, none bool) {
-	if core.OwnerScope(ctx, "account:create") == nil {
-		return nil, false
-	}
-	uid, _ := core.UserID(ctx)
-	can := func(key string) bool {
-		if s.Authorizer == nil {
-			return false
-		}
-		ok, e := s.Authorizer.Can(ctx, uid, key)
-		return e == nil && ok
-	}
-	if can("proxy:read") {
-		return nil, false
-	}
-	if can("proxy:own:read") || can("proxy:own:manage") {
-		return &uid, false
-	}
-	return nil, true
-}
-
 // checkProxy validates a draft's proxy_id: none (direct egress), or visible
 // to the caller and not disabled.
 func (s *Service) checkProxy(ctx context.Context, id *int64) error {
@@ -123,10 +96,14 @@ func (s *Service) checkProxy(ctx context.Context, id *int64) error {
 	if *id <= 0 {
 		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}
-	scope, none := s.canProxies(ctx)
+	// The account module's rule for POST /accounts (CONTRACTS §21.4).
+	refs, e := core.ProxyRefScope(ctx, s.Authorizer, perm.AccountCreate)
+	if e != nil {
+		return e
+	}
 	var status string
-	e := s.DB.Pool.QueryRow(ctx, `SELECT status FROM proxies WHERE id=$1 AND NOT $2::boolean
-		AND ($3::bigint IS NULL OR created_by=$3)`, *id, none, scope).Scan(&status)
+	e = s.DB.Pool.QueryRow(ctx, `SELECT p.status FROM proxies p WHERE p.id=$1 AND `+core.ProxyRows.SQL(2),
+		append([]any{*id}, core.ProxyRows.Args(refs)...)...).Scan(&status)
 	if store.IsNoRows(e) {
 		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}
@@ -167,8 +144,30 @@ func (s *Service) draftCreate(c *gin.Context) {
 	}
 	uid, _ := core.UserID(ctx)
 	key := newDraftKey()
-	if _, e := s.DB.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by)
-		VALUES($1, $2, NULLIF($3::bigint, 0))`, key, in.ProxyID, uid); e != nil {
+	// A draft takes a runtime container until it is adopted, deleted or
+	// swept; a settings administrator is not limited. The count and the
+	// insert run under the user's lock.
+	limit := core.MaxOpenDrafts
+	if draftScope(ctx) == nil {
+		limit = 0 // no limit
+	}
+	e := s.DB.Tx(ctx, func(tx pgx.Tx) error {
+		if limit > 0 {
+			if err := core.LockOpenDrafts(ctx, tx, uid); err != nil {
+				return err
+			}
+		}
+		tag, err := tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by)
+			SELECT $1, $2, NULLIF($3::bigint, 0)
+			WHERE $4::int = 0 OR (SELECT count(*) FROM ccgateway_runtimes
+				WHERE created_by = $3 AND account_id IS NULL AND retired_at IS NULL) < $4`,
+			key, in.ProxyID, uid, limit)
+		if err == nil && tag.RowsAffected() == 0 {
+			err = core.ErrTooManyDrafts
+		}
+		return err
+	})
+	if e != nil {
 		httpapi.Fail(c, e)
 		return
 	}

@@ -27,7 +27,8 @@ export const BULK_LIMITS = {
   spm_limit: [0, 10_000_000]
 } as const
 
-const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x))
+/** Same ids, in any order. */
+export const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x))
 
 export function buildBulkPatch(a: Account, v: BulkFields, on: BulkFlags): Record<string, unknown> | null {
   const body: Record<string, unknown> = {}

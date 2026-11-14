@@ -44,7 +44,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.12.6" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.12.7" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -54,8 +54,9 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("runtime/entry/hostCompat = %s %+v %s", m.Runtime, m.Entry, m.HostCompat)
 	}
 	// 0.1.229 is the first core that renders a table page's "create" link
-	// (the asset forms have no sidebar entry of their own).
-	for version, want := range map[string]bool{"0.1.125": false, "0.1.228": false, "0.1.229": true} {
+	// (the asset forms have no sidebar entry of their own); 0.1.286 the
+	// first that honours defaultRoles, route accounts and upstreamFields.
+	for version, want := range map[string]bool{"0.1.125": false, "0.1.229": false, "0.1.285": false, "0.1.286": true} {
 		if got, err := check.HostCompatible(m.HostCompat, version); err != nil || got != want {
 			t.Fatalf("host %s compatibility: %v %v", version, got, err)
 		}
@@ -474,18 +475,27 @@ func hostAllowed(domains []string, host string) bool {
 }
 
 // TestAssetRoutesAndPages pins the asset library's declared surface: every
-// route is an admin route behind one of the plugin's two permissions, and
-// every host-rendered page reads a route that actually exists.
+// route is an admin route behind one of the plugin's two permissions and
+// account:read (reads) or account:update (writes), and every host-rendered
+// page reads a route that actually exists. Only the routes naming an account
+// directly pass the own level; the others reach accounts through rows of
+// this plugin, which the core cannot see.
 func TestAssetRoutesAndPages(t *testing.T) {
 	m := decodeManifest(t)
 	if len(m.Routes) == 0 {
 		t.Fatal("stage three declares the asset library routes")
+	}
+	accountFrom := map[string][]string{
+		"POST /asset-groups":                              {"body:account_id"},
+		"GET /accounts/:account_id/upstream/asset-groups": {"path:account_id"},
+		"GET /accounts/:account_id/upstream/assets":       {"path:account_id"},
 	}
 	declared := map[string]bool{}
 	for _, r := range m.Routes {
 		if r.Scope != "admin" {
 			t.Errorf("route %s %s scope = %q; the asset library is administrator-only", r.Method, r.Path, r.Scope)
 		}
+		action := manifest.AccountsRead
 		switch r.Permission {
 		case volcengine.PermAssetsRead:
 			if r.Method != "GET" {
@@ -495,8 +505,13 @@ func TestAssetRoutesAndPages(t *testing.T) {
 			if r.Method == "GET" {
 				t.Errorf("route %s %s is a read behind the manage permission", r.Method, r.Path)
 			}
+			action = manifest.AccountsUpdate
 		default:
 			t.Errorf("route %s %s permission = %q", r.Method, r.Path, r.Permission)
+		}
+		want := &manifest.RouteAccounts{Action: action, From: accountFrom[r.Method+" "+r.Path]}
+		if !reflect.DeepEqual(r.Accounts, want) {
+			t.Errorf("route %s %s accounts = %+v, want %+v", r.Method, r.Path, r.Accounts, want)
 		}
 		declared[r.Method+" "+r.Path] = true
 	}
@@ -600,7 +615,7 @@ func TestValidate(t *testing.T) {
 	for _, icon := range []string{"assets/volcengine-color.svg", "assets/doubao-color.svg"} {
 		files[icon] = mustFile(t, icon)
 	}
-	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.229"}); err != nil {
+	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.286"}); err != nil {
 		t.Fatalf("core manifest validation: %v", err)
 	}
 }

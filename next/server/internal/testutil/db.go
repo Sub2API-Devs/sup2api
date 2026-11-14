@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/fstest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -40,12 +41,49 @@ var (
 func DB(t testing.TB) *store.DB {
 	t.Helper()
 	base := testpg.URL(t)
-	ctx := context.Background()
-	tplOnce.Do(func() { tplName, tplErr = ensureTemplate(ctx, base) })
+	tplOnce.Do(func() { tplName, tplErr = ensureTemplate(context.Background(), base, migrations.FS) })
 	if tplErr != nil {
 		t.Fatalf("test template database: %v", tplErr)
 	}
+	return cloneTemplate(t, base, tplName)
+}
 
+// DBThrough returns a fresh database migrated through the core migration
+// last and no further: the schema a deployed release left, for testing the
+// migrations after it. Its template is built once per migration set, like
+// DB's.
+func DBThrough(t testing.TB, last string) *store.DB {
+	t.Helper()
+	base := testpg.URL(t)
+	upTo := fstest.MapFS{}
+	names, err := fs.Glob(migrations.FS, "*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range names {
+		if n > last {
+			continue
+		}
+		b, err := fs.ReadFile(migrations.FS, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		upTo[n] = &fstest.MapFile{Data: b}
+	}
+	if _, ok := upTo[last]; !ok {
+		t.Fatalf("no core migration %s", last)
+	}
+	name, err := ensureTemplate(context.Background(), base, upTo)
+	if err != nil {
+		t.Fatalf("test template database through %s: %v", last, err)
+	}
+	return cloneTemplate(t, base, name)
+}
+
+// cloneTemplate creates a database for one test from the template tpl.
+func cloneTemplate(t testing.TB, base, tpl string) *store.DB {
+	t.Helper()
+	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, base)
 	if err != nil {
 		t.Fatalf("connect TEST_DATABASE_URL: %v", err)
@@ -53,7 +91,7 @@ func DB(t testing.TB) *store.DB {
 	defer admin.Close(ctx)
 
 	name := fmt.Sprintf("t_%d_%d", os.Getpid(), dbSeq.Add(1))
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name+" TEMPLATE "+tplName); err != nil {
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name+" TEMPLATE "+tpl); err != nil {
 		t.Fatalf("create test database: %v", err)
 	}
 	t.Cleanup(func() {
@@ -77,11 +115,12 @@ func DB(t testing.TB) *store.DB {
 	return db
 }
 
-// ensureTemplate builds the migrated template database unless another
-// process already did. A template is only valid once datistemplate is set,
-// which happens after migrations succeed; a half-built one is rebuilt.
-func ensureTemplate(ctx context.Context, base string) (string, error) {
-	sum, err := migrationsHash()
+// ensureTemplate builds the template database migrated with fsys unless
+// another process already did. A template is only valid once datistemplate
+// is set, which happens after migrations succeed; a half-built one is
+// rebuilt.
+func ensureTemplate(ctx context.Context, base string, fsys fs.FS) (string, error) {
+	sum, err := migrationsHash(fsys)
 	if err != nil {
 		return "", err
 	}
@@ -122,7 +161,7 @@ func ensureTemplate(ctx context.Context, base string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+	_, err = store.Migrate(ctx, db, fsys, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
 	db.Close()
 	if err != nil {
 		return "", fmt.Errorf("migrate template: %w", err)
@@ -133,15 +172,37 @@ func ensureTemplate(ctx context.Context, base string) (string, error) {
 	return name, nil
 }
 
-func migrationsHash() (string, error) {
-	names, err := fs.Glob(migrations.FS, "*.sql")
+// ExecWithoutTrigger runs sql with trigger on table disabled, to set up a
+// state the trigger refuses, as a database from before it may hold.
+func ExecWithoutTrigger(t testing.TB, db *store.DB, table, trigger, sql string, args ...any) {
+	t.Helper()
+	toggle := func(tx pgx.Tx, state string) error {
+		_, err := tx.Exec(context.Background(), fmt.Sprintf("ALTER TABLE %s %s TRIGGER %s", table, state, trigger))
+		return err
+	}
+	err := db.Tx(context.Background(), func(tx pgx.Tx) error {
+		if err := toggle(tx, "DISABLE"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(context.Background(), sql, args...); err != nil {
+			return err
+		}
+		return toggle(tx, "ENABLE")
+	})
+	if err != nil {
+		t.Fatalf("exec without trigger %s: %v", trigger, err)
+	}
+}
+
+func migrationsHash(fsys fs.FS) (string, error) {
+	names, err := fs.Glob(fsys, "*.sql")
 	if err != nil {
 		return "", err
 	}
 	sort.Strings(names)
 	h := sha256.New()
 	for _, n := range names {
-		b, err := fs.ReadFile(migrations.FS, n)
+		b, err := fs.ReadFile(fsys, n)
 		if err != nil {
 			return "", err
 		}

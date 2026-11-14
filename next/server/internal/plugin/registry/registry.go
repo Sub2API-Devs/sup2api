@@ -465,6 +465,9 @@ func (g *generation) addRoutes(ext Extension, info core.PluginInfo, pkg *Package
 		if !grants.Has("routes." + rt.Scope) {
 			continue
 		}
+		// Routes account actions post to are checked as if they declared
+		// accounts, so packages installed before the field are covered too.
+		rt.Accounts = manifest.EffectiveRouteAccounts(pkg.Manifest, rt)
 		g.routes[pkg.Key] = append(g.routes[pkg.Key], core.RouteBinding{Plugin: info, Route: rt, Client: hx})
 	}
 }

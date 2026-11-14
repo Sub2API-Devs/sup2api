@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -108,7 +110,24 @@ const (
 	ChannelAuthzChanged   = "authz:changed"
 	ChannelAccountChanged = "account:changed"
 	ChannelConfigChanged  = "config:changed"
+	// ChannelUserSessionsChanged carries a user id whose sessions were ended
+	// (token_version moved): nodes drop that user's cached token status.
+	ChannelUserSessionsChanged = "iam:user:changed"
 )
+
+// AnnounceAuthzChanged tells every node, this one included, that the authz
+// version reached v (authz:changed): each drops the permission sets it
+// cached before v. A failure is logged, not returned: the version poll
+// catches a lost message. v == 0 (nothing changed) or a nil bus announces
+// nothing.
+func AnnounceAuthzChanged(ctx context.Context, bus Bus, v int64) {
+	if bus == nil || v == 0 {
+		return
+	}
+	if err := bus.Publish(ctx, ChannelAuthzChanged, []byte(strconv.FormatInt(v, 10))); err != nil {
+		slog.WarnContext(ctx, "authz: publish authz:changed failed", "err", err)
+	}
+}
 
 // PublishAccountChanged announces on account:changed that account id
 // changed ({"account_id": id}); a nil bus announces nothing. A message

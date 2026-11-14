@@ -11,26 +11,31 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 )
 
-// RegisterRoutes mounts /auth/*, /me, /me/password, /users* and the members
-// of a segment, which are a users list.
+// RegisterRoutes mounts /auth/*, /me, /me/password, /users*, the members of
+// a segment, which are a users list, and the super admin transfer.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
-	r.Authed(http.MethodPost, "/auth/logout", s.handleLogout)
+	r.SessionOnly().Handle(http.MethodPost, "/auth/logout", s.handleLogout)
 	r.AuthedRead("/me", s.handleMe)
-	r.Authed(http.MethodPut, "/me", s.handleUpdateMe)
-	r.Authed(http.MethodPut, "/me/password", s.handleChangePassword)
+	r.Self(http.MethodPut, "/me", "self:profile", s.handleUpdateMe)
+	// Step-up self.password.change in the handler, after the new password
+	// passes validation, so a rejected one does not spend the proof.
+	r.Self(http.MethodPut, "/me/password", selfSecurity, s.handleChangePassword)
 
 	r.Perm(http.MethodGet, "/users", "user:read", s.handleListUsers)
-	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser)
+	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser).Uses(perm.RoleAssign, perm.SegmentManage)
 	r.Perm(http.MethodGet, "/users/:id", "user:read", s.handleGetUser)
-	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser)
-	r.Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
-	r.Perm(http.MethodPut, "/users/:id/roles", "role:manage", s.handleSetUserRoles)
-	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
+	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser).Uses(perm.UserPasswordReset)
+	r.StepUp(core.StepUpUserDelete).Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
+	r.Perm(http.MethodPut, "/users/:id/roles", "role:assign", s.handleSetUserRoles)
+	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers).Uses(perm.UserRead)
+	// The super admin's own standing: under self:security for an access key.
+	r.StepUp(core.StepUpSuperAdminTransfer).Self(http.MethodPost, "/system/super-admin/transfer", selfSecurity, s.handleTransferSuperAdmin)
 	s.registerSecurityRoutes(r)
 }
 
@@ -116,13 +121,20 @@ func (s *Service) handleUpdateMe(c *gin.Context) {
 
 func (s *Service) handleChangePassword(c *gin.Context) {
 	var in struct {
-		OldPassword string `json:"old_password"`
 		NewPassword string `json:"new_password"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := s.ChangePassword(c.Request.Context(), actor(c), in.OldPassword, in.NewPassword); err != nil {
+	if f := validatePassword("new_password", in.NewPassword); f != nil {
+		httpapi.Fail(c, core.InvalidFields(*f))
+		return
+	}
+	if err := s.ConsumeStepUp(c.Request.Context(), core.StepUpSelfPassword); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if err := s.ChangePassword(c.Request.Context(), actor(c), s.currentFamily(c), in.NewPassword); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -203,17 +215,9 @@ func (s *Service) handleCreateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid := actor(c)
 	// Choosing roles other than the default is a role assignment: it needs
-	// role:manage as well.
-	if !IsDefaultRoles(in.RoleKeys) {
-		ok, err := s.authz.Can(ctx, uid, "role:manage")
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if !ok {
-			httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "role:manage"}))
-			return
-		}
+	// role:assign as well.
+	if !IsDefaultRoles(in.RoleKeys) && !httpapi.CanAny(c, s.authz, "role:assign") {
+		return
 	}
 	// Choosing the segment is a segment assignment: it needs segment:manage
 	// as well.
@@ -240,12 +244,12 @@ func (s *Service) handleUpdateUser(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	u, err := s.UpdateUser(c.Request.Context(), actor(c), id, in, c.ClientIP())
+	u, err := s.UpdateUser(audit.Context(c), actor(c), id, in)
 	if err == nil {
 		err = s.redactBalance(c, u)
 	}
 	if err != nil {
-		failLogin(c, err) // Retry-After when the self-confirmation is rate limited
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, u)

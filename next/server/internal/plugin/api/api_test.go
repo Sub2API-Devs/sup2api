@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,12 +29,13 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 // ---------------------------------------------------------------- fakes
 
-type tokens struct{}
+type tokens struct{ testutil.StepUpPassed }
 
 func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	switch tok {
@@ -42,37 +45,61 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 		return 2, nil
 	case "nobody":
 		return 3, nil
+	case "manager":
+		return 4, nil
+	case "runner":
+		return 5, nil
 	}
 	return 0, errors.New("bad token")
 }
 
 // authz: user 1 is superuser; user 2 only has plugin.guard:stats:read;
-// user 3 has nothing.
+// user 3 has nothing; user 4 manages plugins; user 5 only runs tasks.
 type authz struct{}
 
 func (a authz) Can(ctx context.Context, uid int64, p string) (bool, error) {
 	ps, err := a.PermissionSet(ctx, uid)
 	return ps.Has(p), err
 }
-func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
+
+// VerifyAccessKey: sak_<perm>,<perm>... is the viewer's (user 2) key with
+// those permissions.
+func (tokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	return core.AccessKeyIdentity{UserID: 2, KeyID: 1, Permissions: strings.Split(strings.TrimPrefix(raw, core.AccessKeyPrefix), ",")}, nil
+}
+
+// Every signed-in user holds the self permissions, as authz gives them; an
+// access key narrows them as authz does.
+func (a authz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
+	set, err := a.userSet(uid)
+	return core.RestrictToAccessKey(ctx, uid, set), err
+}
+
+func (authz) userSet(uid int64) (core.PermissionSet, error) {
+	var keys []string
 	switch uid {
 	case 1:
 		return core.PermissionSet{Superuser: true}, nil
 	case 2:
-		return core.PermissionSet{Keys: map[string]struct{}{"plugin.guard:stats:read": {}}}, nil
+		keys = []string{"plugin.guard:stats:read"}
+	case 4:
+		keys = []string{PermRead, PermManage}
+	case 5:
+		keys = []string{task.PermRun}
 	}
-	return core.PermissionSet{}, nil
+	return core.PermissionSetOf(append(keys, PermSelfUI)...), nil
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
-func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type noopPerms struct{}
 
-func (noopPerms) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef, []string) error {
+func (noopPerms) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef) error {
 	return nil
 }
-func (noopPerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error { return nil }
-func (noopPerms) DeletePlugin(context.Context, pgx.Tx, string) error          { return nil }
+func (noopPerms) CanGrantToRoles(context.Context, pgx.Tx, int64, []string) error        { return nil }
+func (noopPerms) GrantPluginPermission(context.Context, pgx.Tx, string, []string) error { return nil }
+func (noopPerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error           { return nil }
+func (noopPerms) DeletePlugin(context.Context, pgx.Tx, string) error                    { return nil }
 
 type rollout struct {
 	db *store.DB
@@ -158,6 +185,15 @@ type harness struct {
 	engine *gin.Engine
 	db     *store.DB
 	guard  *manifest.Manifest // the registry's copy; tests mutate it in place
+	api    *API
+}
+
+// jobRuns records manual job runs as "plugin/job by actor".
+type jobRuns []string
+
+func (j *jobRuns) RunNow(_ context.Context, pluginKey, jobID string, actorID int64) error {
+	*j = append(*j, fmt.Sprintf("%s/%s by %d", pluginKey, jobID, actorID))
+	return nil
 }
 
 func (h *harness) do(method, path, token string, body any) (int, map[string]any) {
@@ -231,7 +267,7 @@ func newHarness(t *testing.T, guardConflicts ...core.ResourceConflict) (*harness
 	engine := gin.New()
 	r := httpapi.NewRouter(engine, tokens{}, authz{})
 	a.RegisterRoutes(r)
-	return &harness{t: t, engine: engine, db: db, guard: m}, root
+	return &harness{t: t, engine: engine, db: db, guard: m, api: a}, root
 }
 
 func data(out map[string]any) map[string]any {
@@ -304,6 +340,17 @@ func TestAPIFlow(t *testing.T) {
 	}
 	if code, out = h.do("GET", "/plugins/guard/settings", "viewer", nil); code != 200 || data(out)["permission"] != "plugin.guard:stats:read" {
 		t.Fatalf("settings through the plugin permission = %d %v", code, out)
+	}
+	// An access key needs the plugin pages' self permission and the
+	// settings permission both (期 4 S4).
+	for perms, want := range map[string]int{
+		"plugin.guard:stats:read,self:plugin_ui": 200,
+		"plugin.guard:stats:read":                http.StatusForbidden,
+		"self:plugin_ui":                         http.StatusForbidden,
+	} {
+		if code, out := h.do("GET", "/plugins/guard/settings", core.AccessKeyPrefix+perms, nil); code != want {
+			t.Fatalf("settings through a key with %s = %d %v, want %d", perms, code, out, want)
+		}
 	}
 	// Unknown plugin: 403 without permission (no existence leak), 404 with it.
 	if code, out = h.do("PUT", "/plugins/ghost/settings", "nobody", map[string]any{"values": map[string]any{}}); code != http.StatusForbidden {
@@ -406,6 +453,22 @@ func TestAPIFlow(t *testing.T) {
 	}
 	if code, _ = h.do("POST", "/plugins/guard/jobs/rollup/run", "admin", nil); code != http.StatusServiceUnavailable {
 		t.Fatalf("run job without runner = %d", code)
+	}
+	// A manual run is a task run: it needs task:run as POST
+	// /system/tasks/:name/run does, plugin:manage alone is not enough.
+	var runs jobRuns
+	h.api.d.Jobs = &runs
+	code, out = h.do("POST", "/plugins/guard/jobs/rollup/run", "manager", nil)
+	if code != http.StatusForbidden || out["error"].(map[string]any)["details"].(map[string]any)["permission"] != task.PermRun {
+		t.Fatalf("run job with plugin:manage only = %d %v", code, out)
+	}
+	if code, out = h.do("POST", "/plugins/guard/jobs/rollup/run", "runner", nil); code != http.StatusNoContent {
+		t.Fatalf("run job with task:run = %d %v", code, out)
+	}
+	var auditAction string
+	_ = h.db.Pool.QueryRow(ctx, `SELECT action FROM audit_logs WHERE user_id = 5 ORDER BY id DESC LIMIT 1`).Scan(&auditAction)
+	if len(runs) != 1 || runs[0] != "guard/rollup by 5" || auditAction != "plugin.job.run" {
+		t.Fatalf("job runs = %v, audit action = %q", runs, auditAction)
 	}
 
 	// UI extensions filtered by permission.
@@ -638,4 +701,87 @@ func TestResourcesRefusedForRuntimeNone(t *testing.T) {
 	fields, _ := out["error"].(map[string]any)["details"].(map[string]any)["fields"].([]any)
 	require.Len(t, fields, 1, out)
 	assert.Equal(t, "runtime", fields[0].(map[string]any)["field"])
+}
+
+// A plugin without a settings schema may still hold stored values: nothing
+// says which are secret, so every top-level value is masked, and a mask sent
+// back keeps the stored value.
+func TestSettingsWithoutSchemaAreAllMasked(t *testing.T) {
+	h, root := newHarness(t)
+	guard := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	guard.UI.Settings = nil
+	code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(guard, root)))
+	require.Equal(t, http.StatusOK, code, out)
+	consent := install.ConsentRequest{Grants: []install.GrantInput{{Permission: "db.schema"}, {Permission: "gateway.hook"},
+		{Permission: "events"}, {Permission: "jobs"}, {Permission: "routes.admin"}, {Permission: "ui.menu"}, {Permission: "ui.native"}}}
+	code, out = h.do("POST", "/plugins/guard/versions/0.1.0/consent", "admin", consent)
+	require.Equal(t, http.StatusOK, code, out)
+
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{
+		"api_key": "k-1", "upstream": map[string]any{"url": "https://u.example", "token": "t-1"}, "note": ""}})
+	require.Equal(t, http.StatusOK, code, out)
+	masked := map[string]any{"api_key": Mask, "upstream": Mask, "note": ""}
+	assert.Equal(t, masked, data(out)["values"])
+	assert.ElementsMatch(t, []any{"api_key", "note", "upstream"}, data(out)["secret_fields"])
+
+	code, out = h.do("GET", "/plugins/guard/settings", "admin", nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, "none", data(out)["mode"])
+	assert.Equal(t, masked, data(out)["values"])
+	assert.NotContains(t, string(mustJSON(t, out)), "k-1")
+	assert.NotContains(t, string(mustJSON(t, out)), "t-1")
+
+	// Masks keep the stored values; a new value replaces its own key only.
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{
+		"api_key": Mask, "upstream": Mask, "note": "n"}})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, map[string]any{"api_key": Mask, "upstream": Mask, "note": Mask}, data(out)["values"])
+	var enc []byte
+	require.NoError(t, h.db.Pool.QueryRow(context.Background(), `SELECT config_enc FROM plugins WHERE key = 'guard'`).Scan(&enc))
+	cipher, _ := secret.New(bytes.Repeat([]byte{7}, 32))
+	plain, err := cipher.Decrypt(enc, ConfigAAD("guard"))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"api_key":"k-1","upstream":{"url":"https://u.example","token":"t-1"},"note":"n"}`, string(plain))
+}
+
+// The plugin page lists the role grants an automatic upgrade withheld
+// (role_grants_to_review); plugin:install rejects (or confirms) them, which
+// clears the list.
+func TestAPIRoleGrantsToReview(t *testing.T) {
+	h, root := newHarness(t)
+	ctx := context.Background()
+	if code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(pkgtest.Guard("guard", "0.1.0", "sub2api"), root))); code != 200 {
+		t.Fatalf("upload = %d %v", code, out)
+	}
+	if _, err := h.db.Pool.Exec(ctx, `
+INSERT INTO roles (key, name, builtin) VALUES ('user', '{}', true) ON CONFLICT (key) DO NOTHING;
+INSERT INTO permissions (key, module, label, source, plugin_key, status) VALUES ('plugin.guard:rules:export', 'plugin.guard', '{}', 'plugin', 'guard', 'active');
+INSERT INTO audit_logs (action, target_type, target_id, detail) VALUES ('plugin.consent.auto', 'plugin', 'guard',
+  '{"version":"0.1.0","granted":[],"pending":[{"permission":"plugin.guard:rules:export","role":"user","sensitive":false,"via":"default","needs_consent":true}],"review_required":true}')`); err != nil {
+		t.Fatal(err)
+	}
+	pending := func() []any {
+		t.Helper()
+		code, out := h.do("GET", "/plugins/guard", "admin", nil)
+		list, ok := data(out)["role_grants_to_review"].([]any)
+		if code != 200 || !ok {
+			t.Fatalf("get = %d %v", code, out)
+		}
+		return list
+	}
+	if got := pending(); len(got) != 1 || got[0].(map[string]any)["role"] != "user" || got[0].(map[string]any)["version"] != "0.1.0" {
+		t.Fatalf("to review %v", got)
+	}
+	if code, _ := h.do("POST", "/plugins/guard/versions/0.1.0/role-grants/reject", "viewer", nil); code != http.StatusForbidden {
+		t.Fatalf("viewer reject = %d", code)
+	}
+	if code, out := h.do("POST", "/plugins/guard/versions/0.1.0/role-grants/reject", "admin", nil); code != 200 || data(out)["confirmed"] != false {
+		t.Fatalf("reject = %d %v", code, out)
+	}
+	if got := pending(); len(got) != 0 {
+		t.Fatalf("after reject %v", got)
+	}
+	if code, _ := h.do("POST", "/plugins/guard/versions/0.1.0/role-grants/confirm", "admin", nil); code != http.StatusNotFound {
+		t.Fatalf("confirm with nothing pending = %d", code)
+	}
 }

@@ -136,7 +136,7 @@ async function install() {
   error.value = null
   try {
     // Control panel mode may pull images and upgrade the controller itself (waiting for its health): allow as long as the SSH install.
-    await api.post('/system/ccgateway/runtime/install', {}, { signal: AbortSignal.timeout(controller.value ? 20 * 60_000 : 300000) })
+    await api.post('/system/ccgateway/runtime/install', {}, { timeoutMs: controller.value ? 20 * 60_000 : 300000 })
     toast(t('ccgateway.runtimeInstall.done'), 'success')
   } catch (e) {
     error.value = { title: t('ccgateway.runtimeInstall.failed'), detail: describe(e) }
@@ -181,7 +181,7 @@ async function updateWorkers(paired = false) {
   workersError.value = ''
   try {
     // One synchronous request: every runtime in turn, at most 5 minutes each, 25 minutes in all (the core keeps going if this tab gives up).
-    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'] } : {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
+    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'] } : {}, { timeoutMs: WORKERS_TIMEOUT_MS })
     pairedReport.value = paired
     toast(t(paired ? 'ccgateway.workers.pairedDone' : 'ccgateway.workers.done'), 'success')
   } catch (e) {
@@ -208,7 +208,7 @@ async function pushBundled() {
   bundledReport.value = null
   try {
     // One synchronous request (upload, load and apply per role, the asked-for worker update and a controller self-upgrade); the core keeps going if this tab gives up.
-    const report = await api.post<CcgBundledReport>('/system/ccgateway/runtime/bundled', updateExisting ? { update_existing: true } : {}, { signal: AbortSignal.timeout(BUNDLED_TIMEOUT_MS) })
+    const report = await api.post<CcgBundledReport>('/system/ccgateway/runtime/bundled', updateExisting ? { update_existing: true } : {}, { timeoutMs: BUNDLED_TIMEOUT_MS })
     bundledReport.value = report
     const failed = (report.results || []).some(r => r.status === 'failed')
     toast(t(failed ? 'ccgateway.bundled.partial' : 'ccgateway.bundled.done'), failed ? 'warning' : 'success')

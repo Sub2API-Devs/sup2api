@@ -1,12 +1,10 @@
 package account
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -16,18 +14,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
-
-// connectMaxBody fits the largest models / model_mapping an account accepts
-// (500 ids each, CONTRACTS §18): the console prefills the plugin presets (§41).
-const connectMaxBody = 512 << 10
-
-// ccgNotReady: the shared CCGateway is not configured or not authorized.
-var ccgNotReady = core.ErrUnavailable.WithMessage("Configure and authorize CCGateway first.").
-	WithDetails(map[string]any{"reason": "not_configured"})
 
 func containerSettingKeys(plugin string) []string {
 	if plugin == "ccgateway" {
@@ -103,7 +94,7 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 			WithDetails(map[string]any{"reason": "not_configured"})
 	}
 	var scope *int64
-	if !s.can(ctx, "settings:manage") {
+	if !core.Can(ctx, s.d.Authorizer, "settings:manage") {
 		uid, _ := core.UserID(ctx)
 		scope = &uid
 	}
@@ -111,93 +102,30 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 	return scope, facts, err
 }
 
-func (s *Service) connectCCGateway(c *gin.Context) {
-	ctx := c.Request.Context()
-	if !s.can(ctx, "account:create") {
-		httpapi.Fail(c, core.ErrPermissionDenied)
-		return
-	}
-	if s.d.CCGateway == nil {
-		httpapi.Fail(c, ccgNotReady)
-		return
-	}
-	// The shared container must be configured and authorized; per-account
-	// runtimes have no shared /admin/status, each account is authorized on
-	// its own after it is created (CONTRACTS §49).
-	runtimes := false
-	if cfg, err := s.d.CCGateway.Load(ctx); err == nil {
-		runtimes = cfg.AccountRuntimes
-	}
-	if !runtimes && s.d.CCGateway.Ready(ctx) != nil {
-		httpapi.Fail(c, ccgNotReady)
-		return
-	}
-	var in struct {
-		Name         string            `json:"name"`
-		GroupIDs     []int64           `json:"group_ids"`
-		Models       []string          `json:"models"`
-		ModelMapping map[string]string `json:"model_mapping"`
-		// The proxy a per-account runtime egresses through (required there:
-		// without one the runtime stays blocked).
-		ProxyID  *int64  `json:"proxy_id"`
-		ProxyURL *string `json:"proxy_url"`
-	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, connectMaxBody)
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	if in.Name == "" {
-		in.Name = "CCGateway"
-	}
-	payload := map[string]any{"name": in.Name, "group_ids": in.GroupIDs, "models": in.Models, "model_mapping": in.ModelMapping, "plugin_key": "ccgateway", "type": "managed", "credentials": map[string]any{}}
-	if in.ProxyID != nil {
-		payload["proxy_id"] = *in.ProxyID
-	}
-	if in.ProxyURL != nil {
-		payload["proxy_url"] = *in.ProxyURL
-	}
-	body, _ := json.Marshal(payload)
-	c.Request.Body = io.NopCloser(bytes.NewReader(body))
-	c.Request.ContentLength = int64(len(body))
-	// account:create was checked above: create the account at that level
-	// (the route itself is granted by settings:manage). create kicks the
-	// runtime (kickCCGateway).
-	c.Request = c.Request.WithContext(core.WithGranted(ctx, append(append([]string{}, core.Granted(ctx)...), "account:create")))
-	s.create(c)
-}
-
 // ---------------------------------------------------------------- re-authorization (CONTRACTS §49.17)
-
-// ccgReauthScope is the account range of the re-authorization endpoints
-// (the §49.5 rule): settings:manage or account:update reach every account,
-// account:own:update the accounts the caller created.
-func ccgReauthScope(ctx context.Context) *int64 {
-	if core.OwnerScope(ctx, "settings:manage") == nil {
-		return nil
-	}
-	return core.OwnerScope(ctx, "account:update")
-}
 
 // ccgReauthAccount loads the CCGateway account of a re-authorization
 // request; ok=false after the failure was written.
-func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int64, scope *int64, ok bool) {
+// Its range is that of the other per-account runtime writes (the §49.5
+// rule): the caller's account:update scope.
+func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int64, scope core.DataScope, ok bool) {
 	if id, ok = httpapi.PathID(c, "id"); !ok {
-		return 0, nil, false
+		return 0, scope, false
 	}
-	scope = ccgReauthScope(ctx)
+	scope = s.scopeOf(ctx, perm.AccountUpdate)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
-		return 0, nil, false
+		return 0, scope, false
 	}
 	if a.PluginKey != "ccgateway" {
 		httpapi.Fail(c, notFound(ctx))
-		return 0, nil, false
+		return 0, scope, false
 	}
 	if s.d.CCGateway == nil {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Account runtimes are not configured.").
 			WithDetails(map[string]any{"reason": "not_configured"}))
-		return 0, nil, false
+		return 0, scope, false
 	}
 	return id, scope, true
 }
@@ -227,7 +155,7 @@ func (s *Service) reauthorizeCCGateway(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument)
 		return
 	}
-	key, _, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	key, _, err := s.d.CCGateway.ReauthDraft(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -255,7 +183,7 @@ func (s *Service) commitCCGatewayReauth(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	tctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	_, err := s.d.CCGateway.CommitReauth(tctx, id, key, core.OwnerScope(ctx, "settings:manage"), func(tx pgx.Tx, retired string) error {
+	_, err := s.d.CCGateway.CommitReauth(tctx, id, key, func(tx pgx.Tx, retired string) error {
 		a, err := s.loadRow(tctx, tx, id, scope, true)
 		if err != nil {
 			return err

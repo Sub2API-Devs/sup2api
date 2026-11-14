@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"time"
@@ -14,18 +15,18 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
-	permissions := []string{"account:create", "account:own:create"}
-	r.PermAny("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, permissions...)
-	r.PermAny("GET", "/account-preparations/:key/:action", s.preparationAction, permissions...)
-	r.PermAny("POST", "/account-preparations/:key/:action", s.preparationAction, permissions...)
-	r.PermAny("DELETE", "/account-preparations/:key", s.cancelPreparation, permissions...)
-	r.PermAny("PUT", "/account-preparations/:key", s.updatePreparation, permissions...)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, perm.AccountCreate).Uses(perm.AccountRelay)
+	r.PermScoped("GET", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
+	r.PermScoped("POST", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
+	r.PermScoped("DELETE", "/account-preparations/:key", s.cancelPreparation, perm.AccountCreate)
+	r.PermScoped("PUT", "/account-preparations/:key", s.updatePreparation, perm.AccountCreate)
 }
 
 func (s *Service) preparationResource(p core.AccountPreparation) (core.AccountLifecycleResource, error) {
@@ -62,6 +63,10 @@ func (s *Service) createPreparation(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnsupported)
 		return
 	}
+	if err := s.checkCustomUpstream(ctx, s.scopeOf(ctx, perm.AccountCreate), binding); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	var in struct {
 		ProxyID        *int64          `json:"proxy_id"`
 		Settings       json.RawMessage `json:"settings"`
@@ -71,7 +76,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create"), nil); err != nil {
+	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -96,13 +101,34 @@ func (s *Service) createPreparation(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	// A preparation takes its resource (a runtime container) until it is
+	// adopted, cancelled or expires; the full account:create is not limited.
+	limit := core.MaxOpenDrafts
+	if s.scopeOf(ctx, perm.AccountCreate).All {
+		limit = 0 // no limit
+	}
+	var fresh bool // this request inserted the row
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var matches, active bool
-		if err := tx.QueryRow(ctx, `INSERT INTO account_preparations(key,plugin_key,account_type,proxy_id,settings,created_by,idempotency_key)
-			VALUES($1,$2,$3,$4,$5::jsonb,$6,NULLIF($7,''))
+		// The count and the insert run under the user's lock. A repeated
+		// idempotency key is not a new preparation and passes.
+		if limit > 0 {
+			if err := core.LockOpenDrafts(ctx, tx, uid); err != nil {
+				return err
+			}
+		}
+		err := tx.QueryRow(ctx, `INSERT INTO account_preparations(key,plugin_key,account_type,proxy_id,settings,created_by,idempotency_key)
+			SELECT $1,$2::text,$3::text,$4,$5::jsonb,$6::bigint,NULLIF($7::text,'')
+			WHERE $8::int = 0
+				OR (SELECT count(*) FROM account_preparations WHERE created_by=$6::bigint AND account_id IS NULL AND state IN ('pending','ready') AND expires_at>now()) < $8::int
+				OR EXISTS (SELECT 1 FROM account_preparations WHERE created_by=$6::bigint AND plugin_key=$2::text AND account_type=$3::text AND idempotency_key=NULLIF($7::text,''))
 			ON CONFLICT (created_by,plugin_key,account_type,idempotency_key) DO UPDATE SET last_seen_at=now()
-			RETURNING key,settings=$5::jsonb AND proxy_id IS NOT DISTINCT FROM $4::bigint,account_id IS NULL AND state IN ('pending','ready') AND expires_at>now()`,
-			p.Key, p.PluginKey, p.Type, p.ProxyID, p.Settings, uid, in.IdempotencyKey).Scan(&p.Key, &matches, &active); err != nil {
+			RETURNING key,settings=$5::jsonb AND proxy_id IS NOT DISTINCT FROM $4::bigint,account_id IS NULL AND state IN ('pending','ready') AND expires_at>now(),xmax=0`,
+			p.Key, p.PluginKey, p.Type, p.ProxyID, p.Settings, uid, in.IdempotencyKey, limit).Scan(&p.Key, &matches, &active, &fresh)
+		if store.IsNoRows(err) {
+			return core.ErrTooManyDrafts
+		}
+		if err != nil {
 			return err
 		}
 		if !matches || !active {
@@ -120,14 +146,25 @@ func (s *Service) createPreparation(c *gin.Context) {
 		return
 	}
 	defer release()
-	p, err = s.loadPreparation(ctx, p.Key)
-	if err == nil {
+	if loaded, e := s.loadPreparation(ctx, p.Key); e != nil {
+		err = e
+	} else {
+		p = loaded
 		err = s.preparationCallback(ctx, p, "prepare", "")
 	}
 	if err == nil {
 		err = resource.PrepareAccount(ctx, p)
 	}
 	if err != nil {
+		if fresh {
+			// The key was never returned, so nobody could cancel it and it
+			// would hold a core.MaxOpenDrafts slot until the sweep.
+			abandon, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			if err := s.disposePreparation(abandon, p, disposeAbandoned); err != nil {
+				slog.WarnContext(abandon, "account: abandon failed preparation", "key", p.Key, "err", err)
+			}
+			cancel()
+		}
 		httpapi.Fail(c, err)
 		return
 	}
@@ -221,7 +258,7 @@ func (s *Service) updatePreparation(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create"), nil); err != nil {
+	if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -268,13 +305,7 @@ func (s *Service) cancelPreparation(c *gin.Context) {
 		err = core.ErrNotFound
 	}
 	if err == nil {
-		err = s.preparationCallback(ctx, p, "cancel", "")
-	}
-	if err == nil {
-		err = audit.Audit(ctx, s.d.DB.Pool, uid, "account.preparation.cancel", "account_preparation", p.Key, nil)
-	}
-	if err == nil {
-		err = s.disposePreparation(ctx, p, false)
+		err = s.disposePreparation(ctx, p, disposeCancelled)
 	}
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -298,31 +329,83 @@ func (s *Service) lockPreparation(ctx context.Context, key string) (context.Cont
 	return ctx, func() { cancel(); lock.Release() }, nil
 }
 
-func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparation, expiredOnly bool) error {
-	ctx, release, err := s.lockPreparation(ctx, p.Key)
-	if err != nil {
-		return err
+// Why a preparation is disposed of (disposePreparation).
+const (
+	// disposeCancelled: its creator cancels it (DELETE
+	// /account-preparations/:key); the plugin may refuse.
+	disposeCancelled = "cancelled"
+	// disposeAbandoned: its first prepare failed; the caller holds its lock.
+	// The row goes, giving back the core.MaxOpenDrafts slot and the
+	// idempotency key.
+	disposeAbandoned = "abandoned"
+	// disposeExpired: the sweep, for one that expired, was left alone or is
+	// still being cancelled.
+	disposeExpired = "expired"
+)
+
+// disposePreparation cancels p for reason: it marks the row cancelling,
+// which no longer counts as open, tells the plugin (the cancel phase: before
+// that for a cancel by its creator, which a refusal stops; otherwise once
+// the row starts cancelling), has the resource drop what it started, then marks it cancelled (an abandoned one is deleted) and audits
+// it. A row not in a state reason applies to is a conflict, but for the
+// sweep. A failure leaves it cancelling for the sweep to retry.
+func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparation, reason string) error {
+	if reason != disposeAbandoned {
+		locked, release, err := s.lockPreparation(ctx, p.Key)
+		if err != nil {
+			return err
+		}
+		defer release()
+		ctx = locked
 	}
-	defer release()
 	resource, err := s.preparationResource(p)
 	if err != nil {
 		return err
 	}
-	tag, err := s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelling' WHERE key=$1 AND account_id IS NULL AND state IN ('pending','ready','cancelling') AND (NOT $2 OR state='cancelling' OR expires_at<=now() OR last_seen_at<now()-interval '15 minutes')`, p.Key, expiredOnly)
-	if err != nil {
-		return err
+	if reason == disposeCancelled {
+		if err := s.preparationCallback(ctx, p, "cancel", ""); err != nil {
+			return err // the plugin may refuse its creator's cancel
+		}
 	}
-	if tag.RowsAffected() == 0 {
-		if expiredOnly {
+	var was string
+	err = s.d.DB.Pool.QueryRow(ctx, `UPDATE account_preparations ap SET state='cancelling'
+		FROM (SELECT key, state FROM account_preparations WHERE key=$1 FOR UPDATE) old
+		WHERE ap.key=old.key AND ap.account_id IS NULL
+		AND CASE $2::text WHEN 'abandoned' THEN ap.state='pending'
+			WHEN 'expired' THEN ap.state='cancelling' OR ap.state IN ('pending','ready') AND (ap.expires_at<=now() OR ap.last_seen_at<now()-interval '15 minutes')
+			ELSE ap.state IN ('pending','ready','cancelling') END
+		RETURNING old.state`, p.Key, reason).Scan(&was)
+	if store.IsNoRows(err) {
+		if reason == disposeExpired {
 			return nil
 		}
 		return core.ErrConflict
 	}
+	if err != nil {
+		return err
+	}
+	// The system disposing of it tells the plugin once, when it starts to
+	// (not on a retry of one already cancelling); a refusal does not stop it.
+	if reason != disposeCancelled && was != "cancelling" {
+		if err := s.preparationCallback(ctx, p, "cancel", ""); err != nil {
+			slog.WarnContext(ctx, "account: preparation cancel callback", "key", p.Key, "reason", reason, "err", err)
+		}
+	}
 	if err := resource.CancelAccountPreparation(ctx, p); err != nil {
 		return err
 	}
-	_, err = s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelled' WHERE key=$1 AND account_id IS NULL AND state='cancelling'`, p.Key)
-	return err
+	final := `UPDATE account_preparations SET state='cancelled' WHERE key=$1 AND account_id IS NULL AND state='cancelling'`
+	if reason == disposeAbandoned {
+		final = `DELETE FROM account_preparations WHERE key=$1 AND account_id IS NULL AND state='cancelling'`
+	}
+	if _, err := s.d.DB.Pool.Exec(ctx, final, p.Key); err != nil {
+		return err
+	}
+	actor := p.CreatedBy
+	if reason == disposeExpired {
+		actor = 0
+	}
+	return audit.Audit(ctx, s.d.DB.Pool, actor, "account.preparation.cancel", "account_preparation", p.Key, map[string]any{"reason": reason})
 }
 
 // checkPreparationForCreate checks the preparation_key of POST /accounts and

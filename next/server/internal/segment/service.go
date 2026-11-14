@@ -15,6 +15,9 @@ type Deps struct {
 	DB *store.DB
 	// Authz tells whether the caller may read users (see Masked).
 	Authz core.Authorizer
+	// Users decides which users the caller may move between segments; nil
+	// refuses all.
+	Users core.UserGuard
 	// Platforms returns the platforms each group serves (group.Service.Platforms).
 	Platforms func(ctx context.Context, groupIDs []int64) (map[int64][]string, error)
 	// PriceRulesChanged drops the cached price rules on every node (billing.Service.PriceRulesChanged).
@@ -28,6 +31,7 @@ type Deps struct {
 type Service struct {
 	db                *store.DB
 	authz             core.Authorizer
+	users             core.UserGuard
 	platforms         func(ctx context.Context, groupIDs []int64) (map[int64][]string, error)
 	priceRulesChanged func(ctx context.Context)
 	ruleCounts        func(ctx context.Context, segmentIDs []int64) (map[int64]map[int64]int64, error)
@@ -35,7 +39,7 @@ type Service struct {
 
 // New builds the segment service.
 func New(d Deps) *Service {
-	return &Service{db: d.DB, authz: d.Authz, platforms: d.Platforms, priceRulesChanged: d.PriceRulesChanged,
+	return &Service{db: d.DB, authz: d.Authz, users: core.GuardOrDeny(d.Users), platforms: d.Platforms, priceRulesChanged: d.PriceRulesChanged,
 		ruleCounts: d.RuleCounts}
 }
 
@@ -60,6 +64,47 @@ func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh
 
 func fieldError(ctx context.Context, field, code, en, zh string) core.FieldError {
 	return core.FieldError{Field: field, Code: code, Message: t(ctx, en, zh)}
+}
+
+// actOnUsers fails unless the caller may choose the user group of the users:
+// it manages every one of them, itself only as a superuser (C-L7, FU6).
+func (s *Service) actOnUsers(ctx context.Context, userIDs ...int64) error {
+	actor, _ := core.UserID(ctx)
+	return s.users.CanActOnUsers(ctx, actor, core.ActOnData, userIDs...)
+}
+
+// errOwnSegment is the refusal of a change to the terms of a user group the
+// caller is in (GuardOwnSegments).
+func errOwnSegment(ctx context.Context) *core.Error {
+	return core.ErrConflict.WithMessage(t(ctx, "you cannot change the terms of a user group you are in", "你不能修改自己所在用户组的定价或授权"))
+}
+
+// GuardOwnSegments fails unless the caller may change what the segments
+// charge or grant (discount, grants, rates, model prices): the caller is a
+// member of none of them, or it manages itself (UserGuard on itself: only a
+// superuser with the built-in assignable lists, audited there; FU2, FU6).
+// It is the one check of every such write; refusals are 409. Other members
+// are not targets: these writes are on the segment. The default segment is
+// exempt: everyone is in it, so changing it is changing the platform's
+// prices, as price:manage and group:manage do, not one's own; dropping the
+// is_default condition tightens it. q is the writer's transaction or the
+// pool.
+func GuardOwnSegments(ctx context.Context, q store.Querier, users core.UserGuard, segmentIDs []int64) error {
+	actor, _ := core.UserID(ctx)
+	if actor == 0 || len(segmentIDs) == 0 {
+		return nil
+	}
+	var member bool
+	if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users u JOIN segments s ON s.id = u.segment_id
+		WHERE u.id = $1 AND s.id = ANY($2) AND NOT s.is_default)`,
+		actor, segmentIDs).Scan(&member); err != nil || !member {
+		return err
+	}
+	err := users.CanActOnUsers(ctx, actor, core.ActOnData, actor)
+	if err != nil && core.AsError(err).Code == core.ErrPermissionDenied.Code {
+		return errOwnSegment(ctx).WithCause(err)
+	}
+	return err
 }
 
 // NotFound is the not_found of a user group that does not exist. It is the

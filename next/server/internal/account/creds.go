@@ -22,6 +22,7 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
@@ -112,8 +113,10 @@ func maskAll(secretPart fields) fields {
 	return out
 }
 
-// unmask puts stored values back where the client sent Mask.
-func unmask(b, old []byte, sensitive []string) []byte {
+// unmask puts stored values back where the client sent Mask and returns the
+// paths it restored.
+func unmask(b, old []byte, sensitive []string) ([]byte, []string) {
+	var restored []string
 	for _, p := range sensitive {
 		r := gjson.GetBytes(b, p)
 		if r.Type != gjson.String || r.Str != Mask {
@@ -123,6 +126,7 @@ func unmask(b, old []byte, sensitive []string) []byte {
 		var nb []byte
 		if o := gjson.GetBytes(old, p); o.Exists() {
 			nb, err = sjson.SetRawBytes(b, p, []byte(o.Raw))
+			restored = append(restored, p)
 		} else {
 			nb, err = sjson.DeleteBytes(b, p)
 		}
@@ -130,7 +134,57 @@ func unmask(b, old []byte, sensitive []string) []byte {
 			b = nb
 		}
 	}
-	return b
+	return b, restored
+}
+
+// addressFields are the fields that say where an account of the type sends
+// requests: the declared or derived AddressFields, otherwise the guarded
+// settings plus base_url.
+func addressFields(at manifest.AccountType) []string {
+	if f, known := at.AddressFields(); known {
+		return f
+	}
+	f := []string{"base_url"}
+	for _, g := range at.GuardedSettings {
+		if !slices.Contains(f, g.Field) {
+			f = append(f, g.Field)
+		}
+	}
+	return f
+}
+
+// addressChanged reports whether any address field of the type differs
+// between the submitted credentials b and the stored ones old (nil on create:
+// any non-empty address).
+func addressChanged(b, old []byte, at manifest.AccountType) bool {
+	return slices.ContainsFunc(addressFields(at), func(f string) bool {
+		return addressValue(b, f) != addressValue(old, f)
+	})
+}
+
+// addressValue is the comparison form of field f of b: strings after
+// guardNorm, other values compacted; absent, null and "" are all "".
+func addressValue(b []byte, f string) string {
+	r := gjson.GetBytes(b, f)
+	if r.Type != gjson.JSON {
+		return guardNorm(r.String())
+	}
+	var buf bytes.Buffer
+	if json.Compact(&buf, []byte(r.Raw)) != nil {
+		return r.Raw
+	}
+	return buf.String()
+}
+
+// reenterRequired fails each restored secret: a caller who may not see the
+// stored secrets must type them again to send them to a new address.
+func reenterRequired(ctx context.Context, restored []string) error {
+	fe := make([]core.FieldError, len(restored))
+	for i, p := range restored {
+		fe[i] = core.FieldError{Field: "credentials." + p, Code: "reenter_required",
+			Message: t(ctx, "enter this secret again when changing the upstream address", "修改上游地址时需要重新输入该密钥")}
+	}
+	return core.InvalidFields(fe...)
 }
 
 // ---------------------------------------------------------------- JSON Schema
@@ -226,13 +280,44 @@ type prepared struct {
 	enc      []byte
 	settings []byte
 	secret   []byte
+	// addressChanged: an upstream address field differs from the stored one
+	// (on create: one is set).
+	addressChanged bool
+}
+
+// credBase is what prepare needs of an existing account: the stored secret
+// part, the merged plaintext and whether the caller may reveal it.
+type credBase struct {
+	secret []byte
+	old    []byte
+	reveal bool
+}
+
+// credBase decrypts a's credentials; reveal is whether a is in the caller's
+// account:credential:view scope.
+func (s *Service) credBase(ctx context.Context, a *row) (*credBase, error) {
+	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
+	if err != nil {
+		return nil, err
+	}
+	all, err := merge(plain, a.Settings)
+	if err != nil {
+		return nil, err
+	}
+	reveal, err := inScope(ctx, s.d.DB.Pool, a.ID, s.scopeOf(ctx, perm.AccountCredentialView))
+	if err != nil {
+		return nil, err
+	}
+	return &credBase{secret: plain, old: mustJSON(all), reveal: reveal}, nil
 }
 
 // prepare validates credentials (schema, then plugin, then the guarded
-// settings unless custom is true) and encrypts the non-settings part. old is
-// the merged plaintext of the stored credentials (nil on create); Mask values
-// are replaced from it and guarded fields equal to their old value pass.
-func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw json.RawMessage, old []byte, custom bool) (*prepared, error) {
+// settings without account:settings:custom) and encrypts the non-settings
+// part. base is the stored account (nil on create): Mask values are replaced
+// from it, guarded fields equal to their old value pass, and restoring a
+// secret the caller may not reveal while changing the upstream address fails
+// before the plugin sees it.
+func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw json.RawMessage, base *credBase) (*prepared, error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || raw[0] != '{' {
 		return nil, core.InvalidFields(core.FieldError{Field: "credentials", Code: "invalid",
@@ -243,8 +328,15 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 			Message: t(ctx, "credentials must be a JSON object", "凭证必须为 JSON 对象")})
 	}
 	b := []byte(raw)
-	if old != nil {
-		b = unmask(b, old, bt.Type.SensitiveFields)
+	var old []byte
+	var restored []string
+	if base != nil {
+		old = base.old
+		b, restored = unmask(b, old, bt.Type.SensitiveFields)
+	}
+	moved := addressChanged(b, old, bt.Type)
+	if len(restored) > 0 && moved && !base.reveal {
+		return nil, reenterRequired(ctx, restored)
 	}
 	environmentKeys := extensionKeys(bt)
 	if len(environmentKeys) > 0 {
@@ -299,7 +391,7 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 			secJSON, stJSON = mustJSON(sec), mustJSON(st)
 		}
 	}
-	if !custom {
+	if !s.customSettings(ctx) {
 		if err := checkGuarded(ctx, bt.Type.GuardedSettings, st, old); err != nil {
 			return nil, err
 		}
@@ -320,7 +412,7 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 		}
 		stJSON = mustJSON(st)
 	}
-	return &prepared{enc: enc, settings: stJSON, secret: secJSON}, nil
+	return &prepared{enc: enc, settings: stJSON, secret: secJSON, addressChanged: moved}, nil
 }
 
 // ---------------------------------------------------------------- guarded settings

@@ -28,6 +28,8 @@ export interface Me {
   roles: string[]
   permissions: string[]
   superuser: boolean
+  /** authz version the permissions were read at (CONTRACTS §5.2). */
+  authz_version?: number
 }
 
 export interface MenuItem {
@@ -67,14 +69,38 @@ export interface Role {
   builtin: boolean
   superuser: boolean
   permission_keys?: string[]
+  /** Roles the holders manage: may assign, and may act on users holding (CONTRACTS §15.7, §43.6). */
+  assignable_role_keys?: string[]
+  /** Also every custom role, except the ones the holder itself holds. */
+  assign_custom?: boolean
   user_count?: number
   member_count?: number // deprecated alias
+}
+
+/** One role of GET /me/assignable-roles: on the caller's managed list (CONTRACTS §43.6). */
+export interface AssignableRole {
+  key: string
+  name: LText
+  builtin: boolean
+  /** What the role carries is within the caller: assigning it passes. */
+  grantable: boolean
+  missing?: string[]
+  missing_assignable?: string[]
+  missing_assign_custom?: boolean
 }
 
 export interface PermissionItem {
   key: string
   label: LText
+  /** What it allows (core catalog); shown as a hint. */
+  description?: LText
   sensitive: boolean
+  /** Using it needs a step-up verification each time (CONTRACTS §80.2); shown only. */
+  step_up?: boolean
+  /** The resource its scope ranges over ("account", "proxy"; CONTRACTS §21), "" for none. */
+  scope_type?: string
+  /** Soft dependencies: keys it is of little use without, of the same scope; editor hints only. */
+  requires?: string[]
   status: string // active | disabled | removed
 }
 
@@ -380,6 +406,10 @@ export interface AccountType {
   auth_method_label?: LText
   form: AccountFormRef
   sensitive_fields: string[]
+  /** Settings fields restricted to official values without account:settings:custom (CONTRACTS §21.3). */
+  guarded_settings?: { field: string; allowed: string[] }[]
+  /** An account of the type can be pointed at any upstream: an own-level caller needs account:relay (§21.3.1). */
+  custom_upstream?: boolean
   /** Plugin suggestions prefilled into a new account's models / model_mapping (CONTRACTS §41). */
   default_models?: string[]
   default_models_by_subscription?: Record<string, string[]>
@@ -660,6 +690,8 @@ export interface Account {
   usage?: AccountUsage | null
   status: string
   status_reason?: string
+  /** An administrator disabled the account: its creator cannot enable it or reset its status. */
+  admin_locked?: boolean
   auto_disabled_until?: string | null
   credentials?: Record<string, unknown>
   settings?: { locale?: string; timezone?: string; [key: string]: unknown }
@@ -1112,6 +1144,14 @@ export interface LedgerEntry {
   created_at: string
 }
 
+/** Account counts by status (GET /accounts/summary, usage overview `accounts`). */
+export interface AccountCounts {
+  total: number
+  available: number
+  auto_disabled: number
+  disabled: number
+}
+
 export interface UsageLog {
   id: number
   request_id: string
@@ -1230,7 +1270,7 @@ export interface UsageOverview {
   /** Operator view with user:read. */
   users?: { total: number; new_today: number; active_today: number }
   /** Operator view with account:read. */
-  accounts?: { total: number; available: number; auto_disabled: number; disabled: number }
+  accounts?: AccountCounts
 }
 
 export interface BillingSettings {
@@ -1357,6 +1397,8 @@ export interface ResourceConflict {
 
 export interface PluginSummary {
   has_settings?: boolean
+  /** Role grants an automatic (built-in) upgrade held back for review (CONTRACTS P4C). */
+  role_grants_to_review?: PluginRoleGrant[]
   /** Non-empty: the plugin is abnormal (another plugin claimed a resource first, or the core holds it). */
   resource_conflicts?: ResourceConflict[]
   key: string
@@ -1381,6 +1423,17 @@ export interface HostPermissionReview {
   reason?: LText
   optional?: boolean
   requires?: string
+  /** The current grant (upgrades only). */
+  current_status?: string
+  current_scope?: Record<string, unknown> | null
+}
+
+/** One host permission of an upgrade's diff (review.go DiffItem). */
+export interface ReviewDiffItem {
+  id: string
+  risk: HostPermissionReview['risk']
+  scope?: Record<string, unknown> | null
+  previous_scope?: Record<string, unknown> | null
 }
 
 export interface ReviewAccountType {
@@ -1419,12 +1472,43 @@ export interface PluginReview {
   events: Array<string | Record<string, any>>
   routes: Array<Record<string, any>>
   menus: Array<Record<string, any>>
-  user_permissions: Array<{ key: string; label: LText; description?: LText; sensitive?: boolean }>
+  user_permissions: ReviewUserPermission[]
   database?: { schema: string; migrations: string[] } | null
   resources?: Record<string, any> | null
   external_services: string[]
   host_permissions: HostPermissionReview[]
-  diff?: { added: string[]; widened: string[]; removed: string[] } | null
+  diff?: { added: ReviewDiffItem[]; widened: ReviewDiffItem[]; removed: ReviewDiffItem[] } | null
+  /** Role grants the new permissions get without overrides (defaultRoles, inheritFrom holders). */
+  new_role_grants?: PluginRoleGrant[]
+  /** One of them needs consent: the upgrade is not carried over. */
+  role_grants_need_consent?: boolean
+  /** Granting the db.schema asked for takes plugin:grant:db_schema_unconfined. */
+  needs_db_schema_unconfined?: boolean
+}
+
+/** A user permission a plugin version declares (consent review). */
+export interface ReviewUserPermission {
+  key: string
+  label: LText
+  description?: LText
+  sensitive?: boolean
+  /** Roles it goes to when created, unless the consent names others. */
+  default_roles?: string[]
+  inherit_from?: string[]
+  /** Not in the catalog yet: the consent creates it, and only then do roles named for it apply. */
+  new?: boolean
+}
+
+/** One role grant of a plugin permission (CONTRACTS P4C). */
+export interface PluginRoleGrant {
+  /** The version whose consent withheld it (the list to review). */
+  version?: string
+  /** Qualified permission key. */
+  permission: string
+  role: string
+  sensitive: boolean
+  via: 'default' | 'inherit'
+  needs_consent: boolean
 }
 
 export interface RolloutNode {

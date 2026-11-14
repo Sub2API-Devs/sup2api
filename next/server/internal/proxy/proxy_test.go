@@ -26,32 +26,33 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
-type fakeTokens struct{}
+type fakeTokens struct{ testutil.StepUpPassed }
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
 
+// VerifyAccessKey reads "sak_<uid>" as an access key acting for uid.
+func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	uid, err := strconv.ParseInt(strings.TrimPrefix(raw, core.AccessKeyPrefix), 10, 64)
+	return core.AccessKeyIdentity{UserID: uid, KeyID: 1}, err
+}
+
 // fakeAuthz grants each user a fixed key set; a nil map allows everything.
 type fakeAuthz struct{ keys map[int64][]string }
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
-	if a.keys == nil {
-		return true, nil
-	}
-	for _, k := range a.keys[uid] {
-		if k == key {
-			return true, nil
-		}
-	}
-	return false, nil
+func (a fakeAuthz) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
 }
 
-func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
+	if a.keys == nil {
+		return core.PermissionSet{Superuser: true}, nil
+	}
+	return core.RestrictToAccessKey(ctx, uid, core.PermissionSetOf(a.keys[uid]...)), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type fakeBus struct {
 	mu   sync.Mutex
@@ -131,12 +132,18 @@ func forwardProxy(t *testing.T) (*httptest.Server, *atomic.Value, *atomic.Int64)
 
 func do(t *testing.T, h http.Handler, uid int64, method, path string, body any) (int, map[string]any) {
 	t.Helper()
+	return call(t, h, "u"+strconv.FormatInt(uid, 10), method, path, body)
+}
+
+// call sends the request with bearer as the token.
+func call(t *testing.T, h http.Handler, bearer, method, path string, body any) (int, map[string]any) {
+	t.Helper()
 	var b []byte
 	if body != nil {
 		b, _ = json.Marshal(body)
 	}
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(b))
-	req.Header.Set("Authorization", "Bearer u"+strconv.FormatInt(uid, 10))
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	var out map[string]any
@@ -230,6 +237,10 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 	code, out = do(t, engine, admin, "POST", fmt.Sprintf("/proxies/%d/reveal-url", id), nil)
 	if want := fmt.Sprintf("http://bob:s3cret@%s:%d", host, port); code != 200 || data(out)["url"] != want {
 		t.Fatalf("reveal-url: %d %v, want %s", code, out, want)
+	}
+	code, out = call(t, engine, core.AccessKeyPrefix+strconv.FormatInt(admin, 10), "POST", fmt.Sprintf("/proxies/%d/reveal-url", id), nil)
+	if want := fmt.Sprintf("http://bob:s3cret@%s:%d", host, port); code != 200 || data(out)["url"] != want {
+		t.Fatalf("access key reveal-url (step-up passed): %d %v", code, out)
 	}
 
 	// Directory: cached client per proxy.
@@ -373,7 +384,7 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 		}
 		actions = append(actions, action)
 	}
-	if strings.Join(actions, ",") != "proxy.create,proxy.url.reveal,proxy.update,proxy.delete" {
+	if strings.Join(actions, ",") != "proxy.create,proxy.url.reveal,proxy.url.reveal,proxy.update,proxy.delete" {
 		t.Fatalf("audit actions %v", actions)
 	}
 }
@@ -390,8 +401,8 @@ func TestOwnership(t *testing.T) {
 	engine := gin.New()
 	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
 		admin:  {"proxy:read", "proxy:manage"},
-		alice:  {"proxy:own:read", "proxy:own:manage"},
-		bob:    {"proxy:own:read", "proxy:own:manage"},
+		alice:  {"proxy:read:own", "proxy:manage:own"},
+		bob:    {"proxy:read:own", "proxy:manage:own"},
 		reader: {"proxy:read"},
 	}}))
 
@@ -423,13 +434,6 @@ func TestOwnership(t *testing.T) {
 
 	// Lists: own range sees own rows only; all range sees everything and can
 	// filter by created_by or mine.
-	ids := func(out map[string]any) string {
-		var s []string
-		for _, it := range out["data"].([]any) {
-			s = append(s, strconv.Itoa(int(it.(map[string]any)["id"].(float64))))
-		}
-		return strings.Join(s, ",")
-	}
 	_, out := do(t, engine, alice, "GET", "/proxies", nil)
 	if total(out) != 1 || ids(out) != strconv.FormatInt(pAlice, 10) {
 		t.Fatalf("alice list: %v", out)
@@ -449,10 +453,14 @@ func TestOwnership(t *testing.T) {
 	if code, _ := do(t, engine, admin, "GET", "/proxies?created_by=abc", nil); code != 400 {
 		t.Fatalf("bad created_by: %d", code)
 	}
-	// created_by is ignored under the own range.
+	// created_by filters within the caller's range (CONTRACTS §21.0).
 	_, out = do(t, engine, alice, "GET", fmt.Sprintf("/proxies?created_by=%d", bob), nil)
+	if total(out) != 0 {
+		t.Fatalf("alice created_by bob: %v", out)
+	}
+	_, out = do(t, engine, alice, "GET", fmt.Sprintf("/proxies?created_by=%d&mine=true", alice), nil)
 	if total(out) != 1 || ids(out) != strconv.FormatInt(pAlice, 10) {
-		t.Fatalf("alice created_by ignored: %v", out)
+		t.Fatalf("alice created_by alice: %v", out)
 	}
 
 	// Detail, update, delete and test of somebody else's proxy (or a legacy
@@ -543,8 +551,12 @@ func TestFindOrCreate(t *testing.T) {
 	alice := addUser(t, db, "alice@x.com")
 	bob := addUser(t, db, "bob@x.com")
 
-	resolve := func(spec Spec, owner int64, scope *int64) (int64, bool) {
+	resolve := func(spec Spec, owner int64, creator *int64) (int64, bool) {
 		t.Helper()
+		scope := core.AllScope
+		if creator != nil {
+			scope = core.DataScope{Owner: *creator}
+		}
 		var id int64
 		var created bool
 		err := db.Tx(ctx, func(tx pgx.Tx) error {
@@ -628,7 +640,7 @@ func TestFindOrCreate(t *testing.T) {
 	}
 	// Invalid specs are refused before touching the database.
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		_, _, err := svc.FindOrCreate(ctx, tx, Spec{Protocol: "ftp", Host: "h", Port: 1}, alice, nil)
+		_, _, err := svc.FindOrCreate(ctx, tx, Spec{Protocol: "ftp", Host: "h", Port: 1}, alice, core.AllScope)
 		return err
 	}); core.AsError(err).Code != "invalid_argument" {
 		t.Fatalf("bad spec: %v", err)
@@ -666,7 +678,7 @@ func TestFindOrCreate(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			_ = db.Tx(ctx, func(tx pgx.Tx) error {
-				id, created, err := svc.FindOrCreate(ctx, tx, fresh, alice, &alice)
+				id, created, err := svc.FindOrCreate(ctx, tx, fresh, alice, core.DataScope{Owner: alice})
 				if err != nil {
 					return err
 				}

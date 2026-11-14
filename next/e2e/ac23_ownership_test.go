@@ -8,7 +8,7 @@ import (
 )
 
 // AC 23: ownership of accounts and proxies (CONTRACTS §21). A "vendor" role
-// (account:own:*, proxy:own:*) only sees and changes what it created, cannot
+// (account:*:own, proxy:*:own) only sees and changes what it created, cannot
 // point base_url anywhere but the official address, and gets a proxy created
 // or reused from a pasted proxy_url; a "viewer" role sees everything but
 // changes nothing and never sees secrets; admins filter by creator.

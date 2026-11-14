@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +27,6 @@ func (a viewerAuth) PermissionSet(context.Context, int64) (core.PermissionSet, e
 func (a viewerAuth) VerifyAccessToken(context.Context, string) (int64, error) { return 1, nil }
 func (a viewerAuth) Can(_ context.Context, _ int64, key string) (bool, error) { return a[key], nil }
 func (a viewerAuth) CanGrant(context.Context, int64, []string) error          { return nil }
-func (a viewerAuth) CanActOn(context.Context, int64, []string) error          { return nil }
 
 const viewerLogID = "0b6f2a39-6f1e-4c5a-9a7b-2c3d4e5f6a7b"
 
@@ -100,9 +100,9 @@ func TestRequestLogViewerPermissions(t *testing.T) {
 		keys viewerAuth
 		path string
 	}{
-		{viewerAuth{"account:own:read": true}, ""},
-		{viewerAuth{"account:own:read": true}, "/" + viewerLogID},
-		{viewerAuth{"account:update": true, "account:own:update": true}, ""},
+		{viewerAuth{"account:read:own": true}, ""},
+		{viewerAuth{"account:read:own": true}, "/" + viewerLogID},
+		{viewerAuth{"account:update": true, "account:update:own": true}, ""},
 		{viewerAuth{"settings:read": true, "account:read": true, "account:update": true}, "/" + viewerLogID + "/files/request.body"},
 	} {
 		engine := gin.New()
@@ -152,6 +152,142 @@ func TestRequestLogListRejectsMalformedWorkerAnswers(t *testing.T) {
 	}
 }
 
+// The detail's metadata is projected by default: without settings:manage only
+// the listed summary fields come through, so identity, the upstream's error
+// text, Worker paths and fields added later stay with settings:manage.
+func TestRequestLogDetailProjectsMetadataWithoutContent(t *testing.T) {
+	const summary = `"request_id":"rid","http_status":529,"status":529,"stage":"request_command","model":"claude-x","duration_ms":12,` +
+		`"error_type":"overloaded_error","error_code":"overloaded","error_source":"http","mode":"build","body_sha256":"ab","upstream_betas":["b1"],"stream":true`
+	// path is a listed name, but an object is not a summary value.
+	const metadata = `{` + summary + `,"device_id":"dev-1","account_uuid":"acc-uuid","error":"upstream said: secret detail","log_directory":"x",` +
+		`"messages":[{"role":"user"}],"future_field":"new","path":{"nested":"content"}}`
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"metadata":` + metadata + `,"events":[],"events_truncated":false,"files":[]}`))
+	})
+	read := func(keys viewerAuth) map[string]any {
+		t.Helper()
+		w := get(keys, "/"+viewerLogID)
+		var out struct {
+			Data struct {
+				Metadata map[string]any `json:"metadata"`
+			} `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Data.Metadata == nil {
+			t.Fatalf("detail: %d %s", w.Code, w.Body)
+		}
+		return out.Data.Metadata
+	}
+	var whole, projected map[string]any
+	if json.Unmarshal([]byte(metadata), &whole) != nil || json.Unmarshal([]byte(`{`+summary+`}`), &projected) != nil {
+		t.Fatal("fixture")
+	}
+	for _, keys := range []viewerAuth{{"account:read": true}, {"settings:read": true}} {
+		if got := read(keys); !reflect.DeepEqual(got, projected) {
+			t.Errorf("%v reads %v, want %v", keys, got, projected)
+		}
+	}
+	for _, keys := range []viewerAuth{{"settings:manage": true}, {"account:read": true, "settings:manage": true}} {
+		if got := read(keys); !reflect.DeepEqual(got, whole) {
+			t.Errorf("%v reads %v, want the whole metadata", keys, got)
+		}
+	}
+}
+
+// Without settings:manage the events, the upstream request and the headers
+// of a detail keep only their summary fields; settings:manage reads them as
+// the Worker sent them, secret headers masked (FU3).
+func TestRequestLogDetailProjectsEventsWithoutContent(t *testing.T) {
+	const events = `[{"time":"t1","event":"resource_identity_verified","detail":{"principal_id":"p-1","organization_uuid":"o-1"}},` +
+		`{"time":"t2","event":"resource_dispatch_failed","detail":{"error":"open /home/u/secret.txt: denied"}},` +
+		`{"time":"t3","event":"resource_received","detail":{"method":"POST","path":"/v1/files","query":"name=secret.txt","declared_bytes":5}},` +
+		`{"time":"t4","event":"resource_upload_spooled","detail":{"bytes":5,"sha256":"ab","parts":[{"filename":"secret.txt"}]}},` +
+		`{"time":"t5","event":"cli_error","detail":{"status":529,"code":"overloaded","source":"http","truncated":false,"future":"x"},"extra":"y"},` +
+		`{"time":"t6","event":"resource_issuer_mismatch","detail":null},"not an object"]`
+	const upstream = `{"schema":1,"mode":"build","method":"POST","url":"https://api.anthropic.com/v1/messages?beta=true","sent_at":"t",` +
+		`"headers":{"Authorization":"Bearer sk-secret","anthropic-beta":"b1","User-Agent":"claude-cli (device)","x-claude-code-session-id":"s1"},` +
+		`"body_bytes":12,"body_sha256":"ab","prompt":"secret prompt","future":{"x":1}}`
+	const headers = `"request_headers":{"X-Api-Key":["sk-live"],"Content-Type":["application/json"],"User-Agent":["device"]},` +
+		`"response_headers":{"Set-Cookie":["c"],"Request-Id":["rid"],"X-Internal-Path":["/srv/x"]}`
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"metadata":{"request_id":"rid"},"events":` + events + `,"events_truncated":false,` + headers +
+			`,"upstream_request":` + upstream + `,"files":[]}`))
+	})
+	read := func(keys viewerAuth) (string, requestLogDetail) {
+		t.Helper()
+		w := get(keys, "/"+viewerLogID)
+		var out struct {
+			Data requestLogDetail `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+			t.Fatalf("detail: %d %s", w.Code, w.Body)
+		}
+		return w.Body.String(), out.Data
+	}
+	body, d := read(viewerAuth{"account:read": true})
+	for _, leaked := range []string{"p-1", "o-1", "secret", "/v1/files", "future", "extra", "device", "sk-", "/srv/x", "api.anthropic.com/v1", "not an object"} {
+		if strings.Contains(body, leaked) {
+			t.Errorf("account:read reads %q: %s", leaked, body)
+		}
+	}
+	wantEvents := []any{
+		map[string]any{"time": "t1", "event": "resource_identity_verified", "detail": map[string]any{}},
+		map[string]any{"time": "t2", "event": "resource_dispatch_failed", "detail": map[string]any{}},
+		map[string]any{"time": "t3", "event": "resource_received", "detail": map[string]any{"method": "POST", "declared_bytes": float64(5)}},
+		map[string]any{"time": "t4", "event": "resource_upload_spooled", "detail": map[string]any{"bytes": float64(5), "sha256": "ab"}},
+		map[string]any{"time": "t5", "event": "cli_error", "detail": map[string]any{"status": float64(529), "code": "overloaded", "source": "http", "truncated": false}},
+		map[string]any{"time": "t6", "event": "resource_issuer_mismatch"},
+	}
+	wantUpstream := map[string]any{"schema": float64(1), "mode": "build", "method": "POST", "host": "api.anthropic.com", "sent_at": "t",
+		"body_bytes": float64(12), "body_sha256": "ab", "headers": map[string]any{"anthropic-beta": "b1", "x-claude-code-session-id": "s1"}}
+	if !reflect.DeepEqual(d.Events, wantEvents) || !reflect.DeepEqual(d.UpstreamRequest, wantUpstream) ||
+		!reflect.DeepEqual(d.RequestHeaders, map[string][]string{"Content-Type": {"application/json"}}) ||
+		!reflect.DeepEqual(d.ResponseHeaders, map[string][]string{"Request-Id": {"rid"}}) {
+		t.Fatalf("account:read detail:\n%v\n%v\n%v %v", d.Events, d.UpstreamRequest, d.RequestHeaders, d.ResponseHeaders)
+	}
+
+	body, d = read(viewerAuth{"settings:manage": true})
+	var whole []any
+	if json.Unmarshal([]byte(events), &whole) != nil || !reflect.DeepEqual(d.Events, whole) {
+		t.Fatalf("settings:manage events: %v", d.Events)
+	}
+	if strings.Contains(body, "sk-") || d.UpstreamRequest["url"] != "https://api.anthropic.com/v1/messages?beta=true" ||
+		d.UpstreamRequest["prompt"] != "secret prompt" || d.RequestHeaders["User-Agent"][0] != "device" ||
+		d.RequestHeaders["X-Api-Key"][0] != "[REDACTED]" || d.ResponseHeaders["X-Internal-Path"][0] != "/srv/x" {
+		t.Fatalf("settings:manage detail: %s", body)
+	}
+}
+
+// The list keeps the classified error for every reader and the upstream's
+// text for settings:manage only.
+func TestRequestLogListHidesErrorTextWithoutContent(t *testing.T) {
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"items":[{"id":"` + viewerLogID + `","request_id":"rid","time":"2026-11-12T00:00:00Z","duration_ms":1,"status":529,` +
+			`"stage":"request_command","log_level":"summary","error_type":"overloaded_error","error":"upstream said: secret detail","log_status":"complete","bytes":1}],"next":null}`))
+	})
+	for _, tc := range []struct {
+		keys viewerAuth
+		text string
+	}{
+		{viewerAuth{"account:read": true}, ""},
+		{viewerAuth{"settings:read": true}, ""},
+		{viewerAuth{"settings:manage": true}, "upstream said: secret detail"},
+		{viewerAuth{"account:read": true, "settings:manage": true}, "upstream said: secret detail"},
+	} {
+		w := get(tc.keys, "")
+		var out struct {
+			Data struct {
+				Items []requestLogItem `json:"items"`
+			} `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || len(out.Data.Items) != 1 {
+			t.Fatalf("%v list: %d %s", tc.keys, w.Code, w.Body)
+		}
+		if item := out.Data.Items[0]; item.Error != tc.text || item.ErrorType != "overloaded_error" {
+			t.Errorf("%v reads error %q (%s), want %q", tc.keys, item.Error, item.ErrorType, tc.text)
+		}
+	}
+}
+
 func TestRequestLogDetailContentFollowsPermission(t *testing.T) {
 	_, worker, _, get := viewerFixture(t, func(w http.ResponseWriter, action string, body map[string]any) {
 		_, _ = w.Write([]byte(`{"metadata":{"request_id":"rid"},"events":[{"event":"x"}],"events_truncated":false,` +
@@ -167,11 +303,16 @@ func TestRequestLogDetailContentFollowsPermission(t *testing.T) {
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
 	if out.Data.Content || len(out.Data.Files) != 1 || out.Data.Files[0].Name != "request.body" ||
-		out.Data.RequestHeaders["X-Api-Key"][0] != "[REDACTED]" || out.Data.RequestHeaders["X-Request-Id"][0] != "rid" || out.Data.ResponseHeaders["Set-Cookie"][0] != "[REDACTED]" {
+		!reflect.DeepEqual(out.Data.RequestHeaders, map[string][]string{"X-Request-Id": {"rid"}}) || len(out.Data.ResponseHeaders) != 0 {
 		t.Fatal("reader detail", out.Data)
 	}
-	if w := get(managers, "/"+viewerLogID); w.Code != 200 || worker.last("detail") != `{"content":true,"id":"`+viewerLogID+`"}` || !strings.Contains(w.Body.String(), `"content":true`) {
+	w = get(managers, "/"+viewerLogID)
+	if w.Code != 200 || worker.last("detail") != `{"content":true,"id":"`+viewerLogID+`"}` || !strings.Contains(w.Body.String(), `"content":true`) {
 		t.Fatalf("manager: %d %s", w.Code, worker.last("detail"))
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	if out.Data.RequestHeaders["X-Api-Key"][0] != "[REDACTED]" || out.Data.ResponseHeaders["Set-Cookie"][0] != "[REDACTED]" {
+		t.Fatal("manager detail", out.Data)
 	}
 	if w := get(readers, "/not-a-log"); w.Code != 400 {
 		t.Fatal("invalid id", w.Code)

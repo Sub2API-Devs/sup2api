@@ -6,11 +6,12 @@ import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import { useSettingsMenu } from '@/views/settings/settingsNav'
 import { router } from './index'
 
-const auth = vi.hoisted(() => ({ denied: [] as string[] }))
+const auth = vi.hoisted(() => ({ denied: [] as string[], me: {} as object | null, loadMe: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), session: { get: () => 'token' } }))
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ me: {}, has: (perm: string | string[]) => [perm].flat().some(p => !auth.denied.includes(p)) })
-}))
+vi.mock('@/stores/auth', async () => {
+  const { deniedAuth } = await import('@/testing/authMock')
+  return { useAuthStore: () => ({ me: auth.me, loadMe: auth.loadMe, ...deniedAuth(() => auth.denied) }) }
+})
 // The pages the navigations below end on; the routes are what is under test.
 const Page = vi.hoisted(() => ({ default: { render: () => null } }))
 vi.mock('@/layouts/AppLayout.vue', () => Page)
@@ -18,6 +19,7 @@ vi.mock('@/views/settings/SettingsView.vue', () => Page)
 vi.mock('@/views/groups/GroupsView.vue', () => Page)
 vi.mock('@/views/prices/PricesView.vue', () => Page)
 vi.mock('@/views/accounts/AccountsView.vue', () => Page)
+vi.mock('@/views/proxies/ProxiesView.vue', () => Page)
 vi.mock('@/views/plugins/PluginSettingsView.vue', () => Page)
 vi.mock('@/views/ccgateway/CCGatewayView.vue', () => Page)
 vi.mock('@/views/errors/ForbiddenView.vue', () => Page)
@@ -38,6 +40,7 @@ function viewOf(path: string): string | undefined {
 
 beforeEach(() => {
   auth.denied = []
+  auth.me = {}
 })
 
 describe('where pages belong (CONTRACTS §90)', () => {
@@ -78,8 +81,9 @@ describe('where pages belong (CONTRACTS §90)', () => {
     expect(metaOf('/plugins/mailer').parent).toBe('/plugins')
   })
 
-  it('puts the balance ledger under the users list it is opened from', () => {
-    expect(metaOf('/ledger')).toMatchObject({ perm: 'balance:all:read', parent: '/users' })
+  it('gives the balance ledger its own place: the finance menu entry (T80)', () => {
+    expect(metaOf('/ledger')).toMatchObject({ perm: 'balance:all:read' })
+    expect(metaOf('/ledger').parent).toBeUndefined()
     expect(metaOf('/ledger').sidebar).toBeUndefined()
   })
 
@@ -113,16 +117,22 @@ describe('the settings entry', () => {
 })
 
 describe('the CCGateway page', () => {
-  it('has an address of its own, for settings:read', async () => {
-    expect(metaOf(CCGATEWAY_PAGE)).toMatchObject({ perm: 'settings:read', title: 'ccgateway.title' })
+  it('has an address of its own, for settings:read or a reader of the accounts', async () => {
+    expect(metaOf(CCGATEWAY_PAGE)).toMatchObject({ perm: 'settings:read', action: 'account:read', title: 'ccgateway.title' })
     expect(await follow(CCGATEWAY_PAGE)).toBe(CCGATEWAY_PAGE)
   })
 
-  it('is not for a caller without settings:read', async () => {
-    auth.denied = ['settings:read']
+  it('opens for an owner of accounts without settings:read: the core checks the containers by account:*', async () => {
+    auth.denied = ['settings:read', 'account:read']
+    await follow('/forbidden')
+    expect(await follow(CCGATEWAY_PAGE)).toBe(CCGATEWAY_PAGE)
+  })
+
+  it('is not for a caller with neither', async () => {
+    auth.denied = ['settings:read', 'account:read', 'account:read:own']
     // From another page: a link to the open page is no navigation.
     await follow('/forbidden')
-    expect(await follow(CCGATEWAY_PAGE)).toBe('/forbidden?perm=settings:read')
+    expect(await follow(CCGATEWAY_PAGE)).toMatch(/^\/forbidden\?perm=settings:read/)
   })
 
   it("takes over the plugin's settings addresses, keeping the anchor", async () => {
@@ -162,5 +172,43 @@ describe('links to plugin settings as a tab', () => {
   it('leave the configuration pages where they are', async () => {
     expect(await follow('/settings?tab=sticky')).toBe('/settings?tab=sticky')
     expect(await follow('/sticky')).toBe('/settings?tab=sticky')
+  })
+})
+
+describe('the accounts and proxies pages', () => {
+  beforeEach(() => follow('/forbidden'))
+
+  it('open for the keys of their lists, not for the create keys alone', async () => {
+    auth.denied = ['account:read', 'proxy:read']
+    expect(await follow('/accounts')).toBe('/accounts')
+    expect(await follow('/proxies')).toBe('/proxies')
+    // account:create:own and proxy:manage:own are still held.
+    auth.denied.push('account:read:own', 'proxy:read:own')
+    expect(await follow('/accounts')).toMatch(/^\/forbidden\?perm=/)
+    expect(await follow('/proxies')).toMatch(/^\/forbidden\?perm=/)
+  })
+})
+
+describe('a caller whose account could not be loaded', () => {
+  beforeEach(async () => {
+    await follow('/forbidden')
+    auth.me = null
+    auth.loadMe.mockRejectedValue(new Error('network'))
+    // Without the caller nothing is held, as the store's has() answers.
+    auth.denied = ['group:read']
+  })
+
+  it('is offered a retry of the page, not told a permission is missing', async () => {
+    await follow('/groups')
+    const { path, query } = router.currentRoute.value
+    expect([path, query]).toEqual(['/forbidden', { reason: 'load_failed', redirect: '/groups' }])
+  })
+
+  it('reaches the page once the account loads', async () => {
+    auth.loadMe.mockImplementation(async () => {
+      auth.me = {}
+      auth.denied = []
+    })
+    expect(await follow('/groups')).toBe('/groups')
   })
 })

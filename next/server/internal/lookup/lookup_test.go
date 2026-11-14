@@ -44,14 +44,9 @@ func (a fakeAuthz) Can(ctx context.Context, uid int64, permission string) (bool,
 	return set.Has(permission), err
 }
 func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
-	set := core.PermissionSet{Keys: map[string]struct{}{}}
-	for _, k := range a[uid] {
-		set.Keys[k] = struct{}{}
-	}
-	return core.RestrictToAccessKey(ctx, uid, set), nil
+	return core.RestrictToAccessKey(ctx, uid, core.PermissionSetOf(a[uid]...)), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fixture is one database with rows of every kind. Every name holds "lk".
 //
@@ -62,12 +57,14 @@ func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 //	       group alpha
 //	bob    has no permission; owns key "lk key bob"; only his display name
 //	       holds "zhang" and "_"
+//	carol  has account:group:bind alone; she is in alice's segment
+//	dave   has scoped account grants only, naming groups alpha and hidden
 type fixture struct {
 	t  *testing.T
 	db *store.DB
 	h  http.Handler
 
-	admin, alice, bob int64
+	admin, alice, bob, carol, dave int64
 	// zeta is public, alpha restricted (alice's segment only) and named after
 	// zeta's id, hidden restricted and granted to nobody; oddGroup is disabled.
 	zeta, alpha, hidden int64
@@ -85,6 +82,7 @@ func newFixture(t *testing.T) *fixture {
 	f.admin = f.insert(`INSERT INTO users (email, password_hash) VALUES ('lk-admin@x.test', 'x') RETURNING id`)
 	f.alice = f.insert(`INSERT INTO users (email, display_name, password_hash) VALUES ('lk-alice@x.test', 'Alice', 'x') RETURNING id`)
 	f.bob = f.insert(`INSERT INTO users (email, display_name, password_hash) VALUES ('lk-bob@x.test', 'Bob_Zhang', 'x') RETURNING id`)
+	f.dave = f.insert(`INSERT INTO users (email, password_hash) VALUES ('lk-dave@x.test', 'x') RETURNING id`)
 	f.insert(`INSERT INTO users (email, password_hash, deleted_at) VALUES ('lk-gone@x.test', 'x', now()) RETURNING id`)
 
 	// A group id no other fixture name contains, for the search by id.
@@ -94,9 +92,10 @@ func newFixture(t *testing.T) *fixture {
 	f.alpha = f.insert(groupRow, fmt.Sprintf("lk alpha %d", f.zeta), "restricted", "active", `["lk-gemini-*"]`)
 	f.hidden = f.insert(groupRow, "lk hidden", "restricted", "active", `[]`)
 	f.insert(groupRow, oddGroup, "public", "disabled", `[]`)
-	// alice alone is in the segment granted alpha. Its rate in hidden is not a
-	// grant.
+	// alice and carol are in the segment granted alpha. Its rate in hidden is
+	// not a grant.
 	members := f.insert(`INSERT INTO segments (name) VALUES ('lk alpha members') RETURNING id`)
+	f.carol = f.insert(`INSERT INTO users (email, password_hash, segment_id) VALUES ('lk-carol@x.test', 'x', $1) RETURNING id`, members)
 	f.insert(`UPDATE users SET segment_id = $2 WHERE id = $1 RETURNING id`, f.alice, members)
 	f.insert(`INSERT INTO segment_groups (segment_id, group_id, granted) VALUES ($1, $2, true) RETURNING group_id`, members, f.alpha)
 	f.insert(`INSERT INTO segment_groups (segment_id, group_id, rate_override) VALUES ($1, $2, 0.5) RETURNING group_id`, members, f.hidden)
@@ -126,8 +125,11 @@ func newFixture(t *testing.T) *fixture {
 
 	engine := gin.New()
 	authz := fakeAuthz{
-		f.admin: {"user:read", "group:read", "usage:all:read", "account:read", "account:own:read", "price:read", "proxy:read", "proxy:own:read"},
-		f.alice: {"apikey:self:manage", "account:own:read", "proxy:own:read"},
+		f.admin: {"user:read", "group:read", "usage:all:read", "account:read", "account:read:own", "price:read", "proxy:read", "proxy:read:own"},
+		f.alice: {"apikey:self:manage", "account:read:own", "proxy:read:own"},
+		f.carol: {"account:group:bind", fmt.Sprintf("account:read:group/%d", f.zeta)},
+		f.dave: {fmt.Sprintf("account:read:group/%d", f.hidden), fmt.Sprintf("account:update:group/%d/account/%d", f.alpha, f.acctB),
+			"account:test:group/*", "proxy:read:own"},
 	}
 	r := httpapi.NewRouter(engine, fakeTokens{}, authz)
 	New(f.db, authz).RegisterRoutes(r)
@@ -225,12 +227,14 @@ func TestLookup(t *testing.T) {
 
 		{"groups mine: public and granted, active", f.alice, "groups?mine=true", []string{alphaName, "lk zeta"}, false},
 		{"groups mine needs no permission", f.bob, "groups?mine=true", []string{"lk zeta"}, false},
+		{"groups with account:group:bind: the caller's usable groups", f.carol, "groups", []string{alphaName, "lk zeta"}, false},
 		{"api-keys of one user", f.admin, "api-keys?user_id=" + strconv.FormatInt(f.alice, 10), []string{"lk key one"}, false},
 		{"api-keys by id, of one user", f.admin, "api-keys?ids=" + keyOne + "," + keyBob + "&user_id=" + bob, []string{"lk key bob"}, false},
 		{"api-keys mine", f.alice, "api-keys?mine=true", []string{"lk key one"}, false},
 		{"accounts", f.admin, "accounts?q=lk", []string{"lk acct a", "lk acct b", "lk acct c"}, false},
 		{"accounts of the preferred group first", f.admin, "accounts?q=lk&prefer_group_id=" + zeta, []string{"lk acct b", "lk acct c", "lk acct a"}, false},
 		{"accounts with the own permission", f.alice, "accounts", []string{"lk acct a"}, false},
+		{"accounts with a group scope", f.carol, "accounts", []string{"lk acct b", "lk acct c"}, false},
 		{"accounts mine under the full permission", f.admin, "accounts?mine=true", []string{"lk acct b"}, false},
 		{"proxies", f.admin, "proxies", []string{"lk proxy a", "lk proxy b"}, false},
 		{"proxies with the own permission", f.alice, "proxies", []string{"lk proxy a"}, false},
@@ -243,6 +247,11 @@ func TestLookup(t *testing.T) {
 		// or in q, whether mine or the "own" permission sets the range.
 		{"groups mine: another group in ids", f.alice, "groups?mine=true&ids=" + hidden + "," + zeta, []string{"lk zeta"}, false},
 		{"groups mine: another group's id in q", f.alice, "groups?mine=true&q=" + hidden, []string{}, false},
+		{"groups bind: another group in ids", f.carol, "groups?ids=" + hidden + "," + zeta, []string{"lk zeta"}, false},
+		{"groups bind: a disabled group by name", f.carol, "groups?q=off", []string{}, false},
+		{"groups named by the caller's scopes", f.dave, "groups", []string{alphaName, "lk hidden"}, false},
+		{"groups named: another group in ids", f.dave, "groups?ids=" + zeta + "," + hidden, []string{"lk hidden"}, false},
+		{"groups named: another group by name", f.dave, "groups?q=zeta", []string{}, false},
 		{"api-keys mine: another user's key in ids", f.alice, "api-keys?mine=true&ids=" + keyBob + "," + keyOne, []string{"lk key one"}, false},
 		{"api-keys mine: another user's key id in q", f.alice, "api-keys?mine=true&q=" + keyBob, []string{}, false},
 		{"api-keys mine: another user's name in q", f.alice, "api-keys?mine=true&q=bob", []string{}, false},
@@ -276,6 +285,8 @@ func TestLookup(t *testing.T) {
 		{"user", f.admin, "users?ids=" + strconv.FormatInt(f.alice, 10),
 			fmt.Sprintf(`{"id":%d,"name":"lk-alice@x.test","hint":"Alice","status":"active"}`, f.alice)},
 		{"group has no hint", f.admin, "groups?ids=" + zeta, `{"id":` + zeta + `,"name":"lk zeta","status":"active"}`},
+		{"group with account:group:bind", f.carol, "groups?ids=" + zeta, `{"id":` + zeta + `,"name":"lk zeta","status":"active"}`},
+		{"group named by a scope", f.dave, "groups?ids=" + hidden, `{"id":` + hidden + `,"name":"lk hidden","status":"active"}`},
 		{"key: owner", f.admin, "api-keys?q=one",
 			fmt.Sprintf(`{"id":%d,"name":"lk key one","hint":"lk-alice@x.test","status":"active"}`, f.keyOne)},
 		{"key mine: prefix", f.alice, "api-keys?mine=true",
@@ -303,6 +314,7 @@ func TestLookup(t *testing.T) {
 	}{
 		{"users without user:read", f.alice, "users", 403},
 		{"groups without group:read", f.alice, "groups", 403},
+		{"groups without either permission", f.bob, "groups", 403},
 		{"api-keys without usage:all:read", f.alice, "api-keys", 403},
 		{"api-keys mine without apikey:self:manage", f.bob, "api-keys?mine=true", 403},
 		{"accounts without either permission", f.bob, "accounts", 403},
@@ -357,10 +369,12 @@ func TestLookupAccessKey(t *testing.T) {
 		{"a kind the key was given", key(f.admin, "group:read"), "groups?q=zeta", []string{"lk zeta"}},
 		{"a kind the key was not given", key(f.admin, "group:read"), "users", nil},
 		{"a permission the user does not hold", key(f.alice, "user:read"), "users", nil},
-		{"the own permission of a user who holds the full one", key(f.admin, "account:own:read"), "accounts", []string{"lk acct b"}},
+		{"the own permission of a user who holds the full one", key(f.admin, "account:read:own"), "accounts", []string{"lk acct b"}},
 		{"mine, given its permission", key(f.alice, "apikey:self:manage"), "api-keys?mine=true", []string{"lk key one"}},
-		{"mine, not given its permission", key(f.alice, "account:own:read"), "api-keys?mine=true", nil},
-		{"groups mine needs no permission", key(f.alice, "account:own:read"), "groups?mine=true&q=zeta", []string{"lk zeta"}},
+		{"mine, not given its permission", key(f.alice, "account:read:own"), "api-keys?mine=true", nil},
+		{"groups mine needs no permission", key(f.alice, "account:read:own"), "groups?mine=true&q=zeta", []string{"lk zeta"}},
+		{"groups named by the key's scopes", key(f.dave, fmt.Sprintf("account:read:group/%d", f.hidden)), "groups", []string{"lk hidden"}},
+		{"groups named by the user but not the key", key(f.dave, "proxy:read:own"), "groups", nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -399,4 +413,10 @@ func TestLookupMineIsTheSelfServiceRange(t *testing.T) {
 	require.Subset(t, got, models)
 	// alpha allows lk-gemini-1 but has no account: its prices do not list it.
 	require.Contains(t, got, "lk-gemini-1")
+
+	// account:group:bind alone finds the caller's GET /me/groups too: the
+	// groups an "own" account holder may bind.
+	carol := data[[]named](t, f.call(strconv.FormatInt(f.carol, 10), "/me/groups"))
+	got, _ = found(t, f.get(f.carol, "groups"))
+	require.ElementsMatch(t, names(carol), got)
 }

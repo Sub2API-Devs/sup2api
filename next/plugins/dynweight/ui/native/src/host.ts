@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { MAX_ACCOUNT_BATCH, type PluginHost, type UseListResult } from '@sub2api/host'
+import { MAX_ACCOUNT_BATCH, type ApiClient, type PluginHost, type UseListResult } from '@sub2api/host'
 import type { SelectOption, StatusTone, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
@@ -19,6 +19,18 @@ export function useDwHost(): PluginHost {
 export function canManage(): boolean {
   return useDwHost().can('dynweight:manage')
 }
+
+/**
+ * May reset effective weights: dynweight:manage and account:update at some
+ * scope (POST /reset names accounts, RouteAccounts update); the core still
+ * answers 404 for an account outside the scope.
+ */
+export function canReset(): boolean {
+  return canManage() && useDwHost().permissions.hasAction?.('account:update') === true
+}
+
+/** A reset naming no account (a whole group) covers every account: the full account:update. */
+export const resetsAllAccounts = () => useDwHost().permissions.has('account:update')
 
 const api = () => useDwHost().pluginApi
 
@@ -368,6 +380,29 @@ export interface Degraded {
   account_ids: number[]
 }
 export const fetchDegraded = () => api().get<Degraded>('/degraded')
+
+/**
+ * The node views cover every account: GET /degraded and /stats, and /status
+ * and /events without an account_id. The core asks the full account:read for
+ * them (manifest routes, RouteAccounts); a narrower scope (own, a group, some
+ * accounts) gets a 403 there and has to name an account.
+ */
+export const seesAllAccounts = () => useDwHost().permissions.has('account:read')
+
+/**
+ * The plugin API for a key list (/status, /events) under useList: for a
+ * viewer without seesAllAccounts, a query naming no account is answered
+ * empty here instead of being refused by the core.
+ */
+export function keyListApi(): ApiClient {
+  const client = api()
+  if (seesAllAccounts()) return client
+  return {
+    ...client,
+    list: (path, query, opts) =>
+      query?.account_id ? client.list(path, query, opts) : Promise.resolve({ items: [], page: { page: 1, page_size: 0, total: 0 }, paged: false })
+  }
+}
 
 // The account list renders the slot once per row: ids asked for in the same
 // tick are fetched together, MAX_ACCOUNT_BATCH per GET /weights (its limit).

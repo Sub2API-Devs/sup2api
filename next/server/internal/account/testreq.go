@@ -24,6 +24,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
@@ -97,7 +98,7 @@ func (s *Service) test(c *gin.Context) {
 			return
 		}
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:test"), false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountTest), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -350,13 +351,20 @@ func upstreamAddr(u *url.URL) string {
 // transportError renders a transport failure with the credential-free
 // address instead of the request URL net/http puts in the message (it keeps
 // the query, which may carry the key). The plugin classifying the failure
-// sees the same text, since it may repeat it in its reason.
+// sees the same text, since it may repeat it in its reason. A dial the
+// private-address guard refused reads as netguard.ErrPrivate: its message
+// names the address the proxy or upstream host resolved to, which the caller
+// may not see (M3).
 func transportError(addr string, err error) string {
 	var ue *url.Error
+	prefix := ""
 	if errors.As(err, &ue) {
-		return strings.TrimSpace(ue.Op+" "+addr) + ": " + ue.Err.Error()
+		prefix, err = strings.TrimSpace(ue.Op+" "+addr)+": ", ue.Err
 	}
-	return err.Error()
+	if errors.Is(err, netguard.ErrPrivate) {
+		err = netguard.ErrPrivate
+	}
+	return prefix + err.Error()
 }
 
 // testUsage reads the token counts of a successful test response. The plugin

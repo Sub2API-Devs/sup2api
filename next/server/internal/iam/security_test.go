@@ -338,7 +338,7 @@ func TestRefreshReuseRevokesFamily(t *testing.T) {
 	if err != nil {
 		t.Fatalf("other family: %v", err)
 	}
-	// Logout revokes only that token; presenting it again revokes its family.
+	// Logout ends only that session.
 	c1 := mustLogin(t, s, adminEmail, adminPassword)
 	if err := s.Logout(ctx, c1.User.ID, c1.RefreshToken); err != nil {
 		t.Fatal(err)

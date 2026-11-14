@@ -2,6 +2,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api, isApiError, type Query } from '@sub2api/host'
 import type { EnvironmentLayer, EnvironmentValues, EnvironmentVariable, Group, Proxy } from '@/api/types'
 import { forgetEntityNames } from '@/components/entity/lookup'
+import { useAuthStore } from '@/stores/auth'
 
 // Small cached lists of the groups and proxies (their first page), for pages
 // that need more of them than a name. Call refresh (`force`) after mutations
@@ -35,11 +36,17 @@ let proxiesP: Promise<void> | null = null
 /** Groups past the first page, read by id; null while asked for and where the core shows none. */
 const farGroups = reactive(new Map<number, Group | null>())
 
+/** GET /groups (and /groups/:id) needs it; the account pages also open with only own-level keys. */
+const GROUP_READ = 'group:read'
+
 export function useGroupsLookup(force = false) {
   if (force) {
     forgetEntityNames('group')
     farGroups.clear()
   }
+  // Without group:read the list stays empty instead of a 403: names come
+  // from the rows and the entity lookup (GET /lookup/groups).
+  if (!useAuthStore().has(GROUP_READ)) return { groups, ready: Promise.resolve() }
   if (force || !groupsP) {
     groupsP = fetchFirstPage<Group>('/groups')
       .then((items) => {

@@ -12,7 +12,7 @@ export * from './bridge-protocol'
 export { useList, type UseListOptions, type UseListResult } from './useList'
 
 /** Version of the host UI contract; plugins declare hostUICompat against it. */
-export const HOST_UI_VERSION = '3.14.0'
+export const HOST_UI_VERSION = '3.15.0'
 
 /**
  * Accounts per plugin account action request and per `GET /accounts?ids=`
@@ -48,8 +48,21 @@ export interface HostI18n {
 
 export interface HostPermissions {
   superuser(): boolean
+  /** The key is held: implied by a held key (CONTRACTS §21), so has("account:read") asks for every account. */
   has(key: string): boolean
   any(...keys: string[]): boolean
+  /**
+   * The scoped action (account:read, proxy:manage, ...) is held at any scope,
+   * as the pages listing the rows in reach ask. Consoles before UI 3.15 do
+   * not have it: a plugin using it declares hostUICompat ^3.15.
+   */
+  hasAction?(action: string): boolean
+  /**
+   * The canonical keys held for the scoped action: ["account:read"] for every
+   * row, else narrower ones ("account:read:own", "account:read:group/12");
+   * [] when not held. Left out like hasAction.
+   */
+  scope?(action: string): string[]
 }
 
 /**
@@ -138,6 +151,17 @@ export function useHost(): HostContext {
   return ctx
 }
 
+/**
+ * RBAC key of a plugin-local permission: "plugin.<pluginKey>:<local>". An
+ * already qualified key of the same plugin is returned as is; an empty local
+ * key gives "" (callers then deny). Mirrors manifest.PermissionKey on the server.
+ */
+export function pluginPermissionKey(pluginKey: string, local: string): string {
+  const prefix = `plugin.${pluginKey}:`
+  const rest = local.startsWith(prefix) ? local.slice(prefix.length) : local
+  return rest ? prefix + rest : ''
+}
+
 export function createPluginHost(
   base: HostContext,
   plugin: PluginHost['plugin'],
@@ -152,7 +176,10 @@ export function createPluginHost(
     asset: (path: string) => plugin.assetBase.replace(/\/$/, '') + '/' + path.replace(/^\//, ''),
     t: (key, params) => base.i18n.t(`${ns}.${key}`, params),
     addMessages: messages => base.i18n.addMessages(ns, messages),
-    can: perm => base.permissions.has(`plugin.${plugin.key}:${perm}`)
+    can: perm => {
+      const key = pluginPermissionKey(plugin.key, perm)
+      return key !== '' && base.permissions.has(key)
+    }
   }
 }
 

@@ -6,12 +6,12 @@
     "en": "Referral rewards and daily check-in. Invitees' usage/recharge triggers commission credited to the inviter's balance. Daily check-in awards random quota.",
     "zh": "邀请返利与每日签到。被邀请人消费或充值后按比例返利给邀请人；每日签到获得随机额度奖励。"
   },
-  "version": "0.1.6",
+  "version": "0.2.0",
   "publisher": "sub2api",
   "icon": "text:G",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.229 <0.2.0",
+  "hostCompat": ">=0.1.286 <0.2.0",
   "hostUICompat": "^3.4",
 
   "capabilities": [
@@ -33,28 +33,32 @@
 
   "userPermissions": [
     {
-      "key": "growth:read",
-      "label": { "en": "View growth stats", "zh": "查看增长统计" },
-      "description": { "en": "Referral and check-in records", "zh": "邀请返利与签到记录" }
+      "key": "growth:use",
+      "defaultRoles": ["user", "supplier", "operator", "admin"],
+      "inheritFrom": ["growth:read"],
+      "label": { "en": "Use referrals and check-in", "zh": "使用邀请与签到" },
+      "description": { "en": "Own referral link, referral records and daily check-in", "zh": "自己的邀请链接、邀请记录与每日签到" }
     },
     {
-      "key": "growth:manage",
-      "label": { "en": "Manage growth settings", "zh": "管理增长设置" },
-      "description": { "en": "Configure rates, limits and view all users' data", "zh": "配置比例、限额并查看所有用户数据" },
+      "key": "growth:stats:read",
+      "defaultRoles": ["admin"],
+      "inheritFrom": ["growth:manage"],
+      "label": { "en": "View the growth dashboard", "zh": "查看增长后台" },
+      "description": { "en": "All users' referrals, commissions, check-ins and stats", "zh": "所有用户的邀请、返利、签到记录与统计" },
       "sensitive": true
     }
   ],
 
   "routes": [
-    { "method": "GET", "path": "/me/referral", "scope": "user", "permission": "growth:read" },
-    { "method": "POST", "path": "/me/referral/bind", "scope": "user", "permission": "growth:read" },
-    { "method": "GET", "path": "/me/checkin/status", "scope": "user", "permission": "growth:read" },
-    { "method": "POST", "path": "/me/checkin", "scope": "user", "permission": "growth:read" },
-    { "method": "GET", "path": "/admin/referrals", "scope": "admin", "permission": "growth:manage" },
-    { "method": "GET", "path": "/admin/referrals/:user_id", "scope": "admin", "permission": "growth:manage" },
-    { "method": "GET", "path": "/admin/commissions", "scope": "admin", "permission": "growth:manage" },
-    { "method": "GET", "path": "/admin/checkins", "scope": "admin", "permission": "growth:manage" },
-    { "method": "GET", "path": "/admin/stats", "scope": "admin", "permission": "growth:manage" }
+    { "method": "GET", "path": "/me/referral", "scope": "user", "permission": "growth:use" },
+    { "method": "POST", "path": "/me/referral/bind", "scope": "user", "permission": "growth:use" },
+    { "method": "GET", "path": "/me/checkin/status", "scope": "user", "permission": "growth:use" },
+    { "method": "POST", "path": "/me/checkin", "scope": "user", "permission": "growth:use" },
+    { "method": "GET", "path": "/admin/referrals", "scope": "admin", "permission": "growth:stats:read" },
+    { "method": "GET", "path": "/admin/referrals/:user_id", "scope": "admin", "permission": "growth:stats:read" },
+    { "method": "GET", "path": "/admin/commissions", "scope": "admin", "permission": "growth:stats:read" },
+    { "method": "GET", "path": "/admin/checkins", "scope": "admin", "permission": "growth:stats:read" },
+    { "method": "GET", "path": "/admin/stats", "scope": "admin", "permission": "growth:stats:read" }
   ],
 
   "ui": {
@@ -65,7 +69,7 @@
         "label": { "en": "My Referrals", "zh": "我的邀请" },
         "icon": "user",
         "page": "my-referral",
-        "permission": "growth:read",
+        "permission": "growth:use",
         "order": 110
       },
       {
@@ -74,7 +78,7 @@
         "label": { "en": "Daily Check-in", "zh": "每日签到" },
         "icon": "clock",
         "page": "checkin",
-        "permission": "growth:read",
+        "permission": "growth:use",
         "order": 120
       },
       {
@@ -83,7 +87,7 @@
         "label": { "en": "Growth Dashboard", "zh": "增长管理" },
         "icon": "chart",
         "page": "admin",
-        "permission": "growth:manage",
+        "permission": "growth:stats:read",
         "order": 10
       }
     ],

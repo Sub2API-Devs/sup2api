@@ -1,6 +1,6 @@
 # codex 插件：ChatGPT 账号（Codex 设备码 / Sign in with ChatGPT）
 
-日期：2026-11-08（额度窗口 2026-11-09，官方用量重置次数 2026-11-10）。状态：已实现（插件 0.1.1 已上线；0.1.2 增加 `codex_device` 的 5h / 周额度窗口，见第 9 节，需核心 ≥0.1.257；0.1.3 接入官方用量重置次数，见第 10 节，需核心 ≥0.1.269）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6），额度见 §44、§69。
+日期：2026-11-08（额度窗口 2026-11-09，官方用量重置次数 2026-11-10）。状态：已实现（插件 0.1.1 已上线；0.1.2 增加 `codex_device` 的 5h / 周额度窗口，见第 9 节，需核心 ≥0.1.257；0.1.3 接入官方用量重置次数，见第 10 节，需核心 ≥0.1.269；0.1.4 随权限加固发布，只改授权相关行为，见第 11 节，需核心 ≥0.1.286）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6），额度见 §44、§69。
 
 ## 1. 目标与边界
 
@@ -61,6 +61,7 @@
   - `POST /auth/device/poll` `{session_id}` → `{status: "pending"|"done"|"expired"|"error", credentials?, message?, interval?}`；`interval` 为 pending 时的轮询间隔（秒，OpenAI 返回 429 时加长）；done 时返回完整凭证对象（见下），同时删除会话。同一会话的“读会话 → 问 OpenAI → 写回/删除”在集群锁（`Host.Locks`，锁名为会话 id 的哈希，ttl 50 秒）下进行：两个标签页或两个节点并发轮询时，拿不到锁的一方直接回 `pending`，不会两边都去用一次性授权码换令牌；锁服务不可用时回 503 `unavailable`。
   - `POST /auth/siwc/start` `{client_id?, ext_agent_host_id?}`（重新授权时带上） → `{session_id, authorize_url}`；PKCE verifier、state、nonce、host_id 存 KV。
   - `POST /auth/siwc/exchange` `{session_id, callback_url}` → `{credentials}` 或错误。
+  - 两种会话都绑定发起它的登录用户（`pluginsdk.SaveCallerSession`，2026-11-12）：其他用户拿到 `session_id` 也无法继续，得到的回答与会话不存在时相同（轮询 `expired`，exchange 404 `session_expired`）；没有登录用户时 start 回 401。
 - 凭证对象：
   - 共有：`access_token`、`refresh_token`、`id_token`、`expires_at`（Unix 秒）、`email`、`plan_type`（从令牌读出，两种类型都可能有）；除 `access_token` 外缺值时省略。
   - `codex_device`：`chatgpt_account_id`。
@@ -196,3 +197,15 @@
 - KV 读写失败一律只记 warn：不影响额度解析结果，不让 list / consume 失败；summary 中读失败的账号视为没有缓存（一次请求只记一条 warn，带失败个数）。
 - summary 的 KV 只有单键 `Get`，所以并发读：最多 16 个同时进行，整次请求限时 5 秒（超时后未读到的账号视为没有缓存）。
 - 测试：`resetcache_test.go`：额度解析写缓存（有字段写入、缺失 / null / 非数字不覆盖、失败查询不写、0 照写）、KV 失败时额度结果不变、summary（去重与非正整数过滤、缺失账号不出现、500 个通过、501 个 400、坏 JSON、KV 失败仍 200、不发上游请求）、list 写入与 consume 后删除（拒绝的 consume 不删，KV 失败不影响 consume）。
+
+## 11. 0.1.4：权限加固（2026-11-13，随核心权限加固发布）
+
+功能与上游协议不变，只改授权相关行为；版本在期 4 T84 统一升级（[DESIGN-2026-11-12-AUTHZ-HARDENING.md](DESIGN-2026-11-12-AUTHZ-HARDENING.md)“期 4 T84”）。
+
+- **`hostCompat` `>=0.1.286 <0.2.0`**：`defaultRoles` 显式写出（旧核心把省略与 `[]` 混淆）和路由的 `accounts` 声明都需要权限加固后的核心（0.1.286）。
+- **路由的账号范围（T25）**：`POST /reset-credits/list` 声明 `{"action":"update","from":["body:account_id"]}`，`POST /reset-credits/summary` 声明 `{"action":"read","from":["body:account_ids"]}`，核心按调用者对这些账号的范围放行（只有自己创建的账号的角色操作他人账号回 404，CONTRACTS §21）；`/reset-credits/consume` 不声明，由 `ui.accountActions` 推断为 `update` + `body:account_ids`。持有 `codex:reset` 但没有任何范围的 `account:update` 的角色调用 list / consume 由 200 变为 403。
+- **默认角色（T58）**：`codex:manage`、`codex:reset` 声明 `defaultRoles: ["admin", "operator"]`。新安装时授给这两个内置角色；已安装的库不回填（D9），升级时若新授予需要同意（敏感权限或授给 user、自定义角色），codex 作为内置插件会暂缓这些授予，由超管在插件页确认（P4C；授给内置角色只有超管能确认）。
+- **授权会话绑定发起人（T42）**：设备码与 Sign in with ChatGPT 的会话改用 `pluginsdk.SaveCallerSession` / `LoadCallerSession` / `UpdateCallerSession`，存 `{"uid", "v"}`。他人拿到 `session_id`：设备码轮询回 200 `expired`（与会话不存在相同），SIWC `exchange` 回 404 `session_expired`。升级或回滚时进行中的授权会话（不超过 15 分钟 / SIWC 会话有效期）需重新发起。重置次数缓存不是会话，改名 `loadCached` / `saveCached`，行为不变。
+- **账号类型（T26）**：`codex_device`、`chatgpt_siwc` 声明 `upstreamFields: []`（没有可改的上游地址），控制台据 `custom_upstream=false` 不显示上游地址字段。
+- **访问密钥（S4）**：`plugin.codex:codex:manage` 与 `plugin.codex:codex:reset` 可以加入访问密钥的权限；`consume` 会花掉 OpenAI 发放的次数，不可撤销，授给密钥前确认用途。
+- 回滚：装回 0.1.3（核心回滚时随之回滚）；会话格式不兼容，进行中的授权需重新发起。

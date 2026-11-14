@@ -45,7 +45,7 @@ type resetClient struct {
 
 	mu sync.Mutex
 	// transportFailures fails that many first sends with status 0; sendErr,
-	// when set, fails every send as an RPC error (a core before 0.1.269).
+	// when set, fails every send as an RPC error.
 	transportFailures int
 	sendErr           error
 	sent              []sentRequest
@@ -486,16 +486,13 @@ func TestResetErrorsNeverEchoTheToken(t *testing.T) {
 
 func TestResetHostCallFailure(t *testing.T) {
 	e := newResetEnv(t)
-	e.client.sendErr = status.Error(codes.Unimplemented, "unknown method")
-	r := e.h.Do("POST", "/reset-credits/list", nil, map[string]any{"account_id": resetDeviceID})
-	if r.GetStatus() != 503 || !strings.Contains(decodeError(t, r).Error.Message, "0.1.269") {
-		t.Errorf("list = %d %s", r.GetStatus(), r.GetBody())
-	}
-	// Any other host failure is 503 without the core version hint.
-	e.client.sendErr = status.Error(codes.Unavailable, "core busy")
-	r = e.h.Do("POST", "/reset-credits/list", nil, map[string]any{"account_id": resetDeviceID})
-	if msg := decodeError(t, r).Error.Message; r.GetStatus() != 503 || strings.Contains(msg, "0.1.269") || !strings.Contains(msg, "core busy") {
-		t.Errorf("list = %d %s", r.GetStatus(), r.GetBody())
+	// A host failure is 503 with the host's reason.
+	for _, err := range []error{status.Error(codes.Unimplemented, "unknown method"), status.Error(codes.Unavailable, "core busy")} {
+		e.client.sendErr = err
+		r := e.h.Do("POST", "/reset-credits/list", nil, map[string]any{"account_id": resetDeviceID})
+		if msg := decodeError(t, r).Error.Message; r.GetStatus() != 503 || !strings.Contains(msg, status.Convert(err).Message()) {
+			t.Errorf("list = %d %s", r.GetStatus(), r.GetBody())
+		}
 	}
 }
 

@@ -427,6 +427,10 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"^3.14", ">=0.1.281 <0.2.0", true},
 		{"^3.14", ">=0.1.283 <0.2.0", true},
 		{"^3.14", ">=0.1.284 <0.2.0", false},
+		// UI 3.15 starts at core 0.1.286; 0.1.285 is the last core with 3.14.
+		{"^3.15", ">=0.1.283 <0.2.0", true},
+		{"^3.15", ">=0.1.285 <0.2.0", true},
+		{"^3.15", ">=0.1.286 <0.2.0", false},
 	}
 	for _, tc := range cases {
 		c := uiCodes(uiNativeManifest(tc.ui, tc.host))
@@ -676,6 +680,17 @@ func TestAccountActions(t *testing.T) {
 	if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); len(c) > 0 {
 		t.Fatalf("a bare path means POST: %v", c)
 	}
+	// A route that declares accounts itself must still read what the console
+	// posts.
+	m = withAccountAction(">=0.1.286 <0.2.0", good)
+	m.Routes[2].Accounts = &manifest.RouteAccounts{Action: "update", From: []string{"body:account_id"}}
+	if c := uiCodes(m); c["ui.accountActions[0].route"] != "accounts_mismatch" {
+		t.Errorf("an action route whose accounts miss body:account_ids must be rejected: %v", c)
+	}
+	m.Routes[2].Accounts.From = append(m.Routes[2].Accounts.From, manifest.AccountActionIDs)
+	if c := uiCodes(m); len(c) > 0 {
+		t.Errorf("an action route reading body:account_ids is valid: %v", c)
+	}
 	// visibleFor takes its two values; empty means "editable".
 	for _, vf := range []string{"editable", "all", ""} {
 		act := good
@@ -820,6 +835,37 @@ func TestParseRouteRef(t *testing.T) {
 		if ok != tc.ok || method != tc.method || path != tc.path {
 			t.Errorf("ParseRouteRef(%q, %q) = (%q, %q, %v), want (%q, %q, %v)",
 				tc.ref, tc.def, method, path, ok, tc.method, tc.path, tc.ok)
+		}
+	}
+}
+
+// A settings schema may only mark secrets where the core can mask them: on
+// properties of nested objects (manifest.SettingsSecrets). Other forms are
+// not settings and are not judged.
+func TestSettingsSecretsMustBeMaskable(t *testing.T) {
+	m := uiManifest()
+	m.UI.Settings = &manifest.Form{Mode: "schema", Schema: "settings.schema.json"}
+	validate := func(schema string) map[string]string {
+		return codes(Validate(m, map[string][]byte{"settings.schema.json": []byte(schema)}, ValidateOptions{Tooling: true}))
+	}
+	for _, schema := range []string{
+		`{"properties":{"key":{"writeOnly":true},"up":{"properties":{"url":{"x-sensitive":true}}},"tags":{"type":"array","items":{"type":"string"}}}}`,
+		`{"properties":{"a":{"$ref":"#/$defs/s"},"up":{"$ref":"#/definitions/creds"}},"$defs":{"s":{"format":"password"}},
+			"definitions":{"creds":{"properties":{"token":{"writeOnly":true}}}}}`,
+	} {
+		if c := validate(schema); len(c) > 0 {
+			t.Fatalf("maskable secrets are valid: %v", c)
+		}
+	}
+	for name, schema := range map[string]string{
+		"items":         `{"properties":{"hooks":{"type":"array","items":{"properties":{"token":{"writeOnly":true}}}}}}`,
+		"$ref":          `{"properties":{"a":{"$ref":"#/$defs/s/properties/k"}},"$defs":{"s":{"properties":{"k":{"format":"password"}}}}}`,
+		"recursive":     `{"properties":{"t":{"$ref":"#/$defs/n"}},"$defs":{"n":{"properties":{"k":{"writeOnly":true},"next":{"$ref":"#/$defs/n"}}}}}`,
+		"root allOf":    `{"allOf":[{"properties":{"x":{"x-sensitive":true}}}]}`,
+		"not an object": `true`,
+	} {
+		if c := validate(schema); c["ui.settings.schema"] != "unmaskable_secret" {
+			t.Fatalf("%s: a secret that cannot be masked must be rejected: %v", name, c)
 		}
 	}
 }

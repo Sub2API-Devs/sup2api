@@ -10,6 +10,7 @@ func TestAddMembers(t *testing.T) {
 	e := setup(t)
 	vip, def := e.segment("VIP", "1"), e.defaultSegment()
 	group := e.group("private", "restricted", "1")
+	third := e.user("third@x.com")
 	moved := func(segment int64, users ...int64) any {
 		return e.do(e.admin, "POST", path("/segments/%d/members", segment), map[string]any{"user_ids": users}).ok(200).data()["moved"]
 	}
@@ -17,7 +18,7 @@ func TestAddMembers(t *testing.T) {
 	require.Equal(t, float64(2), moved(vip, e.plain, e.masked, e.plain), "a user named twice moves once")
 	require.Equal(t, vip, e.segmentOf(e.plain))
 	require.Equal(t, vip, e.segmentOf(e.masked))
-	require.Equal(t, float64(1), moved(vip, e.plain, e.admin), "a user already there does not move")
+	require.Equal(t, float64(1), moved(vip, e.plain, third), "a user already there does not move")
 	require.Equal(t, float64(0), moved(vip))
 	require.Zero(t, e.rulesChanged.Load(), "no personal segment went")
 
@@ -35,16 +36,16 @@ func TestAddMembers(t *testing.T) {
 	// Nobody moves when one of the users is unknown; a deleted user is.
 	e.exec(`UPDATE users SET deleted_at = now() WHERE id = $1`, e.masked)
 	for _, unknown := range []int64{999999, e.masked} {
-		r := e.do(e.admin, "POST", path("/segments/%d/members", def), map[string]any{"user_ids": []int64{e.admin, unknown}})
+		r := e.do(e.admin, "POST", path("/segments/%d/members", def), map[string]any{"user_ids": []int64{third, unknown}})
 		require.Equal(t, path("unknown user %d", unknown), r.invalid("user_ids")["message"])
 	}
-	require.Equal(t, vip, e.segmentOf(e.admin))
+	require.Equal(t, vip, e.segmentOf(third))
 	require.Equal(t, vip, e.segmentOf(e.masked), "a deleted user stays where they were")
 
 	personal = e.personal(e.plain)
-	e.do(e.admin, "POST", path("/segments/%d/members", personal), map[string]any{"user_ids": []int64{e.admin}}).failed(409, "conflict")
-	e.do(e.admin, "POST", "/segments/999999/members", map[string]any{"user_ids": []int64{e.admin}}).failed(404, "not_found")
-	e.do(e.plain, "POST", path("/segments/%d/members", vip), map[string]any{"user_ids": []int64{e.admin}}).failed(403, "permission_denied")
+	e.do(e.admin, "POST", path("/segments/%d/members", personal), map[string]any{"user_ids": []int64{third}}).failed(409, "conflict")
+	e.do(e.admin, "POST", "/segments/999999/members", map[string]any{"user_ids": []int64{third}}).failed(404, "not_found")
+	e.do(e.plain, "POST", path("/segments/%d/members", vip), map[string]any{"user_ids": []int64{third}}).failed(403, "permission_denied")
 }
 
 // Deleting a segment while users are moved into it and its members are made

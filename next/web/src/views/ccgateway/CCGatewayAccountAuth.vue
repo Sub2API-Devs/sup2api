@@ -20,7 +20,7 @@
 // not take it while the user is busy elsewhere. Every state and error is a
 // code (status / details.reason) translated via ccgateway.status.* and
 // ccgateway.reason.*; an unknown reason shows the API's English message.
-// `canEdit`: the caller may edit this account (account:update / own:update).
+// `canEdit`: the caller may edit this account (account:update at any scope).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
@@ -28,7 +28,7 @@ import { SAlert, SButton, SCopyButton, SField, SHint, SIcon, SInput, SLink, SSte
 import { useAuthStore } from '@/stores/auth'
 import type { CcgAuthSession, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import BusyText from '@/components/BusyText.vue'
 import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import CcgAuthHeader from './CcgAuthHeader.vue'
@@ -81,7 +81,7 @@ const inPlace = computed(() => Number.isSafeInteger(props.reauthAccountId) && (p
 const reauthCompleted = ref(false)
 const reauth = computed(() => !props.draft && (inPlace.value || isDraftKey(props.reauthKey)))
 const mode = computed<CcgMode>(() => (reauth.value ? 'reauth' : 'draft'))
-const canManage = computed(() => auth.has('settings:manage') || (reauth.value ? !!props.canEdit : auth.has([...ACCOUNT_KEYS.create])))
+const canManage = computed(() => (reauth.value ? !!props.canEdit : auth.has('settings:manage') || auth.hasAction(ACCOUNT_ACTIONS.create)))
 
 /** New account: draft key once created, and the proxy the draft runs with. */
 const draftKey = ref<string | null>(null)
@@ -165,7 +165,9 @@ async function containerFailure(titleKey: string, e: unknown, stamp: number) {
   }
   const reason = reasonOf(e)
   let setup: CcgSetupProblem[] = []
-  if (!reason || reason === 'not_configured') {
+  // The per-user draft limit says nothing about the setup: no probe.
+  const overLimit = isApiError(e) && e.code === 'too_many_drafts'
+  if (!overLimit && (!reason || reason === 'not_configured')) {
     try {
       setup = setupProblems(await api.get<{ account_runtimes?: boolean; mode?: string; has_admin_key?: boolean }>('/system/ccgateway/remote-config'))
     } catch {
@@ -568,7 +570,7 @@ defineExpose({
               <SButton size="sm" icon="refresh" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry">{{ t('ccgateway.accountAuth.retry') }}</SButton>
               <SButton v-if="isProxyReason(failure.reason)" size="sm" variant="ghost" icon="proxy" @click="emit('fix-proxy')">{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
               <SButton v-if="(draft && draftKey) || reauth" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
-              <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" icon="settings" :to="settingsLink" data-testid="ccgateway-auth-open-settings">{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
+              <SButton v-if="auth.has('settings:read') && (failure.setup?.length || failure.reason === 'not_configured')" size="sm" variant="ghost" icon="settings" :to="settingsLink" data-testid="ccgateway-auth-open-settings">{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
             </template>
           </CcgErrorAlert>
           <!-- new account, no draft yet -->

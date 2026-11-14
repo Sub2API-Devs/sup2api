@@ -111,7 +111,7 @@ describe('CCGateway images bundled in the plugin package', () => {
     expect(asked.message).not.toContain('原地更新')
     expect(asked.message).toContain('自升级')
     expect(asked.message).toContain('短暂中断')
-    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/bundled', {}, { signal: expect.any(AbortSignal) })
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/bundled', {}, { timeoutMs: expect.any(Number) })
     expect(resultOf(w, 'app').text()).toContain('控制器上已有（跳过）')
     expect(resultOf(w, 'egress').text()).toContain('已上传并启用')
     expect(resultOf(w, 'controller').text()).toContain('失败')
@@ -138,7 +138,7 @@ describe('CCGateway images bundled in the plugin package', () => {
     const asked = mocks.confirm.mock.calls[0]![0]
     expect(asked.message).toContain('原地更新现有账号的 worker')
     expect(asked.message).toContain('不重建容器')
-    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/bundled', { update_existing: true }, { signal: expect.any(AbortSignal) })
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/bundled', { update_existing: true }, { timeoutMs: expect.any(Number) })
     w.unmount()
   })
 

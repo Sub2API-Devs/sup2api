@@ -15,6 +15,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // ============================================================ identity & authz (owner: A core-data)
@@ -25,17 +26,130 @@ type TokenVerifier interface {
 }
 
 // PermissionSet is a user's effective permissions at a given authz version.
+// In the grant view (what roles carry, authz.RolesPermissions) it also holds
+// the roles the holder may assign: Assignable never holds a superuser role,
+// and AssignCustom ("and every custom role") is already expanded into it.
+//
+// Keys holds the unscoped keys, a scope of everything included (canonical,
+// perm.Canonical); Scoped the narrower scopes per action (CONTRACTS §21).
+// Build sets with Add or PermissionSetOf, which canonicalize.
 type PermissionSet struct {
-	Superuser bool
-	Keys      map[string]struct{}
-	Version   int64
+	Superuser    bool
+	Keys         map[string]struct{}
+	Scoped       map[perm.Key][]perm.Scope
+	Assignable   map[string]struct{}
+	AssignCustom bool
+	Version      int64
 }
 
-func (s PermissionSet) Has(key string) bool {
+// Add grants k (any spelling: trailing wildcards included). A key that does
+// not parse grants nothing.
+func (s *PermissionSet) Add(k string) {
+	p, err := perm.Parse(k)
+	if err != nil {
+		return
+	}
+	s.add(p)
+}
+
+func (s *PermissionSet) add(p perm.Pattern) {
+	if p.Scope.All {
+		if s.Keys == nil {
+			s.Keys = map[string]struct{}{}
+		}
+		s.Keys[string(p.Action)] = struct{}{}
+		return
+	}
+	if s.Scoped == nil {
+		s.Scoped = map[perm.Key][]perm.Scope{}
+	}
+	if !slices.Contains(s.Scoped[p.Action], p.Scope) {
+		s.Scoped[p.Action] = append(s.Scoped[p.Action], p.Scope)
+	}
+}
+
+// Has reports whether the set implies k: a superuser, k held unscoped, or a
+// held scope implying k's. An unscoped k asks for every row, so
+// Has("account:read") is false for a holder of account:read:own only.
+func (s PermissionSet) Has(k string) bool {
 	if s.Superuser {
 		return true
 	}
-	_, ok := s.Keys[key]
+	if _, ok := s.Keys[k]; ok {
+		return true
+	}
+	p, err := perm.Parse(k)
+	if err != nil {
+		return false
+	}
+	if _, ok := s.Keys[string(p.Action)]; ok || p.Scope.All {
+		return ok
+	}
+	for _, sc := range s.Scoped[p.Action] {
+		if perm.Implies(perm.Pattern{Action: p.Action, Scope: sc}, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAction reports whether the set holds action with any scope: what a
+// route of rows the caller may reach some of asks (Router.PermScoped).
+func (s PermissionSet) HasAction(action perm.Key) bool {
+	_, ok := s.Keys[string(action)]
+	return s.Superuser || ok || len(s.Scoped[action]) > 0
+}
+
+// DataScope is the rows uid, the holder, reaches with action.
+func (s PermissionSet) DataScope(uid int64, action perm.Key) DataScope {
+	if _, ok := s.Keys[string(action)]; ok || s.Superuser {
+		return AllScope
+	}
+	return Compile(uid, s.Scoped[action])
+}
+
+// ScopeGroups lists the groups its scopes name (group/G, group/G/account/X)
+// under any action, sorted: the groups whose names the holder's own grants
+// show (lookup.Entity.Named).
+func (s PermissionSet) ScopeGroups() []int64 {
+	var out []int64
+	for _, scopes := range s.Scoped {
+		for _, sc := range scopes {
+			if sc.Group > 0 {
+				out = append(out, sc.Group)
+			}
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// KeyList lists the canonical keys of the set, sorted (not the superuser
+// flag), without the scopes of an action it holds for every row.
+func (s PermissionSet) KeyList() []string {
+	out := make([]string, 0, len(s.Keys))
+	for k := range s.Keys {
+		out = append(out, k)
+	}
+	for a, scopes := range s.Scoped {
+		if _, all := s.Keys[string(a)]; all {
+			continue
+		}
+		for _, sc := range scopes {
+			out = append(out, string(perm.Pattern{Action: a, Scope: sc}.Key()))
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// CanAssign reports whether the holder may assign or revoke role roleKey. A
+// superuser may assign any; callers exclude the superuser role themselves.
+func (s PermissionSet) CanAssign(roleKey string) bool {
+	if s.Superuser {
+		return true
+	}
+	_, ok := s.Assignable[roleKey]
 	return ok
 }
 
@@ -59,6 +173,13 @@ type AccessKeyVerifier interface {
 // access key, whose limits then travel in the returned context.
 func AuthenticateBearer(ctx context.Context, tokens TokenVerifier, token, ip string) (context.Context, int64, error) {
 	if !strings.HasPrefix(token, AccessKeyPrefix) {
+		if sv, ok := tokens.(SessionVerifier); ok {
+			uid, session, err := sv.VerifySession(ctx, token)
+			if err != nil {
+				return ctx, 0, err
+			}
+			return WithSession(WithUserID(ctx, uid), session), uid, nil
+		}
 		uid, err := tokens.VerifyAccessToken(ctx, token)
 		if err != nil {
 			return ctx, 0, err
@@ -76,13 +197,96 @@ func AuthenticateBearer(ctx context.Context, tokens TokenVerifier, token, ip str
 	return WithAccessKey(WithUserID(ctx, id.UserID), id), id.UserID, nil
 }
 
-// Restrict returns the part of the set that keys allow: never more than the
-// set itself, and no longer a superuser, whose Has is true for anything.
+// PermissionSetOf is the set holding exactly keys, not a superuser.
+func PermissionSetOf(keys ...string) PermissionSet {
+	set := PermissionSet{Keys: make(map[string]struct{}, len(keys))}
+	for _, k := range keys {
+		set.Add(k)
+	}
+	return set
+}
+
+// Missing is what a wanted set holds beyond the set it is compared to: the
+// superuser flag, permission keys and assignable roles (both sorted), and
+// the "every custom role" flag.
+type Missing struct {
+	Superuser    bool
+	Keys         []string
+	Assign       []string
+	AssignCustom bool
+}
+
+// Empty reports whether nothing is missing.
+func (m Missing) Empty() bool {
+	return !m.Superuser && len(m.Keys) == 0 && len(m.Assign) == 0 && !m.AssignCustom
+}
+
+// Details is m as the details of a permission_denied error; roles are kept
+// apart from permission keys.
+func (m Missing) Details() map[string]any {
+	return map[string]any{
+		"missing":               append([]string{}, m.Keys...),
+		"missing_assignable":    append([]string{}, m.Assign...),
+		"missing_assign_custom": m.AssignCustom,
+		"superuser":             m.Superuser,
+	}
+}
+
+// Missing returns what want holds that s does not: each key of want that s
+// does not imply. A superuser misses nothing; anyone else misses the
+// superuser flag when want has it.
+func (s PermissionSet) Missing(want PermissionSet) Missing {
+	if s.Superuser {
+		return Missing{}
+	}
+	keys := slices.DeleteFunc(want.KeyList(), s.Has)
+	if len(keys) == 0 {
+		keys = nil
+	}
+	return Missing{
+		Superuser:    want.Superuser,
+		Keys:         keys,
+		Assign:       missingKeys(s.Assignable, want.Assignable),
+		AssignCustom: want.AssignCustom && !s.AssignCustom,
+	}
+}
+
+// missingKeys lists the keys of want not in have, sorted.
+func missingKeys(have, want map[string]struct{}) []string {
+	var out []string
+	for k := range want {
+		if _, ok := have[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// Restrict returns the part of the set that keys allow, pattern by pattern:
+// a key the set implies is kept as is; a key wider than the set keeps the
+// set's narrower scopes of that action it implies (a key of account:read
+// on a holder of account:read:own gives account:read:own); scopes neither
+// implies, such as group/12 and own, are dropped rather than intersected.
+// Never more than the set itself, and no longer a superuser, whose Has is
+// true for anything. The loss of the flag is deliberate: an access key never
+// acts as a superuser, so it cannot grant or act on what only a superuser
+// may (Missing). Assignable roles are not copied, also deliberately: an
+// access key never assigns roles.
 func (s PermissionSet) Restrict(keys []string) PermissionSet {
 	out := PermissionSet{Keys: make(map[string]struct{}, len(keys)), Version: s.Version}
 	for _, k := range keys {
-		if s.Has(k) {
-			out.Keys[k] = struct{}{}
+		p, err := perm.Parse(k)
+		switch {
+		case err != nil:
+		case s.Has(k):
+			out.add(p)
+		default:
+			for _, sc := range s.Scoped[p.Action] {
+				if held := (perm.Pattern{Action: p.Action, Scope: sc}); perm.Implies(p, held) {
+					out.add(held)
+				}
+			}
 		}
 	}
 	return out
@@ -95,27 +299,103 @@ type Authorizer interface {
 	PermissionSet(ctx context.Context, userID int64) (PermissionSet, error)
 	// CanGrant validates the actor holds all permissions being granted (CONTRACTS §4.1, SEC-H2).
 	CanGrant(ctx context.Context, actorID int64, perms []string) error
-	// CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
-	CanActOn(ctx context.Context, actorID int64, targetPerms []string) error
+}
+
+// AuthzVersioner is optionally implemented by an Authorizer: the newest
+// version of the roles and permissions it knows of, without reading the
+// database. Every change of roles, grants or the catalog raises it; a session
+// that ends does not. The console compares it (response header
+// X-Authz-Version) with the authz_version of its GET /me to know when to
+// fetch the caller's permissions again.
+type AuthzVersioner interface {
+	Version() int64
+}
+
+// UserAction is what an action on users changes (UserGuard).
+type UserAction int
+
+const (
+	// ActOnData changes what users have on the platform: balance, user
+	// group.
+	ActOnData UserAction = iota
+	// ActOnIdentity changes the account itself: profile, email, password,
+	// second factors and passkeys, status, deletion, roles. A superuser's
+	// account changes through an access key only with a step-up proof
+	// (期 4 S3, replacing decision 1's session-only rule).
+	ActOnIdentity
+	// ActOnBalance adjusts balances: ActOnData, and a target holding a role
+	// besides the default one also takes balance:adjust:any, in the actor's
+	// roles and its access key (plain users only with balance:adjust alone).
+	ActOnBalance
+)
+
+// UserGuard decides whom a caller may act on (authz implements it); what the
+// caller may do is the route's permission, checked before (FU6).
+type UserGuard interface {
+	// CanActOnUsers fails unless actorID may manage every target, itself
+	// included: by the actor's roles, not narrowed by its access key, every
+	// role a target holds, the default user role aside, is one the actor may
+	// assign, and what the targets' roles grant is within the actor's (a
+	// superuser manages everyone). For ActOnIdentity a superuser target
+	// through an access key needs a step-up proof; for ActOnBalance a target
+	// holding a role besides user needs balance:adjust:any, which an access
+	// key must name. Actor 0 (the system) passes.
+	CanActOnUsers(ctx context.Context, actorID int64, action UserAction, targetIDs ...int64) error
+}
+
+// GuardOrDeny is g, or a guard refusing everything with ErrInternal when g
+// is nil (not wired): failing closed instead of panicking.
+func GuardOrDeny(g UserGuard) UserGuard {
+	if g == nil {
+		return denyAllUsers{}
+	}
+	return g
+}
+
+type denyAllUsers struct{}
+
+func (denyAllUsers) CanActOnUsers(context.Context, int64, UserAction, ...int64) error {
+	return ErrInternal
 }
 
 // PermissionDef describes one permission in the catalog.
 type PermissionDef struct {
-	Key         string
-	Module      string
+	Key    string
+	Module string
+	// ScopeType is the resource the action's scope ranges over
+	// (perm.ScopeType), "" for an action that takes none.
+	ScopeType   string
 	Label       LocalizedText
 	Description LocalizedText
 	Sensitive   bool
 	Sort        int
+	// GrantRoles are the roles a plugin permission is granted to when the
+	// catalog first creates it (super admin roles are skipped).
+	GrantRoles []string
+	// InheritFrom are keys of the same plugin's permissions (local or
+	// qualified) whose holders get a plugin permission when the catalog
+	// first creates it; only grants that exist before this sync count.
+	InheritFrom []string
 }
 
 // PermissionCatalog is used by the plugin runtime to manage plugin-owned
 // permissions ("plugin.<key>:<local>"). Every mutation bumps the authz version
 // and broadcasts authz:changed.
 type PermissionCatalog interface {
-	// SyncPlugin upserts the plugin's permissions (install/upgrade), deleting
-	// ones no longer declared, and grants newly created ones to roleKeys.
-	SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []PermissionDef, grantNewToRoleKeys []string) error
+	// SyncPlugin upserts the plugin's permissions (install/upgrade), grants
+	// newly created ones to their GrantRoles and to the holders of their
+	// InheritFrom keys, then deletes ones no longer declared.
+	SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []PermissionDef) error
+	// CanGrantToRoles fails unless actorID may change every role of
+	// roleKeys (super admin roles never), as handing them a plugin's new
+	// permissions does, and each is on its assignable list and, but for a
+	// superuser, not held by actorID.
+	CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error
+	// GrantPluginPermission grants the existing plugin permission key to
+	// roleKeys (super admin roles skipped), each grant audited as
+	// authz.sync.grant: the role grants an upgrade withheld until someone
+	// confirmed them. Callers check the rights (CanGrantToRoles).
+	GrantPluginPermission(ctx context.Context, tx pgx.Tx, key string, roleKeys []string) error
 	// SetPluginActive flips status active/disabled (enable/disable).
 	SetPluginActive(ctx context.Context, tx pgx.Tx, pluginKey string, active bool) error
 	// DeletePlugin removes the plugin's permissions and grants (uninstall).
@@ -225,6 +505,45 @@ type APIKeyAuthenticator interface {
 }
 
 // ============================================================ accounts & proxies (owner: A)
+
+// AccountAccess answers which accounts a console user may act on
+// (CONTRACTS §21.0); account implements it. action is "read", "update" or
+// "test": the user's scope of account:<action> (every account, own, groups,
+// ids). ctx may carry an access key, which narrows as usual.
+type AccountAccess interface {
+	// AccountsInScope returns all=true for a scope of every account;
+	// otherwise the ids that are live accounts in the scope (order kept,
+	// deduplicated); ErrPermissionDenied without any scope.
+	AccountsInScope(ctx context.Context, userID int64, action string, ids []int64) (all bool, allowed []int64, err error)
+}
+
+// AccountsDenied is the ErrPermissionDenied of an account action, naming its
+// "all" key.
+func AccountsDenied(action string) *Error {
+	return ErrPermissionDenied.WithDetails(map[string]any{"permission": "account:" + action})
+}
+
+// AuthorizeAccounts is the strict form of AccountsInScope every caller uses:
+// the "all" scope passes; the "own" scope needs at least one id (else
+// AccountsDenied) and every id in scope (else ErrNotFound, as for an account
+// outside the scope). A caller whose account module is not wired passes nil
+// and gets ErrUnavailable.
+func AuthorizeAccounts(ctx context.Context, aa AccountAccess, userID int64, action string, ids []int64) error {
+	if aa == nil {
+		return ErrUnavailable.WithMessage("account checks are not configured")
+	}
+	all, allowed, err := aa.AccountsInScope(ctx, userID, action, ids)
+	if err != nil || all {
+		return err
+	}
+	if len(ids) == 0 {
+		return AccountsDenied(action)
+	}
+	if slices.ContainsFunc(ids, func(id int64) bool { return !slices.Contains(allowed, id) }) {
+		return ErrNotFound.WithMessage(Text(ctx, "account not found", "账号不存在"))
+	}
+	return nil
+}
 
 // AccountRef is the scheduling view of an account (no secrets).
 type AccountRef struct {
@@ -554,10 +873,10 @@ type ProxySpec struct {
 // proxy.Service, injected into account.Deps.
 type ProxyResolver interface {
 	// FindOrCreate returns the id of the enabled proxy equal to spec in
-	// protocol, host, port, username and password, restricted to rows the
-	// caller may see (scope nil = all, otherwise created_by = *scope; NULL
-	// created_by rows only match under nil), or inserts a new one owned by
-	// ownerID (name "<protocol>://<host>:<port>", status active). It must
+	// protocol, host, port, username and password among the rows of scope
+	// (the caller's proxy:manage, CONTRACTS §21.0), or, when scope may
+	// create (every row or own), inserts a new one owned by ownerID (name
+	// "<protocol>://<host>:<port>", status active). It must
 	// run inside the caller's transaction (tx) together with the account
 	// write; it takes pg_advisory_xact_lock on the match key first so two
 	// concurrent saves of the same URL never create duplicates.
@@ -566,7 +885,7 @@ type ProxyResolver interface {
 	// audit detail needs does not exist yet when the account is being
 	// created. After the account row is written, callers pass created ==
 	// true rows to AuditAutoCreate in the same transaction.
-	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope *int64) (id int64, created bool, err error)
+	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope DataScope) (id int64, created bool, err error)
 	// AuditAutoCreate records the audit row proxy.create {auto:true,
 	// account_id} (actor = ownerID, ip from audit.WithClientIP on ctx) for a
 	// proxy FindOrCreate just inserted, and announces the new proxy on

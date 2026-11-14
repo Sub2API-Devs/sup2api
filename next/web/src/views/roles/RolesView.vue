@@ -1,21 +1,25 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
+import { api, isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SChip, SDropdown, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SFormModal, SPageHeader, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
 import type { LText, PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
 import { fetchFirstPage } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
+import { useAssignableRoles } from '@/composables/useAssignableRoles'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import PermissionTree from './PermissionTree.vue'
+import RoleAssignable from './RoleAssignable.vue'
+import { ROLE_KEY_PATTERN } from '@/generated/permissions'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const canManage = computed(() => auth.has('role:manage'))
+const managed = useAssignableRoles()
+const canDefine = computed(() => auth.has('role:define'))
 
 const roles = ref<RoleRow[]>([])
 const modules = ref<PermissionModule[]>([])
@@ -47,10 +51,21 @@ init()
 
 const form = reactive({ nameEn: '', nameZh: '', description: '' })
 const perms = ref(new Set<string>())
-const original = ref({ nameEn: '', nameZh: '', description: '', perms: [] as string[] })
+const assignable = ref(new Set<string>())
+const assignCustom = ref(false)
+const original = ref({ nameEn: '', nameZh: '', description: '', perms: [] as string[], assignable: [] as string[], assignCustom: false })
 const saving = ref(false)
+/** What the last save lacked (403 details.missing / missing_assignable). */
+const saveMissing = ref('')
 
-const readOnly = computed(() => !canManage.value || !!selected.value?.superuser)
+/**
+ * A built-in role is changed by whoever manages it: on the caller's assignable list and within the
+ * caller (CONTRACTS §43.6; the server decides); the super admin role by nobody.
+ */
+const builtinLocked = computed(
+  () => !!selected.value?.builtin && !selected.value.superuser && !auth.me?.superuser && !managed.assignable(selected.value.key)
+)
+const readOnly = computed(() => !canDefine.value || !!selected.value?.superuser || builtinLocked.value)
 const permsMissing = computed(() => !!selected.value && !selected.value.superuser && !Array.isArray(selected.value.permission_keys))
 
 function splitName(v: LText | undefined): { en: string; zh: string } {
@@ -63,7 +78,10 @@ const metaDirty = computed(
   () => form.nameEn !== original.value.nameEn || form.nameZh !== original.value.nameZh || form.description !== original.value.description
 )
 const permsDirty = computed(() => [...perms.value].sort().join() !== original.value.perms.join())
-const dirty = computed(() => metaDirty.value || permsDirty.value)
+const assignableDirty = computed(
+  () => [...assignable.value].sort().join() !== original.value.assignable.join() || assignCustom.value !== original.value.assignCustom
+)
+const dirty = computed(() => metaDirty.value || permsDirty.value || assignableDirty.value)
 
 async function selectRole(r: RoleRow, force = false) {
   if (!force && r.id === selectedId.value) return
@@ -71,9 +89,13 @@ async function selectRole(r: RoleRow, force = false) {
   selectedId.value = r.id
   const n = splitName(r.name)
   const keys = [...(r.permission_keys || [])].sort()
+  const manages = [...(r.assignable_role_keys || [])].sort()
   Object.assign(form, { nameEn: n.en, nameZh: n.zh, description: lt(r.description) })
   perms.value = new Set(keys)
-  original.value = { ...form, perms: keys }
+  assignable.value = new Set(manages)
+  assignCustom.value = !!r.assign_custom
+  saveMissing.value = ''
+  original.value = { ...form, perms: keys, assignable: manages, assignCustom: !!r.assign_custom }
   loadMembers(r)
 }
 
@@ -109,31 +131,55 @@ async function save() {
   const r = selected.value
   if (!r || readOnly.value) return
   if (permsDirty.value && permsMissing.value && !(await confirm({ message: t('roles.overwriteUnknown'), danger: true }))) return
+  // Each changed part has its own endpoint; they run in order and stop at the first refusal.
+  const steps = [
+    metaDirty.value && (() => api.patch(`/roles/${r.id}`, { name: { en: form.nameEn.trim(), zh: form.nameZh.trim() }, description: form.description.trim() })),
+    permsDirty.value && (() => api.put(`/roles/${r.id}/permissions`, { permission_keys: [...perms.value].sort() })),
+    assignableDirty.value && (() => api.put(`/roles/${r.id}/assignable`, { role_keys: [...assignable.value].sort(), assign_custom: assignCustom.value }))
+  ].filter((step) => !!step)
   saving.value = true
+  saveMissing.value = ''
+  let done = 0
+  let missing = ''
   try {
-    if (metaDirty.value) {
-      await api.patch(`/roles/${r.id}`, {
-        name: { en: form.nameEn.trim(), zh: form.nameZh.trim() },
-        description: form.description.trim()
-      })
-    }
-    if (permsDirty.value) {
-      await api.put(`/roles/${r.id}/permissions`, { permission_keys: [...perms.value].sort() })
+    for (const step of steps) {
+      await step()
+      done++
     }
     toast(t('common.saved'), 'success')
-    await loadRoles()
-    const fresh = roles.value.find((x) => x.id === r.id)
-    if (fresh) {
-      // Keep the edited permissions if the list endpoint omits permission_keys.
-      if (!Array.isArray(fresh.permission_keys)) fresh.permission_keys = [...perms.value]
-      selectRole(fresh, true)
-    }
-    if (auth.me?.roles.includes(r.key)) auth.loadMe().catch(() => undefined)
   } catch (e) {
+    missing = missingText(e)
     notifyError(e)
-  } finally {
-    saving.value = false
   }
+  // Something was written (all of it, or the parts before a refusal): show what the role now is.
+  if (done) await showSaved(r, done === steps.length).catch(notifyError)
+  saveMissing.value = missing
+  saving.value = false
+}
+
+async function showSaved(r: RoleRow, complete: boolean) {
+  await loadRoles()
+  const fresh = roles.value.find((x) => x.id === r.id)
+  if (fresh) {
+    // Keep the saved permissions if the list endpoint omits permission_keys.
+    if (!Array.isArray(fresh.permission_keys) && complete) fresh.permission_keys = [...perms.value]
+    selectRole(fresh, true)
+  }
+  if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
+}
+
+/** The permissions and managed roles a refused save lacked, as one line. */
+function missingText(e: unknown): string {
+  if (!isApiError(e)) return ''
+  const d = e.details
+  const list = (v: unknown) => (Array.isArray(v) ? v.join(t('roles.listSep')) : '')
+  return [
+    list(d.missing) && t('roles.missingPermissions', { keys: list(d.missing) }),
+    list(d.missing_assignable) && t('roles.missingAssignable', { keys: list(d.missing_assignable) }),
+    d.missing_assign_custom ? t('roles.missingAssignCustom') : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function resetEditor() {
@@ -141,6 +187,9 @@ function resetEditor() {
 }
 
 // ------------------------------------------------------------------ create / delete
+
+/** Field error codes of POST /roles shown in the console's language. */
+const CREATE_FIELD_CODES = { reserved: 'roles.keyReserved' }
 
 const createOpen = ref(false)
 const creating = ref(false)
@@ -156,7 +205,8 @@ function openCreate() {
 async function submitCreate() {
   createErrors.value = {}
   const key = createForm.key.trim()
-  if (!/^[a-z][a-z0-9_]{1,63}$/.test(key)) createErrors.value.key = t('roles.keyInvalid')
+  // Same rule as roleKeyRe in server/internal/authz/roles.go.
+  if (!ROLE_KEY_PATTERN.test(key)) createErrors.value.key = t('roles.keyInvalid')
   if (!createForm.nameEn.trim() && !createForm.nameZh.trim()) createErrors.value.name = t('common.required')
   if (Object.keys(createErrors.value).length) return
   creating.value = true
@@ -174,7 +224,7 @@ async function submitCreate() {
     }
   } catch (e) {
     // The name is one field in the form but two (name.en / name.zh) on the server.
-    if (applyFormError(e, createErrors)) {
+    if (applyFormError(e, createErrors, CREATE_FIELD_CODES)) {
       const fe = createErrors.value
       fe.name ||= fe['name.en'] || fe['name.zh'] || ''
     }
@@ -193,21 +243,14 @@ function removeRole() {
   })
 }
 
-const roleActions = computed(() =>
-  selected.value?.builtin ? [{ key: 'restore', label: t('roles.restoreDefaults') }] : [{ key: 'delete', label: t('common.delete'), danger: true }]
-)
+const roleActions = computed(() => [{ key: 'delete', label: t('common.delete'), danger: true }])
 
-function onRoleAction(key: string) {
-  if (key === 'restore') return restoreDefaults()
-  return removeRole()
-}
-
-// POST /roles/:id/reset: name, description and core permissions back to the
-// built-in defaults; plugin permissions stay.
+// POST /roles/:id/reset: name, description, core permissions and managed
+// roles back to the built-in defaults; plugin permissions stay.
 async function restoreDefaults() {
   const r = selected.value
   if (!r?.builtin || r.superuser) return
-  if (!(await confirm({ message: t('roles.restoreConfirm', { name: lt(r.name) || r.key }) }))) return
+  if (!(await confirm({ message: t('roles.restoreConfirm', { name: lt(r.name) || r.key }), danger: true }))) return
   saving.value = true
   try {
     await api.post(`/roles/${r.id}/reset`)
@@ -215,7 +258,7 @@ async function restoreDefaults() {
     await loadRoles()
     const fresh = roles.value.find((x) => x.id === r.id)
     if (fresh) selectRole(fresh, true)
-    if (auth.me?.roles.includes(r.key)) auth.loadMe().catch(() => undefined)
+    if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
   } catch (e) {
     notifyError(e)
   } finally {
@@ -228,7 +271,7 @@ async function restoreDefaults() {
   <div>
     <SPageHeader :title="t('roles.title')" :description="t('roles.description')">
       <template #actions>
-        <SButton v-permission="'role:manage'" variant="primary" icon="plus" @click="openCreate">{{ t('roles.create') }}</SButton>
+        <SButton v-if="canDefine" variant="primary" icon="plus" data-testid="role-create" @click="openCreate">{{ t('roles.create') }}</SButton>
       </template>
     </SPageHeader>
 
@@ -269,17 +312,18 @@ async function restoreDefaults() {
             <SHint v-if="roleMemberCount(selected) !== undefined" inline size="xs">{{ t('roles.members', { n: roleMemberCount(selected) }) }}</SHint>
           </div>
         </template>
-        <template v-if="canManage" #actions>
-          <template v-if="!selected.superuser">
-            <SButton size="sm" :disabled="!dirty || saving" @click="resetEditor">{{ t('common.reset') }}</SButton>
-            <SButton variant="primary" size="sm" :disabled="!dirty" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
-          </template>
-          <SDropdown v-if="!selected.superuser" :actions="roleActions" data-testid="role-menu" @select="onRoleAction" />
+        <template v-if="!readOnly" #actions>
+          <SButton v-if="selected.builtin" size="sm" icon="refresh" :disabled="saving" data-testid="role-restore" @click="restoreDefaults">{{ t('roles.restoreDefaults') }}</SButton>
+          <SButton size="sm" :disabled="!dirty || saving" @click="resetEditor">{{ t('common.reset') }}</SButton>
+          <SButton variant="primary" size="sm" :disabled="!dirty" :loading="saving" data-testid="role-save" @click="save">{{ t('common.save') }}</SButton>
+          <SDropdown v-if="!selected.builtin" :actions="roleActions" data-testid="role-menu" @select="removeRole" />
         </template>
 
         <div class="space-y-5">
           <SAlert v-if="selected.superuser" tone="accent" icon="lock">{{ t('roles.superuserHint') }}</SAlert>
+          <SAlert v-else-if="builtinLocked && canDefine" tone="info" icon="lock" data-testid="role-builtin-locked">{{ t('roles.builtinLocked') }}</SAlert>
           <SAlert v-else-if="permsMissing" tone="warning">{{ t('roles.permsNotLoaded') }}</SAlert>
+          <SAlert v-if="saveMissing" tone="danger" data-testid="role-save-missing">{{ saveMissing }}</SAlert>
 
           <SGrid :cols="1" :md-cols="3">
             <SField :label="t('roles.nameEn')">
@@ -293,7 +337,9 @@ async function restoreDefaults() {
             </SField>
           </SGrid>
 
-          <PermissionTree v-model:granted="perms" :modules="modules" :all-granted="selected.superuser" :read-only="readOnly" />
+          <PermissionTree v-model:granted="perms" :modules="modules" :all-granted="selected.superuser" :read-only="readOnly" :scope-limit="auth.scopes" />
+
+          <RoleAssignable v-if="!selected.superuser && Array.isArray(selected.assignable_role_keys)" v-model:keys="assignable" v-model:assign-custom="assignCustom" :roles="roles" :read-only="readOnly" />
 
           <div v-if="auth.has('user:read')" class="flex flex-wrap items-center gap-2 border-t border-line pt-4 text-sm">
             <SHint inline class="shrink-0">{{ t('roles.membersLabel') }}:</SHint>

@@ -126,9 +126,9 @@ export function fetchAccountBalance(id: number): Promise<AccountBalance> {
   return api.get<AccountBalance>(`/accounts/${id}/balance`)
 }
 
-/** POST /accounts/:id/refresh-balance — force refresh (ignores freshness, subject to 2s rate limit). */
+/** GET /accounts/:id/balance?force=true — force refresh (ignores freshness, subject to 2s rate limit). */
 export function refreshAccountBalance(id: number): Promise<AccountBalance> {
-  return api.post<AccountBalance>(`/accounts/${id}/refresh-balance`)
+  return api.get<AccountBalance>(`/accounts/${id}/balance`, { force: true })
 }
 
 export interface BalanceRefreshOptions {

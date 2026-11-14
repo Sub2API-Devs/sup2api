@@ -182,7 +182,7 @@ func newFamilyID() (string, error) {
 }
 
 // issueTokens issues an access token and a refresh token in familyID (a new
-// family when empty, i.e. on login).
+// family when empty, i.e. on login, which is audited for a superuser).
 func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, familyID string) (*TokenPair, error) {
 	var tokenVersion int
 	if err := tx.QueryRow(ctx, `SELECT token_version FROM users WHERE id = $1`, userID).Scan(&tokenVersion); err != nil {
@@ -195,6 +195,9 @@ func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, fami
 	newFamily := familyID == ""
 	if newFamily {
 		if familyID, err = newFamilyID(); err != nil {
+			return nil, err
+		}
+		if err := s.auditSuperuserLogin(ctx, tx, userID); err != nil {
 			return nil, err
 		}
 	}
@@ -352,54 +355,43 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	return pair, nil
 }
 
-// Logout revokes refreshToken (only that token, not its family) if it
-// belongs to userID; an empty token revokes every refresh token of the user.
+// Logout ends the session refreshToken belongs to, if it is a live token of
+// userID; an empty token ends every session of the user.
 func (s *Service) Logout(ctx context.Context, userID int64, refreshToken string) error {
-	return s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := lockRefreshUser(ctx, tx, userID); err != nil {
+	which := allSessions
+	if refreshToken != "" {
+		var family string
+		err := s.db.Pool.QueryRow(ctx, `SELECT family_id FROM refresh_tokens
+			WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL AND family_id <> ''`, hashToken(refreshToken), userID).Scan(&family)
+		if store.IsNoRows(err) {
+			return nil
+		}
+		if err != nil {
 			return err
 		}
-		if refreshToken == "" {
-			return revokeAllRefreshTokens(ctx, tx, userID)
-		}
-		_, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL`, hashToken(refreshToken), userID)
-		return err
-	})
+		which = oneSession(family)
+	}
+	return s.changeSessions(ctx, userID, which, nil)
 }
 
-// ChangePassword changes the caller's password and revokes all refresh
-// tokens (other sessions end when their access tokens expire).
-func (s *Service) ChangePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error {
+// ChangePassword changes the caller's password and ends every other session
+// at once; keepFamily, the caller's own ("" through an access key: none),
+// renews on its next 401. The route has verified the caller (step-up
+// self.password.change: the password and a second factor).
+func (s *Service) ChangePassword(ctx context.Context, userID int64, keepFamily, newPassword string) error {
 	if f := validatePassword("new_password", newPassword); f != nil {
 		return core.InvalidFields(*f)
-	}
-	var hash string
-	err := s.db.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&hash)
-	if store.IsNoRows(err) {
-		return core.ErrUnauthenticated
-	}
-	if err != nil {
-		return err
-	}
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(oldPassword)) != nil {
-		return core.InvalidFields(core.FieldError{Field: "old_password", Code: "incorrect", Message: "incorrect password"})
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), s.cost)
 	if err != nil {
 		return err
 	}
-	return s.db.Tx(ctx, func(tx pgx.Tx) error {
-		var currentHash string
-		if err := tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&currentHash); err != nil {
-			return err
+	return s.changeSessions(ctx, userID, otherSessions(keepFamily), func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, userID, string(newHash))
+		if err == nil && tag.RowsAffected() == 0 {
+			err = core.ErrUnauthenticated
 		}
-		if currentHash != hash {
-			return core.ErrConflict.WithMessage("password changed concurrently; retry")
-		}
-		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(newHash)); err != nil {
-			return err
-		}
-		return revokeAllRefreshTokens(ctx, tx, userID)
+		return err
 	})
 }
 
@@ -411,6 +403,9 @@ type Me struct {
 	Roles       []string `json:"roles"`
 	Permissions []string `json:"permissions"`
 	Superuser   bool     `json:"superuser"`
+	// AuthzVersion is the authz version Permissions were read at; a larger
+	// X-Authz-Version on a later response means they may have changed.
+	AuthzVersion int64 `json:"authz_version"`
 }
 
 // GetMe returns the caller's profile and effective permissions (superusers
@@ -424,16 +419,14 @@ func (s *Service) GetMe(ctx context.Context, userID int64) (*Me, error) {
 	if err != nil {
 		return nil, err
 	}
-	me := &Me{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Roles: u.Roles, Superuser: set.Superuser}
+	me := &Me{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Roles: u.Roles, Superuser: set.Superuser, AuthzVersion: set.Version}
 	if set.Superuser {
 		if me.Permissions, err = s.authz.ActivePermissionKeys(ctx); err != nil {
 			return nil, err
 		}
 	} else {
-		me.Permissions = make([]string, 0, len(set.Keys))
-		for k := range set.Keys {
-			me.Permissions = append(me.Permissions, k)
-		}
+		// Canonical keys (account:read:own, account:update:group/12…).
+		me.Permissions = set.KeyList()
 	}
 	sort.Strings(me.Permissions)
 	return me, nil

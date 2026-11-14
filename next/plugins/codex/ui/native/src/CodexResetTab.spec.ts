@@ -21,7 +21,7 @@ const CREDITS = {
 }
 const QUOTA = { windows: [{ key: '5h', utilization: 100, resets_at: '2026-11-10T12:00:00Z' }] }
 
-function fakeHost(canReset = true): PluginHost {
+function fakeHost(canReset = true, actions = ['account:update']): PluginHost {
   const post = vi.fn(async (path: string, body?: unknown) => {
     calls.push({ path, body })
     const r = answer(path, body)
@@ -32,6 +32,7 @@ function fakeHost(canReset = true): PluginHost {
     t: (key: string, params?: Record<string, unknown>) => (params ? `${key}:${JSON.stringify(params)}` : key),
     i18n: { locale: ref('en'), formatDateTime: (v: unknown) => `T(${Number(v)})`, t: (k: string) => k, text: (v: unknown) => String(v ?? '') },
     can: (p: string) => p === 'codex:reset' && canReset,
+    permissions: { hasAction: (a: string) => actions.includes(a) },
     confirm: vi.fn(async () => true),
     toast: vi.fn(),
     api: { get: vi.fn(async () => ({ windows: [{ key: '5h', utilization: 0, resets_at: null }] })) },
@@ -40,8 +41,8 @@ function fakeHost(canReset = true): PluginHost {
 }
 
 let wrapper: VueWrapper | null = null
-async function mountTab(canReset = true) {
-  host = fakeHost(canReset)
+async function mountTab(canReset = true, actions?: string[]) {
+  host = fakeHost(canReset, actions)
   setHost(host)
   wrapper = mount(CodexResetTab, { props: { account: { id: 29, name: 'plus', quota: QUOTA } }, attachTo: document.body })
   await flushPromises()
@@ -59,6 +60,13 @@ afterEach(() => {
 })
 
 describe('CodexResetTab', () => {
+  it('asks nothing and says why without account:update at any scope', async () => {
+    const w = await mountTab(true, ['account:read'])
+    expect(calls).toEqual([])
+    expect(w.find('[data-testid="codex-reset-needs-update"]').exists()).toBe(true)
+    expect(w.find('[data-testid="codex-reset-use-next"]').exists()).toBe(false)
+  })
+
   it('lists the available resets and the used-up window', async () => {
     const w = await mountTab()
     expect(calls[0]).toEqual({ path: '/reset-credits/list', body: { account_id: 29 } })

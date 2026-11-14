@@ -16,9 +16,6 @@ x-gateway: &gateway
     REDIS_URL: ${REDIS_URL:?set shared Redis URL}
     SUB2API_DATABASE_URL: ${DATABASE_URL}
     SUB2API_REDIS_URL: ${REDIS_URL}
-    # Migration only: serve management requests of cores that do not send the
-    # management token yet. Leave empty once the baseline core sends it.
-    SUB2API_ALLOW_TOKENLESS_MANAGEMENT: ${SUB2API_ALLOW_TOKENLESS_MANAGEMENT:-}
     SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY:?set shared base64 master key}
     SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET:?set shared JWT secret}
     SUB2API_PUBLIC_URL: ${SUB2API_PUBLIC_URL:?set public URL}

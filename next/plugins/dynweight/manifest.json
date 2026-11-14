@@ -6,13 +6,13 @@
     "en": "Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy. Each (account, group, client model) is counted per window and judged by configurable rules (error rate, first token and whole attempt percentiles, the weight itself) and strategies (degrade, climb, clear sticky sessions). Turning points can be notified through a core notification channel.",
     "zh": "账号在某个分组和模型下出错或变慢时降低其调度权重，恢复健康后再逐步抬回。每个（账号、分组、客户端模型）按窗口计数，由可配置的规则（错误率、首字与整次耗时分位、权重本身）和策略（降权、回升、清理粘性会话）判定。权重拐点可经核心通知渠道发送通知。"
   },
-  "version": "0.5.8",
+  "version": "0.5.9",
   "publisher": "sub2api",
   "icon": "text:W",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.279 <0.2.0",
-  "hostUICompat": "^3.11",
+  "hostCompat": ">=0.1.286 <0.2.0",
+  "hostUICompat": "^3.15",
 
   "capabilities": [
     { "id": "gateway.observe.v1" },
@@ -39,11 +39,13 @@
   "userPermissions": [
     {
       "key": "dynweight:read",
+      "defaultRoles": ["admin"],
       "label": { "en": "View dynamic weight", "zh": "查看动态权重" },
       "description": { "en": "The configuration, the effective weights and the events", "zh": "查看配置、有效权重和事件" }
     },
     {
       "key": "dynweight:manage",
+      "defaultRoles": ["admin"],
       "label": { "en": "Manage dynamic weight", "zh": "管理动态权重" },
       "description": { "en": "Change the configuration and reset effective weights", "zh": "修改配置、重置有效权重" }
     }
@@ -55,12 +57,12 @@
     { "method": "POST", "path": "/config/validate", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/defaults", "scope": "admin", "permission": "dynweight:read" },
     { "method": "GET", "path": "/channels", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/status", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage" },
-    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/degraded", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read" }
+    { "method": "GET", "path": "/status", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read", "from": ["query:account_id"] } },
+    { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read", "from": ["query:account_id"] } },
+    { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage", "accounts": { "action": "update", "from": ["body:account_ids", "body:account_id"] } },
+    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read", "from": ["query:account_ids"] } },
+    { "method": "GET", "path": "/degraded", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read" } },
+    { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read" } }
   ],
 
   "ui": {

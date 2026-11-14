@@ -20,6 +20,7 @@ function fakeHost(summary: Record<string, unknown>): PluginHost {
     t: (key: string, params?: Record<string, unknown>) => (params ? `${key}:${JSON.stringify(params)}` : key),
     i18n: { locale: ref('en'), formatDateTime: (v: unknown) => String(v), t: (k: string) => k, text: (v: unknown) => String(v ?? '') },
     can: () => true,
+    permissions: { hasAction: () => true },
     api: { get: vi.fn() },
     pluginApi: { post }
   } as unknown as PluginHost

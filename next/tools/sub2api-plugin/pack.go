@@ -199,7 +199,7 @@ func addTree(files map[string][]byte, root, prefix string, skip func(rel string)
 
 // checkPackage verifies that the files referenced by the manifest exist.
 func checkPackage(files map[string][]byte, m *manifest.Manifest, allowMissingUI bool) ([]string, error) {
-	var warnings []string
+	warnings := manifestWarnings(m, files)
 	var missing []string
 	need := func(p, what string) {
 		if p == "" {

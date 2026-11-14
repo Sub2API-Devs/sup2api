@@ -1,25 +1,25 @@
-import { fail, now, on, type MockRequest } from './router'
+import { fail, noContent, now, on, type MockHandler, type MockRequest } from './router'
+import { canonicalPermission, permissionIndex, scopeAllowsRow, type Scope, type ScopedRow } from '../src/authz/implies'
 
 // auth, me, menus
 
 export const ALL_PERMISSIONS = [
-  'user:read', 'user:create', 'user:update', 'user:delete',
+  'user:read', 'user:create', 'user:update', 'user:delete', 'user:password:reset',
   'segment:read', 'segment:manage',
-  'role:read', 'role:manage',
+  'role:read', 'role:define', 'role:assign',
   'apikey:self:manage',
   'group:read', 'group:manage',
+  // CONTRACTS §21: the account and proxy actions take a scope (account:read:own, account:update:group/12, ...).
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'account:credential:view',
-  // CONTRACTS §21.1: own-level keys act on rows the caller created; settings:custom lifts the base_url guard.
-  'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
-  'account:settings:custom',
-  'proxy:read', 'proxy:manage', 'proxy:own:read', 'proxy:own:manage',
+  'account:settings:custom', 'account:group:bind', 'account:relay',
+  'proxy:read', 'proxy:manage',
   'price:read', 'price:manage',
-  'balance:self:read', 'balance:all:read', 'balance:adjust',
-  'usage:self:read', 'usage:all:read',
+  'balance:self:read', 'balance:all:read', 'balance:adjust', 'balance:adjust:any',
+  'usage:self:read', 'usage:all:read', 'usage:settle',
   'sticky:read', 'sticky:manage',
-  'plugin:read', 'plugin:install', 'plugin:manage', 'plugin:uninstall', 'plugin:grant:high', 'plugin:grant:critical', 'plugin:egress:read', 'plugin:market:read',
+  'plugin:read', 'plugin:install', 'plugin:manage', 'plugin:uninstall', 'plugin:grant:high', 'plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'plugin:egress:read', 'plugin:market:read',
   'publisher:read', 'publisher:manage',
-  'node:read', 'gateway:use', 'settings:read', 'settings:manage',
+  'node:read', 'task:read', 'task:run', 'task:manage', 'gateway:use', 'settings:read', 'settings:manage',
   'audit:read', 'system:update:read', 'system:update:execute', 'system:update:recover',
   'plugin.guard:rules:read', 'plugin.guard:rules:manage', 'plugin.guard:stats:read',
   'plugin.dynweight:dynweight:read', 'plugin.dynweight:dynweight:manage',
@@ -57,8 +57,9 @@ const plainUser: Identity = {
 
 /**
  * Sign in as vendor@example.com (password admin): the "vendor" role of
- * CONTRACTS §21.1 (own-level account and proxy keys, no settings:custom).
- * Sees and edits only the accounts / proxies it created.
+ * CONTRACTS §21 (the own scope of the account and proxy actions, no
+ * settings:custom). Sees
+ * and edits only the accounts / proxies it created.
  */
 export const vendorUser: Identity = {
   id: 6,
@@ -66,8 +67,8 @@ export const vendorUser: Identity = {
   display_name: 'Vendor',
   roles: ['vendor'],
   permissions: [
-    'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
-    'proxy:own:read', 'proxy:own:manage',
+    'account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own',
+    'proxy:read:own', 'proxy:manage:own',
     'group:read', 'gateway:use'
   ],
   superuser: false
@@ -121,34 +122,44 @@ export function userEmail(id: number | null | undefined): string | null {
 }
 const KNOWN_EMAILS: Record<number, string> = { 2: 'ops@example.com', 3: 'li.si@example.com', 5: 'old@example.com' }
 
+/** One of the keys is held: implied by a held key (CONTRACTS §21, the console's implies.ts). */
 export function hasPerm(who: Identity, key: string | string[]): boolean {
   if (who.superuser) return true
-  const list = Array.isArray(key) ? key : [key]
-  return list.some((k) => who.permissions.includes(k))
+  const held = permissionIndex(who.permissions)
+  return [key].flat().some((k) => held.has(k))
+}
+
+/** One of the scoped actions is held at any scope. */
+export function hasAction(who: Identity, action: string | string[]): boolean {
+  return who.superuser || [action].flat().some((a) => permissionIndex(who.permissions).hasAction(a))
 }
 
 /**
- * Owner scope of a caller (CONTRACTS §21.1, core.OwnerScope): `all` with the
- * all-level key, `own` with only the own-level key, null with neither.
+ * The reach of a caller for a scoped action (core.DataScope): `all` every
+ * row, else `own` (the restricted tier: own, group and id scopes) with the
+ * scopes held; null without the action.
  */
-export function ownerScope(who: Identity, allKey: string, ownKey: string): 'all' | 'own' | null {
-  if (hasPerm(who, allKey)) return 'all'
-  if (hasPerm(who, ownKey)) return 'own'
-  return null
+export interface Reach {
+  level: 'all' | 'own'
+  scopes: Scope[]
+}
+export function ownerScope(who: Identity, action: string): Reach | null {
+  if (hasPerm(who, action)) return { level: 'all', scopes: [] }
+  const scopes = permissionIndex(who.permissions).scopes(action)
+  return scopes.length ? { level: 'own', scopes } : null
 }
 
-/** Whether `row` (created_by) is reachable by the caller under the scope; null owners need the all level. */
-export function inScope(scope: 'all' | 'own' | null, who: Identity, row: { created_by?: number | null }): boolean {
-  if (scope === 'all') return true
-  if (scope === 'own') return row.created_by != null && row.created_by === who.id
-  return false
+/** Whether `row` is in the caller's reach (core.DataScope.AllowsRow); null owners need the all level or an id or group scope. */
+export function inScope(scope: Reach | null, who: Identity, row: ScopedRow): boolean {
+  if (scope?.level === 'all') return true
+  return !!scope && scope.scopes.some((s) => scopeAllowsRow(s, row, who.id))
 }
 
 /** Applies the ?mine=true and ?created_by= list filters (the latter only at the all level). */
-export function filterOwned<T extends { created_by?: number | null }>(rows: T[], scope: 'all' | 'own' | null, who: Identity, q: Record<string, string>): T[] {
+export function filterOwned<T extends ScopedRow>(rows: T[], scope: Reach | null, who: Identity, q: Record<string, string>): T[] {
   let out = rows.filter((r) => inScope(scope, who, r))
   if (q.mine === 'true') out = out.filter((r) => r.created_by === who.id)
-  if (scope === 'all' && q.created_by) out = out.filter((r) => r.created_by === Number(q.created_by))
+  if (scope?.level === 'all' && q.created_by) out = out.filter((r) => r.created_by === Number(q.created_by))
   return out
 }
 
@@ -254,11 +265,6 @@ on('PUT', '/me', (req) => ({ ...whoAmI(req.headers.authorization), display_name:
 const twoFactor = { enabled: false, left: 0 }
 const backupCodes = () => Array.from({ length: 10 }, (_, i) => `MOCK${i}-CODE${i}`)
 on('GET', '/me/two-factor', () => ({ enabled: twoFactor.enabled, enabled_at: twoFactor.enabled ? now() : undefined, backup_codes_left: twoFactor.left }))
-on('POST', '/me/two-factor/setup', (req) =>
-  req.body?.password === 'admin'
-    ? { flow_token: 'mock-totp', expires_in: 300, secret: 'MOCKSECRETMOCKSECRET', otpauth_url: 'otpauth://totp/mock', qr_code: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' }
-    : fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
-)
 const codeError = () => fail(400, 'invalid_argument', 'incorrect code', { fields: [{ field: 'code', code: 'incorrect', message: 'incorrect verification code' }] })
 on('POST', '/me/two-factor/enable', (req) => {
   if (req.body?.code !== '123456') return codeError()
@@ -266,26 +272,85 @@ on('POST', '/me/two-factor/enable', (req) => {
   twoFactor.left = 10
   return { backup_codes: backupCodes() }
 })
-on('POST', '/me/two-factor/disable', (req) => {
-  if (req.body?.code !== '123456') return codeError()
+// Step-up verification (CONTRACTS §80.2): the code is 123456, the password admin.
+const proofs = new Set<string>()
+const passwordTooScopes = new Set(['superadmin.transfer', 'self.password.change'])
+/** The password goes with the factor for these scopes, and for the super admin removing its last factor (iam lastSuperFactor; the mock user has no passkey). */
+const passwordToo = (scope: string, context = '') =>
+  passwordTooScopes.has(scope) ||
+  (!!me.superuser && ((scope === 'self.2fa.disable' && twoFactor.enabled) || (scope === 'user.security.reset' && context === `DELETE /api/v1/users/${me.id}/security`)))
+const verifyMethods = (scope: string, context = '') => ({
+  scope,
+  password_required: passwordToo(scope, context),
+  methods: [
+    { method: 'passkey', available: false, reason: 'not_enrolled' },
+    { method: 'totp', available: twoFactor.enabled, ...(twoFactor.enabled ? {} : { reason: 'not_enrolled' }) },
+    { method: 'password', available: !twoFactor.enabled, ...(twoFactor.enabled ? { reason: 'strong_method' } : {}) }
+  ]
+})
+on('GET', '/me/verify/methods', (req) => verifyMethods(req.query.scope, req.query.context))
+on('POST', '/me/verify', (req) => {
+  const { scope, context, method, password, code } = req.body || {}
+  if ((passwordToo(scope, context) || method === 'password') && password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+  if (method === 'totp' && code !== '123456') return codeError()
+  const proof = `mock-proof-${scope}-${Date.now()}`
+  proofs.add(proof)
+  return { proof, expires_at: now(300), method, scope, context }
+})
+/** handler behind a one-time proof of scope, as Router.StepUp(scope). */
+export const stepUp = (scope: string, handler: MockHandler): MockHandler => (req) => {
+  const proof = req.headers['x-verify-proof']
+  if (!proof || !proofs.delete(proof)) {
+    return fail(403, 'verification_required', "verify it's you to continue", { ...verifyMethods(scope, `${req.method} /api/v1${req.path}`), context: `${req.method} /api/v1${req.path}` })
+  }
+  return handler(req)
+}
+on('POST', '/me/two-factor/setup', stepUp('self.2fa.enable', () => ({
+  flow_token: 'mock-totp', expires_in: 300, secret: 'MOCKSECRETMOCKSECRET', otpauth_url: 'otpauth://totp/mock',
+  qr_code: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+})))
+on('POST', '/me/two-factor/disable', stepUp('self.2fa.disable', () => {
   twoFactor.enabled = false
   twoFactor.left = 0
   return {}
+}))
+on('POST', '/me/two-factor/backup-codes', stepUp('self.2fa.backup_codes', () => ({ backup_codes: backupCodes() })))
+const passkeys = [{ id: 1, name: 'MacBook', rp_id: 'localhost', created_at: now(), last_used_at: null }]
+on('GET', '/me/passkeys', () => passkeys)
+on('PATCH', '/me/passkeys/:id', (req) => {
+  const pk = passkeys.find((p) => String(p.id) === req.params.id)
+  if (!pk) return fail(404, 'not_found', 'not found')
+  pk.name = String(req.body?.name || '')
+  return pk
 })
-on('POST', '/me/two-factor/backup-codes', (req) => (req.body?.code === '123456' ? { backup_codes: backupCodes() } : codeError()))
-on('GET', '/me/passkeys', () => [{ id: 1, name: 'MacBook', rp_id: 'localhost', created_at: now(), last_used_at: null }])
-on('DELETE', '/me/passkeys/:id', () => ({}))
+on('DELETE', '/me/passkeys/:id', stepUp('self.passkey.delete', (req) => {
+  const i = passkeys.findIndex((p) => String(p.id) === req.params.id)
+  if (i >= 0) passkeys.splice(i, 1)
+  return noContent()
+}))
 on('GET', '/me/sessions', () => [
   { id: 'a', method: 'passkey', ip: '203.0.113.10', user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0 Safari/537.36', created_at: now(), last_used_at: now(), current: true },
   { id: 'b', method: 'two_factor', ip: '203.0.113.11', user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1', created_at: now(), last_used_at: now(), current: false }
 ])
 on('DELETE', '/me/sessions/:id', () => ({}))
 on('POST', '/me/sessions/revoke-others', () => ({}))
-on('DELETE', '/users/:id/security', () => ({}))
-// Access keys (CONTRACTS §80): what the mock user holds is what can be chosen.
+on('DELETE', '/users/:id/security', stepUp('user.security.reset', () => noContent()))
+on('POST', '/system/super-admin/transfer', stepUp('superadmin.transfer', () => noContent()))
+// Access keys (CONTRACTS §80): what the mock user holds is what can be chosen; stored canonical (§21).
+const canonicalKeys = (keys: string[] = []) => [...new Set(keys.map((k) => canonicalPermission(k) ?? k))]
 const accessKeys: any[] = []
 on('GET', '/me/access-keys', () => accessKeys)
 on('GET', '/me/access-keys/permissions', () => [
+  {
+    module: 'self',
+    label: { en: 'My account', zh: '我的账号' },
+    source: 'core',
+    status: 'active',
+    permissions: [
+      { key: 'self:profile', label: { en: 'Edit own profile', zh: '修改自己的资料' }, description: {}, sensitive: false, step_up: false, status: 'active' },
+      { key: 'self:security', label: { en: 'Own sign-in security', zh: '自己的登录安全设置' }, description: {}, sensitive: true, step_up: true, status: 'active' }
+    ]
+  },
   {
     module: 'usage',
     label: { en: 'Usage', zh: '用量' },
@@ -295,31 +360,45 @@ on('GET', '/me/access-keys/permissions', () => [
       { key: 'usage:self:read', label: { en: 'View own usage', zh: '查看自己的用量' }, description: {}, sensitive: false, status: 'active' },
       { key: 'balance:self:read', label: { en: 'View own balance', zh: '查看自己的余额' }, description: {}, sensitive: false, status: 'active' }
     ]
+  },
+  {
+    // Scoped actions (CONTRACTS §21): the key's scope stays within the user's.
+    module: 'account',
+    label: { en: 'Accounts', zh: '账号' },
+    source: 'core',
+    status: 'active',
+    permissions: [
+      { key: 'account:read', label: { en: 'View', zh: '查看' }, description: {}, sensitive: false, scope_type: 'account', status: 'active' },
+      { key: 'account:test', label: { en: 'Test', zh: '测试' }, description: {}, sensitive: false, scope_type: 'account', status: 'active' }
+    ]
   }
 ])
-on('POST', '/me/access-keys', (req) => {
-  if (req.body?.password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
-  const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: req.body.permissions, lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
+on('POST', '/me/access-keys', stepUp('self.access_key.write', (req) => {
+  const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: canonicalKeys(req.body.permissions), lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
   accessKeys.unshift(key)
   return { ...key, key: 'sak_mockmockmockmockmockmockmockmockmockmockmock' }
-})
-on('PATCH', '/me/access-keys/:id', (req) => {
+}))
+on('PATCH', '/me/access-keys/:id', stepUp('self.access_key.write', (req) => {
   const key = accessKeys.find((k) => String(k.id) === req.params.id)
   if (!key) return fail(404, 'not_found', 'not found')
-  Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ?? key.permissions, lost: [] })
+  Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ? canonicalKeys(req.body.permissions) : key.permissions, lost: [] })
   return key
-})
+}))
 on('DELETE', '/me/access-keys/:id', (req) => {
   const i = accessKeys.findIndex((k) => String(k.id) === req.params.id)
   if (i >= 0) accessKeys.splice(i, 1)
   return {}
 })
-on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
+on('PUT', '/me/password', (req) =>
+  String(req.body?.new_password || '').length < 8
+    ? fail(400, 'invalid_argument', 'too short', { fields: [{ field: 'new_password', code: 'too_short', message: 'at least 8 characters' }] })
+    : stepUp('self.password.change', () => noContent())(req)
+)
 
-// Permission of each core menu path (CONTRACTS §21.2 for accounts / proxies); plugin items need their plugin permission.
+// Scoped action of a core menu path, held at any scope (CONTRACTS §21, menus.go HasAction).
+const MENU_ACTIONS: Record<string, string> = { '/accounts': 'account:read', '/proxies': 'proxy:read' }
+// Permission of each other core menu path; plugin items need their plugin permission.
 const MENU_PERMS: Record<string, string | string[]> = {
-  '/accounts': ['account:read', 'account:own:read', 'account:own:create'],
-  '/proxies': ['proxy:read', 'proxy:own:read', 'proxy:own:manage'],
   '/usage': 'usage:all:read',
   '/usage/overview': 'usage:all:read',
   '/users': 'user:read',
@@ -338,13 +417,15 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/me/usage': 'usage:self:read',
   '/me/usage/overview': 'usage:self:read',
   '/me/wallet': 'balance:self:read',
+  '/ledger': 'balance:all:read',
   '/p/guard/dashboard': 'plugin.guard:stats:read',
   '/p/dynweight/dashboard': 'plugin.dynweight:dynweight:read'
 }
 
 on('GET', '/me/menus', (req) => {
   const who = caller(req)
-  return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => !MENU_PERMS[i.path] || hasPerm(who, MENU_PERMS[i.path])) })).filter((s) => s.items.length)
+  const allowed = (path: string) => (MENU_ACTIONS[path] ? hasAction(who, MENU_ACTIONS[path]) : !MENU_PERMS[path] || hasPerm(who, MENU_PERMS[path]))
+  return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => allowed(i.path)) })).filter((s) => s.items.length)
 })
 
 // Mirrors server/internal/authz/menus.go (sections, labels and order, CONTRACTS
@@ -380,6 +461,11 @@ const MENUS = [
       { id: 'guard:guard', label: L('Guard', '请求守卫'), icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' },
       { id: 'moderation:moderation', label: L('Prompt Moderation', '提示词审核'), icon: 'shield', path: '/p/moderation/dashboard', plugin_key: 'moderation' }
     ]
+  },
+  {
+    section: 'finance',
+    label: L('Finance', '财务'),
+    items: [{ id: 'ledger', label: L('Balance ledger', '余额流水'), icon: 'balance', path: '/ledger' }]
   },
   {
     section: 'users',

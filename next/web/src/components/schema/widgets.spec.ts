@@ -10,7 +10,7 @@ import { schemaWidgets } from './widgets'
 
 // The pickers look names up; no lookup answers here, so ids show as "#id".
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: vi.fn(async () => ({ items: [], more: false })) } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true, hasAction: () => true }) }))
 
 const schema = {
   type: 'object',

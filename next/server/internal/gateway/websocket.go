@@ -48,6 +48,7 @@ type wsLimits struct {
 	pingTimeout  time.Duration // a ping unanswered this long closes that connection
 	maxPerKey    int           // open sessions per API key, cluster-wide
 	slotWait     time.Duration // later turns wait this long for the account
+	auth         time.Duration // re-authenticating the key before a turn
 	drainGrace   time.Duration // a turn in progress when draining starts
 	handshake    time.Duration // upstream dial and handshake
 	writeTimeout time.Duration // one message to a slow peer
@@ -56,7 +57,7 @@ type wsLimits struct {
 }
 
 func defaultWSLimits() wsLimits {
-	return wsLimits{ping: 30 * time.Second, pingTimeout: 30 * time.Second, maxPerKey: 64, slotWait: 10 * time.Second,
+	return wsLimits{ping: 30 * time.Second, pingTimeout: 30 * time.Second, maxPerKey: 64, slotWait: 10 * time.Second, auth: 10 * time.Second,
 		drainGrace: 30 * time.Second, handshake: 30 * time.Second, writeTimeout: time.Minute, upstreamRead: 64 << 20,
 		drainPoll: 500 * time.Millisecond}
 }
@@ -84,7 +85,8 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		writeError(cl.c, cl.format, fromCore(core.ErrUnauthenticated.WithMessage("missing api key"), ""))
 		return
 	}
-	p, err := g.d.Auth.Authenticate(core.WithClientIP(ctx, cl.c.ClientIP()), key)
+	ip := cl.c.ClientIP()
+	p, err := g.d.Auth.Authenticate(core.WithClientIP(ctx, ip), key)
 	if err != nil {
 		writeError(cl.c, cl.format, fromCore(core.AsError(err), ""))
 		return
@@ -111,7 +113,7 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		return
 	}
 	conn.SetReadLimit(cl.bodyLimit())
-	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid}
+	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid, key: key, ip: ip}
 	s.run(ctx)
 }
 
@@ -120,9 +122,12 @@ func (g *Gateway) draining() bool { return g.d.Draining != nil && g.d.Draining()
 // wsSession is one client connection.
 type wsSession struct {
 	g      *Gateway
-	base   *call // the upgrade request: endpoint, principal, headers
+	base   *call // the upgrade request: endpoint, headers; its principal is refreshed every turn
 	client *websocket.Conn
 	id     string
+	// key and ip are the upgrade request's API key and client address; every
+	// turn authenticates with them again (refresh).
+	key, ip string
 
 	// The upstream connection and the account the first turn chose; every
 	// later turn of the session uses them.
@@ -230,6 +235,21 @@ func (s *wsSession) run(ctx context.Context) {
 				return
 			}
 			asked = true
+			// The message is checked first: one that cannot start a turn
+			// costs no key lookup.
+			e, code := wsMessageError(m.data), websocket.StatusCode(0)
+			if e == nil {
+				e, code = s.refresh(sctx)
+			}
+			if e != nil {
+				s.sendError(sctx, e)
+				if code == 0 {
+					resetIdle(s.g.ws.idle)
+					continue
+				}
+				end(code, truncateUTF8(e.Message, 120))
+				return
+			}
 			var fatal bool
 			if turn, fatal = s.begin(sctx, m); fatal {
 				end(websocket.StatusInternalError, "upstream connection failed; reconnect")
@@ -375,9 +395,40 @@ func (s *wsSession) sendError(ctx context.Context, e *gwError) {
 	_ = s.write(ctx, websocket.MessageText, body)
 }
 
+// refresh authenticates the session's API key again before a turn, so the
+// turn runs under the key's present state: a key revoked, disabled or
+// refused since the upgrade ends the session, new limits and quota apply at
+// once. A non-zero closeCode ends the session with it; an error without one
+// fails only this turn (the key store may be back for the next). No usage is
+// recorded for a turn refused here, as for a request that fails to
+// authenticate on HTTP.
+func (s *wsSession) refresh(ctx context.Context) (e *gwError, closeCode websocket.StatusCode) {
+	// The session context has no deadline; a key store that hangs must not
+	// stop the session loop (pings, drain, the client closing).
+	actx, cancel := context.WithTimeout(core.WithClientIP(ctx, s.ip), s.g.ws.auth)
+	p, err := s.g.d.Auth.Authenticate(actx, s.key)
+	cancel()
+	if err != nil {
+		e = fromCore(core.AsError(err), "")
+		if e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden {
+			return e, websocket.StatusPolicyViolation
+		}
+		slog.WarnContext(ctx, "gateway: websocket turn authentication failed", "request_id", s.id, "err", err)
+		return e, 0
+	}
+	// The upstream connection belongs to an account of the group the first
+	// turn ran in; a key moved to another group reconnects to be scheduled there.
+	if s.up != nil && p.Group.ID != s.base.principal.Group.ID {
+		return &gwError{Status: http.StatusConflict, Code: "api_key_group_changed", Type: "invalid_request_error",
+			Message: "the API key moved to another group; reconnect"}, wsCloseRestart
+	}
+	s.base.principal = p
+	return nil, 0
+}
+
 // newCall is the per-turn request: a fresh request id (the usage and ledger
-// idempotency key), the upgrade request's endpoint, headers and principal,
-// and the message as the body.
+// idempotency key), the upgrade request's endpoint and headers, the principal
+// as refresh last saw it, and the message as the body.
 func (s *wsSession) newCall(body []byte) *call {
 	b := s.base
 	cl := &call{g: s.g, c: b.c, gen: b.gen, ep: b.ep, plugin: b.plugin, platform: b.platform, pf: b.pf, params: b.params,
@@ -388,7 +439,28 @@ func (s *wsSession) newCall(body []byte) *call {
 	return cl
 }
 
-// begin starts a turn, or answers why it cannot run and records that.
+// wsMessageError answers why a client message cannot start a turn: it is not
+// a JSON object within the shape limits, or not a response.create.
+func wsMessageError(data []byte) *gwError {
+	shape := scanJSONShape(data)
+	if shape.tooDeep {
+		return jsonShapeError(shape, "message")
+	}
+	if !utf8.Valid(data) || !gjson.ValidBytes(data) || !gjson.ParseBytes(data).IsObject() {
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code, Message: "message is not a JSON object"}
+	}
+	if e := jsonShapeError(shape, "message"); e != nil {
+		return e
+	}
+	if typ := gjson.GetBytes(data, "type").String(); typ != "response.create" {
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+			Message: "unsupported message type " + strconvQuote(typ) + ": only response.create is accepted"}
+	}
+	return nil
+}
+
+// begin starts a turn for a message wsMessageError accepted, or answers why
+// it cannot run and records that.
 // fatal means the upstream connection broke and the session must end.
 func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bool) {
 	reject := func(cl *call, e *gwError) (*wsTurn, bool) {
@@ -398,20 +470,6 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		}
 		s.sendError(ctx, e)
 		return nil, false
-	}
-	shape := scanJSONShape(m.data)
-	if shape.tooDeep {
-		return reject(nil, jsonShapeError(shape, "message"))
-	}
-	if !utf8.Valid(m.data) || !gjson.ValidBytes(m.data) || !gjson.ParseBytes(m.data).IsObject() {
-		return reject(nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code, Message: "message is not a JSON object"})
-	}
-	if e := jsonShapeError(shape, "message"); e != nil {
-		return reject(nil, e)
-	}
-	if typ := gjson.GetBytes(m.data, "type").String(); typ != "response.create" {
-		return reject(nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
-			Message: "unsupported message type " + strconvQuote(typ) + ": only response.create is accepted"})
 	}
 	cl := s.newCall(m.data)
 	if e := cl.checkModel(ctx); e != nil {

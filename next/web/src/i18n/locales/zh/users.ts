@@ -11,7 +11,9 @@ export default {
   passwordTooShort: '密码至少 8 个字符',
   roles: '角色',
   allRoles: '全部角色',
-  rolesUnavailable: '无法加载角色（需要 role:read 权限）。',
+  roleNotGrantable: '不能新分配：超出你的权限（{keys}）',
+  roleLocked: '不在你的可管理角色内，保持不变',
+  noManagedRoles: '你没有可管理的角色。',
   superuser: '超级管理员',
   balance: '余额',
   lastLogin: '最近登录',
@@ -55,7 +57,25 @@ export default {
   },
   ledger: '余额流水',
   adjustBalance: '调整余额',
-  resetSecurity: '重置二次验证和通行密钥',
-  resetSecurityConfirm: '{name} 的二次验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
-  resetSecurityDone: '已重置'
+  resetSecurity: '重置两步验证和通行密钥',
+  resetSecurityConfirm: '{name} 的两步验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
+  resetSecurityDone: '已重置',
+  superAdminBadge: '超级管理员',
+  resetPassword: {
+    action: '重置密码',
+    title: '重置 {name} 的密码',
+    hint: '至少 8 个字符。对方要用新密码重新登录。',
+    done: '密码已重置'
+  },
+  transfer: {
+    action: '移交超管',
+    title: '移交超级管理员',
+    warning: '超级管理员只有一个。移交后你会变成管理员，你和对方都要重新登录，且无法自行撤回。',
+    target: '新的超级管理员',
+    targetHint: '选择一个状态正常的用户。建议对方先开启两步验证或添加通行密钥。',
+    inactive: '只能移交给状态正常的用户',
+    submit: '移交',
+    done: '已移交超级管理员，请重新登录'
+  },
+  roleScopes: '该角色的范围：{list}'
 }

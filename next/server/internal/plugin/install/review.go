@@ -3,11 +3,13 @@ package install
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sort"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -45,7 +47,17 @@ type Review struct {
 	ExternalServices []string            `json:"external_services"`
 	HostPermissions  []ReviewHostPerm    `json:"host_permissions"`
 	Diff             *ReviewDiff         `json:"diff,omitempty"`
-	UploadedAt       time.Time           `json:"uploaded_at"`
+	// NewRoleGrants are the roles the permissions this version creates go
+	// to without overrides (manifest defaultRoles and the holders of their
+	// inheritFrom keys now); RoleGrantsNeedConsent is set when one of them
+	// needs consent, so an upgrade is not carried over (rolegrants.go).
+	NewRoleGrants         []RoleGrant `json:"new_role_grants"`
+	RoleGrantsNeedConsent bool        `json:"role_grants_need_consent"`
+	// NeedsDBSchemaUnconfined: granting the db.schema this version asks for
+	// takes plugin:grant:db_schema_unconfined (dbSchemaUnconfined), so the
+	// console can tell before the consent is sent.
+	NeedsDBSchemaUnconfined bool      `json:"needs_db_schema_unconfined"`
+	UploadedAt              time.Time `json:"uploaded_at"`
 }
 
 // ReviewEndpoint is a gateway endpoint of a declared platform. In
@@ -120,6 +132,14 @@ type ReviewUserPerm struct {
 	Label       core.LocalizedText `json:"label"`
 	Description core.LocalizedText `json:"description,omitempty"`
 	Sensitive   bool               `json:"sensitive"`
+	// DefaultRoles are the roles the permission goes to when first created
+	// unless the consent overrides them (roleGrants: the manifest
+	// defaultRoles, none for a rename which only inherits from InheritFrom).
+	DefaultRoles []string `json:"default_roles"`
+	InheritFrom  []string `json:"inherit_from,omitempty"`
+	// New: the catalog has no such permission yet; the consent creates it,
+	// and only then do its roles (new_permission_roles) apply.
+	New bool `json:"new"`
 }
 
 type ReviewDatabase struct {
@@ -190,11 +210,21 @@ func riskOf(id string) string {
 	return manifest.RiskCritical
 }
 
-// LoadGrants reads all grant rows of a plugin.
+// LoadGrants reads all grant rows of a plugin: what its active version is
+// granted.
 func LoadGrants(ctx context.Context, q store.Querier, key string) (map[string]Grant, error) {
-	rows, err := q.Query(ctx, `
-		SELECT permission, scope, status, plugin_version, granted_by, granted_at
-		FROM plugin_permission_grants WHERE plugin_key = $1 ORDER BY permission`, key)
+	return loadGrants(ctx, q, `SELECT permission, scope, status, plugin_version, granted_by, granted_at
+		FROM plugin_permission_grants WHERE plugin_key = $1`, key)
+}
+
+// LoadVersionGrants reads the grant rows key@version runs with: the set
+// staged for it while it is not active, else the plugin's grants.
+func LoadVersionGrants(ctx context.Context, q store.Querier, key, version string) (map[string]Grant, error) {
+	return loadGrants(ctx, q, `SELECT permission, scope, status, plugin_version, granted_by, granted_at FROM `+grants.VersionRows, key, version)
+}
+
+func loadGrants(ctx context.Context, q store.Querier, sql string, args ...any) (map[string]Grant, error) {
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +333,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 	}
 	for _, up := range m.UserPermissions {
 		r.UserPermissions = append(r.UserPermissions, ReviewUserPerm{Key: up.Key, Label: core.LocalizedText(up.Label),
-			Description: core.LocalizedText(up.Description), Sensitive: up.Sensitive})
+			Description: core.LocalizedText(up.Description), Sensitive: up.Sensitive, InheritFrom: up.InheritFrom})
 	}
 	if m.Database != nil {
 		r.Database = &ReviewDatabase{Schema: m.Database.Schema, Migrations: pkg.MigrationFiles(files, m.Database.Migrations)}
@@ -350,6 +380,39 @@ func diffGrants(m *manifest.Manifest, current map[string]Grant) *ReviewDiff {
 	return d
 }
 
+// resolveDefaultRoles sets each user permission's DefaultRoles to what a
+// consent naming no roles grants it given the catalog now (roleGrants), and
+// the role grants that consent makes (planRoleGrants).
+func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *manifest.Manifest) error {
+	existing, err := catalogKeys(ctx, q, m)
+	if err != nil {
+		return err
+	}
+	grants := roleGrants(m, ConsentRequest{}, existing)
+	for i := range r.UserPermissions {
+		up := &r.UserPermissions[i]
+		up.DefaultRoles = grants[up.Key]
+		up.New = !existing[manifest.PermissionKey(m.Key, up.Key)]
+	}
+	plan, err := planRoleGrants(ctx, q, m, existing, grants)
+	if err != nil {
+		return err
+	}
+	r.NewRoleGrants, r.RoleGrantsNeedConsent = plan, needConsent(plan)
+	if r.NewRoleGrants == nil {
+		r.NewRoleGrants = []RoleGrant{}
+	}
+	return nil
+}
+
+// noteDBSchema sets NeedsDBSchemaUnconfined from the manifest's db.schema
+// request and the plugin's trust. A db.schema an upgrade carries over is not
+// checked again (decide); the console then asks for no grant right.
+func (s *Service) noteDBSchema(r *Review, m *manifest.Manifest) {
+	asks := slices.ContainsFunc(m.HostPermissions, func(hp manifest.HostPermission) bool { return hp.ID == "db.schema" })
+	r.NeedsDBSchemaUnconfined = asks && s.dbSchemaUnconfined(r.Trust == pkg.TrustOfficial)
+}
+
 // Review returns the review of a stored version (for the consent page).
 func (s *Service) Review(ctx context.Context, key, version string) (*Review, error) {
 	var (
@@ -394,6 +457,10 @@ func (s *Service) Review(ctx context.Context, key, version string) (*Review, err
 		upgradeFrom, _ = s.runningVersion(ctx, s.d.DB.Pool, key, version)
 	}
 	r := buildReview(p.Manifest, p.Files, ver, s.opt.HostVersion, current)
+	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
+		return nil, err
+	}
+	s.noteDBSchema(r, p.Manifest)
 	r.ConsentStatus = consent
 	r.PackageSHA256, r.PackageSize, r.UploadedAt = sha, size, uploadedAt
 	r.UpgradeFrom = upgradeFrom

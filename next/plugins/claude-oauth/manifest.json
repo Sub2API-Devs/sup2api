@@ -9,8 +9,8 @@
     "en": "OAuth and setup-token authentication for Claude platform accounts",
     "zh": "Claude 平台的 OAuth 与 setup-token 认证"
   },
-  "version": "0.2.2",
-  "publisher": "sup2api",
+  "version": "0.2.3",
+  "publisher": "sub2api",
   "icon": "text:CO",
   "runtime": "grpc",
   "entry": {
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostCompat": ">=0.1.286 <0.2.0",
 
   "capabilities": [
     {
@@ -32,6 +32,7 @@
   "accountTypes": [
     {
       "id": "claude_oauth",
+      "upstreamFields": [],
       "label": {
         "en": "Claude OAuth",
         "zh": "Claude OAuth"
@@ -106,6 +107,7 @@
     },
     {
       "id": "claude_setup_token",
+      "upstreamFields": [],
       "label": {
         "en": "Claude Setup Token",
         "zh": "Claude Setup Token"
@@ -179,6 +181,7 @@
   "userPermissions": [
     {
       "key": "claude_oauth:manage",
+      "defaultRoles": ["admin", "operator"],
       "label": {
         "en": "Manage Claude OAuth accounts",
         "zh": "管理 Claude OAuth 账号"

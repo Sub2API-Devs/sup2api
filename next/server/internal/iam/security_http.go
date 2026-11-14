@@ -12,6 +12,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
+// selfSecurity is the self permission of one's own sign-in: password,
+// two-factor, passkeys.
+const selfSecurity = "self:security"
+
 // registerSecurityRoutes mounts the second login step, passkeys, two-factor
 // and login sessions (CONTRACTS §79).
 func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
@@ -19,28 +23,42 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/passkey/begin", s.handlePasskeyLoginBegin)
 	r.Public(http.MethodPost, "/auth/passkey/finish", s.handlePasskeyLoginFinish)
 
-	r.Authed(http.MethodGet, "/me/two-factor", s.handleTwoFactor)
-	r.Authed(http.MethodPost, "/me/two-factor/setup", s.handleTwoFactorSetup)
-	r.Authed(http.MethodPost, "/me/two-factor/enable", s.handleTwoFactorEnable)
-	r.Authed(http.MethodPost, "/me/two-factor/disable", s.handleTwoFactorDisable)
-	r.Authed(http.MethodPost, "/me/two-factor/backup-codes", s.handleBackupCodes)
+	r.Self(http.MethodGet, "/me/two-factor", selfSecurity, s.handleTwoFactor)
+	r.StepUp(core.StepUpSelf2FAEnable).Self(http.MethodPost, "/me/two-factor/setup", selfSecurity, s.handleTwoFactorSetup)
+	r.Self(http.MethodPost, "/me/two-factor/enable", selfSecurity, s.handleTwoFactorEnable)
+	r.StepUp(core.StepUpSelf2FADisable).Self(http.MethodPost, "/me/two-factor/disable", selfSecurity, s.handleTwoFactorDisable)
+	r.StepUp(core.StepUpSelfBackupCodes).Self(http.MethodPost, "/me/two-factor/backup-codes", selfSecurity, s.handleBackupCodes)
 
-	r.Authed(http.MethodGet, "/me/passkeys", s.handlePasskeys)
-	r.Authed(http.MethodPost, "/me/passkeys/begin", s.handlePasskeyAddBegin)
-	r.Authed(http.MethodPost, "/me/passkeys/finish", s.handlePasskeyAddFinish)
-	r.Authed(http.MethodDelete, "/me/passkeys/:id", s.handlePasskeyDelete)
+	r.Self(http.MethodGet, "/me/passkeys", selfSecurity, s.handlePasskeys)
+	r.StepUp(core.StepUpSelfPasskeyAdd).Self(http.MethodPost, "/me/passkeys/begin", selfSecurity, s.handlePasskeyAddBegin)
+	r.Self(http.MethodPost, "/me/passkeys/finish", selfSecurity, s.handlePasskeyAddFinish)
+	r.Self(http.MethodPatch, "/me/passkeys/:id", selfSecurity, s.handlePasskeyRename)
+	r.StepUp(core.StepUpSelfPasskeyDelete).Self(http.MethodDelete, "/me/passkeys/:id", selfSecurity, s.handlePasskeyDelete)
 
-	r.Authed(http.MethodGet, "/me/sessions", s.handleSessions)
-	r.Authed(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
-	r.Authed(http.MethodDelete, "/me/sessions/:id", s.handleSessionRevoke)
+	// Step-up verification (§80.2): any caller, a session or an access key.
+	r.AuthedRead("/me/verify/methods", s.handleVerifyMethods)
+	r.Handle(http.MethodPost, "/me/verify/begin", s.handleVerifyBegin)
+	r.Handle(http.MethodPost, "/me/verify", s.handleVerify)
 
-	r.Authed(http.MethodGet, "/me/access-keys", s.handleAccessKeys)
-	r.Authed(http.MethodGet, "/me/access-keys/permissions", s.handleAccessKeyPermissions)
-	r.Authed(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
-	r.Authed(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
-	r.Authed(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
+	// Only a login session manages login sessions and access keys: a key
+	// could otherwise end its owner's sessions, or renew or widen itself
+	// (§80). Creating or changing a key takes a step-up each time; deleting
+	// one only takes rights away.
+	session := r.SessionOnly()
+	keyWrite := session.StepUp(core.StepUpAccessKeyWrite)
+	session.Handle(http.MethodGet, "/me/sessions", s.handleSessions)
+	session.Handle(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
+	session.Handle(http.MethodDelete, "/me/sessions/:id", s.handleSessionRevoke)
 
-	r.Perm(http.MethodDelete, "/users/:id/security", "user:update", s.handleResetSecurity)
+	session.Handle(http.MethodGet, "/me/access-keys", s.handleAccessKeys)
+	session.Handle(http.MethodGet, "/me/access-keys/permissions", s.handleAccessKeyPermissions)
+	keyWrite.Handle(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
+	keyWrite.Handle(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
+	session.Handle(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
+
+	// Removing someone's second factor leaves the account one password away,
+	// like resetting the password: the same permission and a step-up (D16).
+	r.StepUp(core.StepUpUserSecurityReset).Perm(http.MethodDelete, "/users/:id/security", "user:password:reset", s.handleResetSecurity)
 }
 
 func (s *Service) handleAccessKeys(c *gin.Context) {
@@ -66,9 +84,9 @@ func (s *Service) handleAccessKeyCreate(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	out, err := s.CreateAccessKey(audit.Context(c), actor(c), in, c.ClientIP())
+	out, err := s.CreateAccessKey(audit.Context(c), actor(c), in)
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.Created(c, out)
@@ -83,9 +101,9 @@ func (s *Service) handleAccessKeyUpdate(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	out, err := s.UpdateAccessKey(audit.Context(c), actor(c), id, in, c.ClientIP())
+	out, err := s.UpdateAccessKey(audit.Context(c), actor(c), id, in)
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
@@ -164,15 +182,9 @@ func (s *Service) handleTwoFactor(c *gin.Context) {
 }
 
 func (s *Service) handleTwoFactorSetup(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	out, err := s.StartTwoFactor(c.Request.Context(), actor(c), in.Password, c.ClientIP())
+	out, err := s.StartTwoFactor(c.Request.Context(), actor(c))
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
@@ -195,31 +207,17 @@ func (s *Service) handleTwoFactorEnable(c *gin.Context) {
 }
 
 func (s *Service) handleTwoFactorDisable(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-		Code     string `json:"code"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	if err := s.DisableTwoFactor(audit.Context(c), actor(c), in.Password, in.Code, c.ClientIP()); err != nil {
-		failLogin(c, err)
+	if err := s.DisableTwoFactor(audit.Context(c), actor(c)); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.NoContent(c)
 }
 
 func (s *Service) handleBackupCodes(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-		Code     string `json:"code"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	codes, err := s.RegenerateBackupCodes(audit.Context(c), actor(c), in.Password, in.Code, c.ClientIP())
+	codes, err := s.RegenerateBackupCodes(audit.Context(c), actor(c))
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, gin.H{"backup_codes": codes})
@@ -235,15 +233,9 @@ func (s *Service) handlePasskeys(c *gin.Context) {
 }
 
 func (s *Service) handlePasskeyAddBegin(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	out, err := s.BeginPasskeyRegistration(c.Request.Context(), c.Request, actor(c), in.Password, c.ClientIP())
+	out, err := s.BeginPasskeyRegistration(c.Request.Context(), c.Request, actor(c))
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
@@ -314,15 +306,65 @@ func (s *Service) handleResetSecurity(c *gin.Context) {
 	if !ok {
 		return
 	}
-	// The body is optional: an operator resetting someone else sends none; a
-	// user resetting their own factors sends their confirmation.
-	var confirm SelfConfirmation
-	if c.Request.Body != nil && c.Request.ContentLength != 0 && !httpapi.BindJSON(c, &confirm) {
-		return
-	}
-	if err := s.ResetSecurity(audit.Context(c), actor(c), id, confirm, c.ClientIP()); err != nil {
-		failLogin(c, err)
+	if err := s.ResetSecurity(audit.Context(c), actor(c), id); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.NoContent(c)
+}
+
+func (s *Service) handlePasskeyRename(c *gin.Context) {
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.RenamePasskey(audit.Context(c), actor(c), id, in.Name)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleVerifyMethods(c *gin.Context) {
+	out, err := s.StepUpMethods(c.Request.Context(), actor(c), c.Query("scope"), c.Query("context"))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleVerifyBegin(c *gin.Context) {
+	var in struct {
+		Scope string `json:"scope"`
+	}
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.BeginStepUpPasskey(c.Request.Context(), c.Request, actor(c), in.Scope, c.ClientIP())
+	if err != nil {
+		failLogin(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleVerify(c *gin.Context) {
+	var in VerifyInput
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.VerifyStepUp(audit.Context(c), c.Request, actor(c), in, c.ClientIP())
+	if err != nil {
+		failLogin(c, err)
+		return
+	}
+	httpapi.OK(c, out)
 }

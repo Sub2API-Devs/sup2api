@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -490,12 +491,36 @@ func sortedKeys[V any](m map[string]V) []string {
 	return out
 }
 
+// maskableSecrets refuses a settings schema that marks secrets where the core
+// cannot mask them one by one (manifest.SettingsSecrets). A missing file is
+// reported by needFile.
+func (v *validator) maskableSecrets(field, schema string) {
+	raw, ok := v.files[schema]
+	if !ok {
+		return
+	}
+	_, unreachable := manifest.SettingsSecrets(raw)
+	if len(unreachable) == 0 {
+		return
+	}
+	for i, loc := range unreachable {
+		if loc == "" {
+			unreachable[i] = "(the schema itself, which must be a JSON object without a marker)"
+		}
+	}
+	v.add(field, "unmaskable_secret", "writeOnly, format password and x-sensitive are only masked on properties of nested objects (at most %d deep), and a schema using them takes no reference other than a local \"#/$defs/<name>\" or \"#/definitions/<name>\" where a value path leads (no cycle, at most %d inside one another); found at %s",
+		manifest.MaxSecretDepth, manifest.MaxSecretRefDepth, strings.Join(unreachable, ", "))
+}
+
 // form validates a console form; settings=true for ui.settings.
 func (v *validator) form(field string, f manifest.Form, settings bool) {
 	if f.Permission != "" && !settings {
 		v.add(field+".permission", "unsupported", "only ui.settings takes a permission")
 	} else if f.Permission != "" && !v.userPerm(f.Permission) {
 		v.add(field+".permission", "unknown", "permission %q is not declared in userPermissions", f.Permission)
+	}
+	if settings {
+		v.maskableSecrets(field+".schema", f.Schema)
 	}
 	switch f.Mode {
 	case "schema":
@@ -744,18 +769,36 @@ func MigrationFiles(files map[string][]byte, dir string) []string {
 	return out
 }
 
+// validUserPermKey reports whether k is a plugin-local permission key. Its
+// last segment is never "own": the core would read it as a scope
+// (CONTRACTS §21.0); "*" and "/" are outside the pattern already.
+func validUserPermKey(k string) bool {
+	return userPermKeyRe.MatchString(k) && !strings.HasSuffix(k, ":own")
+}
+
 func (v *validator) userPermissions() {
 	seen := map[string]bool{}
 	for i, up := range v.m.UserPermissions {
 		f := fmt.Sprintf("userPermissions[%d]", i)
-		if !userPermKeyRe.MatchString(up.Key) || len("plugin."+v.m.Key+":"+up.Key) > 150 {
-			v.add(f+".key", "invalid_format", "permission key %q must match %s", up.Key, userPermKeyRe.String())
+		if !validUserPermKey(up.Key) || len(manifest.PermissionKey(v.m.Key, up.Key)) > 150 {
+			v.add(f+".key", "invalid_format", "permission key %q must match %s and not end in :own", up.Key, userPermKeyRe.String())
 		} else if seen[up.Key] {
 			v.add(f+".key", "duplicate", "permission %q declared twice", up.Key)
 		}
 		seen[up.Key] = true
 		if firstText(up.Label) == "" {
 			v.add(f+".label", "required", "label is required")
+		}
+		for j, r := range up.DefaultRoles {
+			if !slices.Contains(manifest.BuiltinRoleKeys, r) {
+				v.add(fmt.Sprintf("%s.defaultRoles[%d]", f, j), "invalid_value", "role %q is not one of %v", r, manifest.BuiltinRoleKeys)
+			}
+		}
+		// Old keys are usually no longer declared (a rename or a split).
+		for j, from := range up.InheritFrom {
+			if from == up.Key || !validUserPermKey(from) {
+				v.add(fmt.Sprintf("%s.inheritFrom[%d]", f, j), "invalid_value", "inheritFrom %q must be a local permission key other than the permission's own", from)
+			}
 		}
 	}
 }

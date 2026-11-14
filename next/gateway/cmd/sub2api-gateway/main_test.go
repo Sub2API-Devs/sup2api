@@ -137,7 +137,7 @@ func TestNodeCommandsUseLocalManagementRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	seen := make(chan string, 4)
-	srv := &http.Server{Handler: control.RequireManagementToken(token, false, http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+	srv := &http.Server{Handler: control.RequireManagementToken(token, http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		seen <- q.Method + " " + q.URL.EscapedPath() + " " + q.Header.Get("X-Updater-Actor")
 		if strings.Contains(q.URL.Path, "missing") {
 			w.WriteHeader(404)
@@ -210,8 +210,8 @@ func TestManagementTokenFileDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(root, "runtime", "shell.token"); got.ManagementTokenFile != want || got.AllowTokenlessManagement {
-		t.Fatalf("defaults: %q %v", got.ManagementTokenFile, got.AllowTokenlessManagement)
+	if want := filepath.Join(root, "runtime", "shell.token"); got.ManagementTokenFile != want {
+		t.Fatalf("default: %q", got.ManagementTokenFile)
 	}
 	custom := base
 	custom.ManagementSocket = filepath.Join(root, "sock", "m.sock")
@@ -221,20 +221,6 @@ func TestManagementTokenFileDefaults(t *testing.T) {
 	custom.ManagementTokenFile = "relative.token"
 	if _, err = readConfig(write(custom)); err == nil {
 		t.Fatal("relative token path accepted")
-	}
-	// The migration switch: file value, environment override, invalid value.
-	tokenless := base
-	tokenless.AllowTokenlessManagement = true
-	if got, err = readConfig(write(tokenless)); err != nil || !got.AllowTokenlessManagement {
-		t.Fatalf("file switch: %v %v", got.AllowTokenlessManagement, err)
-	}
-	t.Setenv("SUB2API_ALLOW_TOKENLESS_MANAGEMENT", "false")
-	if got, err = readConfig(write(tokenless)); err != nil || got.AllowTokenlessManagement {
-		t.Fatalf("environment must override the file: %v %v", got.AllowTokenlessManagement, err)
-	}
-	t.Setenv("SUB2API_ALLOW_TOKENLESS_MANAGEMENT", "maybe")
-	if _, err = readConfig(write(base)); err == nil {
-		t.Fatal("invalid switch value accepted")
 	}
 }
 

@@ -22,7 +22,6 @@ func (tokenTestAuth) PermissionSet(context.Context, int64) (core.PermissionSet, 
 	return core.PermissionSet{Superuser: true}, nil
 }
 func (tokenTestAuth) CanGrant(context.Context, int64, []string) error { return nil }
-func (tokenTestAuth) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fakeShell is a management endpoint that accepts only the expected bearer
 // token, like the shell does.

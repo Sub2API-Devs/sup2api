@@ -31,7 +31,7 @@ func (s *Service) sweepPreparations(ctx context.Context) (int, error) {
 	}
 	for i, p := range expired {
 		call, cancel := context.WithTimeout(ctx, 90*time.Second)
-		err := s.disposePreparation(call, p, true)
+		err := s.disposePreparation(call, p, disposeExpired)
 		cancel()
 		if err != nil {
 			return i, err

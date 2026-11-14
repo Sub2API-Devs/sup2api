@@ -17,9 +17,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -37,7 +39,10 @@ type runtimeFixture struct {
 
 // keyAuth authenticates "Bearer u<id>" (plain "test" is user 1) and grants
 // each user the listed keys; users without an entry hold every key.
-type keyAuth struct{ keys map[int64][]string }
+type keyAuth struct {
+	testutil.StepUpPassed
+	keys map[int64][]string
+}
 
 func (a *keyAuth) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	if tok == "test" {
@@ -45,23 +50,44 @@ func (a *keyAuth) VerifyAccessToken(_ context.Context, tok string) (int64, error
 	}
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
-func (a *keyAuth) Can(_ context.Context, uid int64, key string) (bool, error) {
+func (a *keyAuth) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
+}
+func (a *keyAuth) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
 	keys, ok := a.keys[uid]
 	if !ok {
-		return true, nil
+		return core.PermissionSet{Superuser: true}, nil
 	}
-	for _, k := range keys {
-		if k == key {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-func (a *keyAuth) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+	return core.PermissionSetOf(keys...), nil
 }
 func (a *keyAuth) CanGrant(context.Context, int64, []string) error { return nil }
-func (a *keyAuth) CanActOn(context.Context, int64, []string) error { return nil }
+
+// fixtureAccess stands in for the account module's core.AccountAccess, which
+// cannot be imported here (account imports this package).
+type fixtureAccess struct {
+	db *store.DB
+	az core.Authorizer
+}
+
+func (a fixtureAccess) AccountsInScope(ctx context.Context, uid int64, action string, ids []int64) (bool, []int64, error) {
+	scope, err := core.Scope(core.WithUserID(ctx, uid), a.az, perm.AccountAction(action))
+	switch {
+	case err != nil:
+		return false, nil, err
+	case scope.Empty():
+		return false, nil, core.AccountsDenied(action)
+	case scope.All:
+		return true, nil, nil
+	}
+	rows, err := a.db.Pool.Query(ctx, `SELECT a.id FROM accounts a WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+core.AccountRows.SQL(2),
+		append([]any{ids}, core.AccountRows.Args(scope)...)...)
+	if err != nil {
+		return false, nil, err
+	}
+	allowed, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	return false, allowed, err
+}
 
 func newRuntimeFixture(t *testing.T, controller http.HandlerFunc) *runtimeFixture {
 	t.Helper()
@@ -75,6 +101,7 @@ func newRuntimeFixture(t *testing.T, controller http.HandlerFunc) *runtimeFixtur
 	engine := gin.New()
 	auth := &keyAuth{keys: map[int64][]string{}}
 	s.Authorizer = auth
+	s.Accounts = fixtureAccess{db: db, az: auth}
 	s.RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	f := &runtimeFixture{t: t, db: db, s: s, engine: engine, auth: auth, cipher: cipher}
 	f.runtimes(true)
@@ -592,18 +619,20 @@ func TestCLIVersionOf(t *testing.T) {
 	}
 }
 
-// TestAccountRuntimeOwnership: besides settings administrators, account
-// readers and updaters reach the runtime of the accounts they may see; own
-// level only the ones they created (CONTRACTS §49.5).
+// TestAccountRuntimeOwnership: account readers and updaters reach the runtime
+// of the accounts they may see, own level only the ones they created;
+// settings keys open none of it (CONTRACTS §49.5).
 func TestAccountRuntimeOwnership(t *testing.T) {
 	ctl := newFakeController(t)
 	f := newRuntimeFixture(t, ctl.ServeHTTP)
 	ctx := context.Background()
 	vendor, reader, nobody := f.user("vendor@x"), f.user("reader@x"), f.user("nobody@x")
 	admin := f.user("admin@x") // no entry in keys: holds every key
-	f.auth.keys[vendor] = []string{"account:own:read", "account:own:update"}
+	f.auth.keys[vendor] = []string{"account:read:own", "account:update:own"}
 	f.auth.keys[reader] = []string{"account:read"}
-	f.auth.keys[nobody] = []string{"account:own:create"}
+	f.auth.keys[nobody] = []string{"account:create:own"}
+	settings := f.user("settings@x")
+	f.auth.keys[settings] = []string{"settings:read", "settings:manage"}
 	mine, other := f.account(true), f.account(true)
 	if _, err := f.db.Pool.Exec(ctx, `UPDATE accounts SET created_by=$1 WHERE id=$2`, vendor, mine); err != nil {
 		t.Fatal(err)
@@ -635,8 +664,19 @@ func TestAccountRuntimeOwnership(t *testing.T) {
 		{reader, "POST", "sync", mine, 403},
 		{nobody, "GET", "status", mine, 403},
 		{nobody, "POST", "start", mine, 403},
-		{admin, "POST", "cancel", mine, 200}, // settings administrator
+		{admin, "POST", "cancel", mine, 200},
 		{admin, "GET", "status", other, 200},
+		{settings, "GET", "session", mine, 403},
+		{settings, "GET", "status", other, 403},
+		{settings, "GET", "cc-features", mine, 403},
+		{settings, "POST", "sync", mine, 403},
+		{settings, "POST", "cc-features/preview", mine, 403},
+		{settings, "PUT", "request-logs", mine, 403},
+		{vendor, "GET", "session", other, 404},
+		{vendor, "GET", "cc-features", mine, 200},
+		{vendor, "GET", "cc-features", other, 404},
+		{vendor, "POST", "cc-features/preview", other, 404},
+		{reader, "GET", "cc-features", other, 200},
 	} {
 		code, out := f.callAs(tc.uid, tc.method, tc.id, tc.action, `{}`)
 		if code != tc.want {

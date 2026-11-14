@@ -19,6 +19,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -88,11 +89,10 @@ func (s *Service) Close(context.Context) {
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// The editors of all three layers show the declarations and the process
 	// layer they fall back to; the account editor is open to the holders of
-	// the own-account permissions too, who may edit the account layer
-	// (PATCH /accounts/:id with account:own:update, create with
-	// account:own:create).
-	r.PermAny("GET", "/environment/variables", s.variables,
-		"settings:read", "group:read", "account:read", "account:own:read", "account:own:create")
+	// account readers and creators of any scope too, who may edit the
+	// account layer.
+	r.PermScoped("GET", "/environment/variables", s.variables,
+		perm.SettingsRead, perm.GroupRead, perm.AccountRead, perm.AccountCreate)
 	r.Perm("GET", "/settings/environment", "settings:read", s.get)
 	r.Perm("PUT", "/settings/environment", "settings:manage", s.put)
 }

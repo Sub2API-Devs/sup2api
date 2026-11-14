@@ -6,13 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
-	"time"
 )
 
 // The management socket's file mode does not separate processes of the same
@@ -91,22 +88,11 @@ func ReadManagementToken(path string) (string, error) {
 	return token, nil
 }
 
-// RequireManagementToken admits only requests that carry token. With
-// allowMissing, a request without any Authorization header is still served
-// (and logged) so a core release that predates the token keeps working during
-// a migration; a present but wrong token is always rejected.
-func RequireManagementToken(token string, allowMissing bool, next http.Handler) http.Handler {
+// RequireManagementToken admits only requests that carry token.
+func RequireManagementToken(token string, next http.Handler) http.Handler {
 	want := []byte("Bearer " + token)
-	var lastWarn atomic.Int64
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.Header.Get("Authorization")
-		if got == "" && allowMissing {
-			if now := time.Now().Unix(); lastWarn.Swap(now) < now-60 {
-				slog.Warn("management request without token accepted; remove allow_tokenless_management once every core sends it", "method", r.Method, "path", r.URL.Path)
-			}
-			next.ServeHTTP(w, r)
-			return
-		}
 		if token == "" || subtle.ConstantTimeCompare([]byte(got), want) != 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("WWW-Authenticate", "Bearer")

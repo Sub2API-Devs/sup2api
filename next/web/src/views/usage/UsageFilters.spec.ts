@@ -16,7 +16,7 @@ const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get, list: async () => ({ items: [], page: {} }) } }))
 vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ replace: vi.fn() }) }))
 // Every permission but the accounts': the pickers look their entities up, the pages show no account.
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (permission: string | string[]) => permission !== 'account:read' }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (permission: string | string[]) => permission !== 'account:read', hasAction: () => true }) }))
 vi.mock('@/composables/useList', async importOriginal => ({ ...(await importOriginal<object>()), useList: (_path: string, filters: Record<string, unknown>) => ({ items: ref([]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(0), filters: reactive(filters), reload: vi.fn() }) }))
 
 enableAutoUnmount(afterEach)

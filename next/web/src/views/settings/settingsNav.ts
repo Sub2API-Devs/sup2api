@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import type { ViewGroup, ViewLink } from '@/layouts/sidebarViews'
 import { useRouteLineage } from '@/layouts/useActiveMenu'
 import { useAuthStore } from '@/stores/auth'
+import type { PermRef } from '@/generated/permissions'
 
 /**
  * System settings (CONTRACTS §90): the configuration pages of the settings
@@ -20,7 +21,7 @@ interface Page {
   tab?: string
   /** Where it opens. */
   path: string
-  perm: string
+  perm: PermRef
   /** i18n key. */
   label: string
   icon: string
@@ -33,7 +34,7 @@ interface Group {
 }
 
 /** A configuration page. */
-const page = (tab: string, perm: string, label: string, icon: string): Page => ({
+const page = (tab: string, perm: PermRef, label: string, icon: string): Page => ({
   tab,
   path: `${SETTINGS_PAGE}?tab=${tab}`,
   perm,
@@ -41,7 +42,7 @@ const page = (tab: string, perm: string, label: string, icon: string): Page => (
   icon
 })
 /** A page with an address of its own; its route sits under the settings page (meta.parent), which opens it in the view. */
-const ownPage = (path: string, perm: string, label: string, icon: string): Page => ({ path, perm, label, icon })
+const ownPage = (path: string, perm: PermRef, label: string, icon: string): Page => ({ path, perm, label, icon })
 
 /** The groups and their pages, in the order shown. */
 const LAYOUT: Group[] = [

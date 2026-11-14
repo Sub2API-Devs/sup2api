@@ -36,7 +36,7 @@ vi.mock('vue-router', () => ({ useRoute: () => ({ query }), useRouter: () => ({ 
 // The pickers look names up; no entity is known here.
 vi.mock('@sub2api/host', async original => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: async () => ({ items: [], more: false }) } }))
 const perms = vi.hoisted(() => ({ accountRead: true }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => perms.accountRead || ![key].flat().includes('account:read') }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => perms.accountRead || ![key].flat().includes('account:read'), hasAction: () => perms.accountRead }) }))
 vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
 vi.mock('./UsageLiveStats.vue', () => ({ default: { name: 'UsageLiveStats', props: ['realtimePath', 'summaryPath', 'revision'], template: '<div data-testid="live-stats" />' } }))

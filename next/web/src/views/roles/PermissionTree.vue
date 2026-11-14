@@ -1,47 +1,88 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { flip } from './flip'
 import { SBadge, SCheckbox, SEmpty, SHint, SIcon, SSectionTitle } from '@sub2api/ui'
 import type { PermissionItem, PermissionModule } from '@/api/types'
 import { lt } from '@/i18n'
+import { ALL_SCOPE, parsePermission, reduceScopes, type Scope, type ScopeResource } from '@/authz/implies'
+import { defaultScopes, offerOf, withScopes } from '@/authz/scopeChoice'
+import ScopePicker from './ScopePicker.vue'
 
 // Permission checkboxes of a role, one collapsible block per module (core
 // modules first, then plugin modules). `allGranted` (superuser) ticks
-// everything; changes are emitted as a new set.
-const props = defineProps<{ modules: PermissionModule[]; granted: Set<string>; allGranted?: boolean; readOnly?: boolean }>()
+// everything; changes are emitted as a new set. Permissions marked step_up
+// carry a shield: using them needs a step-up verification each time.
+// A scoped action (scope_type, CONTRACTS §21) is one row; ticked, its scopes
+// open below it (ScopePicker), offered as far as `scopeLimit` (the editor's
+// own scopes of the action) implies; without it everything is offered.
+const props = defineProps<{ modules: PermissionModule[]; granted: Set<string>; allGranted?: boolean; readOnly?: boolean; scopeLimit?: (action: string) => Scope[] }>()
 const emit = defineEmits<{ (e: 'update:granted', v: Set<string>): void }>()
 const { t } = useI18n()
 
+const anyStepUp = computed(() => props.modules.some((m) => m.permissions.some((p) => p.step_up)))
 const groups = computed(() => [props.modules.filter((m) => m.source !== 'plugin'), props.modules.filter((m) => m.source === 'plugin')])
 const collapsed = ref(new Set<string>())
+/** Scoped actions whose scopes stay open while none is chosen (the editor is choosing). */
+const opened = ref(new Set<string>())
 
-function flip<T>(set: Set<T>, key: T, on = !set.has(key)): Set<T> {
-  const next = new Set(set)
-  if (on) next.add(key)
-  else next.delete(key)
-  return next
+const scoped = (p: PermissionItem) => !!p.scope_type
+/** The granted scopes of each action. */
+const grantedScopes = computed(() => {
+  const out = new Map<string, Scope[]>()
+  for (const k of props.granted) {
+    const p = parsePermission(k)
+    if (p) out.set(p.action, [...(out.get(p.action) ?? []), p.scope])
+  }
+  // A scope another granted one implies is not a choice of its own.
+  for (const [action, list] of out) out.set(action, reduceScopes(list))
+  return out
+})
+const scopesOf = (key: string) => grantedScopes.value.get(key) ?? []
+const offerFor = (key: string) => offerOf(props.scopeLimit ? props.scopeLimit(key) : [ALL_SCOPE], key)
+const isChecked = (key: string) => !!props.allGranted || props.granted.has(key) || scopesOf(key).length > 0
+const showScopes = (p: PermissionItem) => scoped(p) && !props.allGranted && (isChecked(p.key) || opened.value.has(p.key))
+
+/** granted with p on or off; a scoped action goes on at its widest offered scope. */
+function withItem(granted: Set<string>, p: PermissionItem, on: boolean): Set<string> {
+  if (!scoped(p)) return flip(granted, p.key, on)
+  if (on && isChecked(p.key)) return granted
+  // Ticked, the scopes stay open while being chosen; unticked, they close.
+  opened.value = flip(opened.value, p.key, on)
+  return withScopes(granted, p.key, on ? defaultScopes(offerFor(p.key)) : [])
 }
-
-const isChecked = (key: string) => !!props.allGranted || props.granted.has(key)
 const grantedCount = (m: PermissionModule) => m.permissions.filter((p) => isChecked(p.key)).length
 const inactive = (status: string) => status !== 'active' && status !== ''
 const moduleInactive = (m: PermissionModule) => inactive(m.status)
 const permInactive = (m: PermissionModule, p: PermissionItem) => moduleInactive(m) || inactive(p.status)
+// The hover hint: the key, then what it allows.
+const hint = (p: PermissionItem) => [p.key, p.description && lt(p.description)].filter(Boolean).join('\n')
+// A removed permission can only be unticked; disabled plugin ones stay selectable.
+const selectable = (p: PermissionItem) => p.status !== 'removed' || isChecked(p.key)
+const selectables = (m: PermissionModule) => m.permissions.filter(selectable)
 
+// Ticked permissions are always selectable, so "all" means every selectable one.
 function moduleState(m: PermissionModule): 'all' | 'some' | 'none' {
   const n = grantedCount(m)
   if (n === 0) return 'none'
-  return n === m.permissions.length ? 'all' : 'some'
+  return n === selectables(m).length ? 'all' : 'some'
 }
 
-function toggle(key: string) {
-  if (!props.readOnly) emit('update:granted', flip(props.granted, key))
+function toggle(p: PermissionItem) {
+  if (props.readOnly || !selectable(p)) return
+  emit('update:granted', withItem(props.granted, p, !isChecked(p.key)))
 }
 
 function toggleModule(m: PermissionModule) {
   if (props.readOnly) return
   const on = moduleState(m) !== 'all'
-  emit('update:granted', m.permissions.reduce((s, p) => flip(s, p.key, on), props.granted))
+  emit('update:granted', selectables(m).reduce((s, p) => withItem(s, p, on), props.granted))
+}
+
+function setScopes(p: PermissionItem, scopes: Scope[]) {
+  // Narrowing (all off, the last chip removed) keeps the scopes open to choose from.
+  opened.value = flip(opened.value, p.key, true)
+  emit('update:granted', withScopes(props.granted, p.key, scopes))
 }
 </script>
 
@@ -71,7 +112,7 @@ function toggleModule(m: PermissionModule) {
               class="shrink-0"
               :model-value="moduleState(m) === 'all'"
               :indeterminate="moduleState(m) === 'some'"
-              :disabled="readOnly || !m.permissions.length"
+              :disabled="readOnly || !selectables(m).length"
               :label="t('roles.selectAll')"
               @update:model-value="toggleModule(m)"
             />
@@ -79,26 +120,43 @@ function toggleModule(m: PermissionModule) {
           <div v-if="!collapsed.has(m.module)" class="grid gap-x-4 gap-y-2 border-t border-line px-3 py-3 sm:grid-cols-2 xl:grid-cols-3">
             <!-- SCheckbox's own text span fixes the colour, so the inactive tone goes on the
                  slot content; [&>span]:min-w-0 lets the truncate inside shrink. -->
-            <SCheckbox
-              v-for="p in m.permissions"
-              :key="p.key"
-              class="min-w-0 [&>span]:min-w-0"
-              :model-value="isChecked(p.key)"
-              :disabled="readOnly"
-              @update:model-value="toggle(p.key)"
-            >
-              <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="p.key">
-                <span class="truncate">{{ lt(p.label) || p.key }}</span>
-                <span v-if="p.sensitive" class="shrink-0 text-warning-500 dark:text-warning-400" :title="t('roles.sensitive')" :aria-label="t('roles.sensitive')" role="img"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
-                <SBadge v-if="p.status === 'disabled' && !moduleInactive(m)" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
-              </span>
-            </SCheckbox>
+            <template v-for="p in m.permissions" :key="p.key">
+              <SCheckbox
+                class="min-w-0 [&>span]:min-w-0"
+                :model-value="isChecked(p.key)"
+                :disabled="readOnly || !selectable(p)"
+                @update:model-value="toggle(p)"
+              >
+                <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="hint(p)">
+                  <span class="truncate">{{ lt(p.label) || p.key }}</span>
+                  <span v-if="p.sensitive" class="shrink-0 text-warning-500 dark:text-warning-400" :title="t('roles.sensitive')" :aria-label="t('roles.sensitive')" role="img"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
+                  <span v-if="p.step_up" class="shrink-0 text-primary-500 dark:text-primary-400" :title="t('roles.stepUp')" :aria-label="t('roles.stepUp')" role="img" data-testid="permission-step-up"><SIcon name="shield" class="h-3.5 w-3.5" /></span>
+                  <template v-if="!moduleInactive(m)">
+                    <SBadge v-if="p.status === 'disabled'" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
+                    <SBadge v-else-if="p.status === 'removed'" tone="gray">{{ t('roles.removed') }}</SBadge>
+                  </template>
+                </span>
+              </SCheckbox>
+              <ScopePicker
+                v-if="showScopes(p)"
+                class="sm:col-span-2 xl:col-span-3"
+                :action="p.key"
+                :resource="p.scope_type as ScopeResource"
+                :scopes="scopesOf(p.key)"
+                :offer="offerFor(p.key)"
+                :disabled="readOnly"
+                @update:scopes="setScopes(p, $event)"
+              />
+            </template>
           </div>
         </div>
       </template>
     </div>
     <SHint size="xs" class="mt-3 flex items-center gap-1">
       <SIcon name="lock" class="h-3.5 w-3.5 text-warning-500 dark:text-warning-400" />{{ t('roles.sensitiveLegend') }}
+    </SHint>
+    <SHint v-if="anyStepUp" size="xs" class="mt-1 flex items-center gap-1">
+      <SIcon name="shield" class="h-3.5 w-3.5 text-primary-500 dark:text-primary-400" />{{ t('roles.stepUpLegend') }}
     </SHint>
   </div>
 </template>

@@ -56,12 +56,16 @@ export default {
     title: 'No permission',
     desc: 'You do not have permission to view this page ({perm}).'
   },
+  loadFailed: {
+    title: 'Could not load',
+    desc: 'Your account information could not be loaded. Check the connection and retry.',
+    retry: 'Retry'
+  },
   notFound: {
     title: 'Page not found',
     desc: 'The page you are looking for does not exist.'
   },
   password: {
-    old: 'Current password',
     new: 'New password',
     confirm: 'Confirm new password',
     mismatch: 'Passwords do not match',

@@ -274,15 +274,18 @@ export const savePluginSettings = (values: Record<string, unknown>) => useModHos
 /** A setting as stored, else its schema default; undefined when neither is known. */
 export const settingValue = (s: PluginSettings | null | undefined, key: string): unknown => s?.values?.[key] ?? s?.schema?.properties?.[key]?.default
 
-/** May read accounts of the console, all or the caller's own: a caller who may not is not sent for a 403. */
-const canReadAccounts = () => ['account:read', 'account:own:read'].some((k) => useModHost().permissions.has(k))
+/**
+ * May read accounts of the console at any scope (all, own, groups, ids): a
+ * caller who may not is not sent for a 403. Every console this plugin runs
+ * on (UI 3.15) has hasAction.
+ */
+const canReadAccounts = () => useModHost().permissions.hasAction?.('account:read') === true
 
 /** Ids one lookup request takes (the core's cap, CONTRACTS §96.1). */
 const LOOKUP_IDS = 100
 /**
  * Names of the console's accounts by id, through the core's lookup (GET
- * /lookup/accounts: account:read, or the caller's own with
- * account:own:read). An account the caller may not see has no name, and none
+ * /lookup/accounts: account:read at any scope, the accounts in it). An account the caller may not see has no name, and none
  * has when the lookup is refused or fails.
  */
 export async function fetchAccountNames(ids: readonly number[]): Promise<Map<number, string>> {
@@ -311,6 +314,9 @@ export async function fetchAccountGroups(id: number): Promise<number[] | null> {
 
 /** Groups of the console (needs group:read); [] when not readable. */
 export async function fetchGroups(): Promise<Group[]> {
+  // Not asked without group:read: a refused call is a console 403, which
+  // also makes the console reload the caller's permissions.
+  if (!useModHost().permissions.has('group:read')) return []
   // listAll never returns a partial list, which would show the missing
   // groups as unbound: none at all instead.
   return listAll<Group>(useModHost().api, '/groups').catch(() => [])

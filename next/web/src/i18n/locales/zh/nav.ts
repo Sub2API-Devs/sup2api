@@ -56,12 +56,16 @@ export default {
     title: '没有权限',
     desc: '你没有查看此页面的权限（{perm}）。'
   },
+  loadFailed: {
+    title: '加载失败',
+    desc: '无法加载你的账号信息，请检查网络后重试。',
+    retry: '重试'
+  },
   notFound: {
     title: '页面不存在',
     desc: '你访问的页面不存在。'
   },
   password: {
-    old: '当前密码',
     new: '新密码',
     confirm: '确认新密码',
     mismatch: '两次输入的密码不一致',

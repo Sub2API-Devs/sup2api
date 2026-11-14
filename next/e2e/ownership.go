@@ -24,9 +24,9 @@ var (
 	// VendorPerms maintains only the caller's own accounts and proxies and
 	// cannot change guarded settings (no account:settings:custom).
 	VendorPerms = []string{
-		"account:own:read", "account:own:create", "account:own:update", "account:own:delete",
-		"account:own:test", "account:own:credential:view",
-		"proxy:own:read", "proxy:own:manage",
+		"account:read:own", "account:create:own", "account:update:own", "account:delete:own",
+		"account:test:own", "account:credential:view:own",
+		"proxy:read:own", "proxy:manage:own",
 	}
 	// ViewerPerms sees every account and proxy but changes nothing and never
 	// sees secrets.

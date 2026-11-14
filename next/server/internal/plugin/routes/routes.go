@@ -10,11 +10,13 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -30,6 +32,9 @@ type Handler struct {
 	health HealthChecker
 	assets VersionAssets
 	audit  core.PluginWriteAuditor
+	// accounts checks the accounts a route declaring manifest.RouteAccounts
+	// names; without it such routes answer 503.
+	accounts core.AccountAccess
 }
 
 // VersionAssets reads an approved immutable package independently of whichever
@@ -43,6 +48,9 @@ func WithVersionAssets(assets VersionAssets) Option { return func(h *Handler) { 
 // WithAudit records every POST/PUT/PATCH/DELETE an admin route served
 // (CONTRACTS §75.2).
 func WithAudit(a core.PluginWriteAuditor) Option { return func(h *Handler) { h.audit = a } }
+
+// WithAccountAccess enforces manifest.RouteAccounts (CONTRACTS §21.1).
+func WithAccountAccess(aa core.AccountAccess) Option { return func(h *Handler) { h.accounts = aa } }
 
 // HealthChecker reports whether this node may serve traffic
 // (core.NodeRegistry satisfies it).
@@ -90,6 +98,7 @@ var (
 var strippedRequestHeaders = map[string]bool{
 	"authorization":       true,
 	"cookie":              true,
+	"x-verify-proof":      true, // a step-up proof is the core's (CONTRACTS §80.2)
 	"proxy-authorization": true,
 	"connection":          true,
 	"keep-alive":          true,
@@ -159,43 +168,27 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-	var userID int64
 	switch chosen.Route.Scope {
 	case "admin", "user":
-		token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
-		if !ok || token == "" || h.tokens == nil {
-			httpapi.Fail(c, core.ErrUnauthenticated)
+		// A JWT or an access key; the route's permission is checked as the
+		// key narrows it (CONTRACTS §80). A route without a permission
+		// matches nothing and is denied. The plugin is not told the call
+		// came through a key: the admin write audit records it, and the
+		// plugin's AuthzCheck/AccountScopeCheck are narrowed by it.
+		if !httpapi.Authenticate(c, h.tokens) {
 			return
 		}
-		uid, err := h.tokens.VerifyAccessToken(ctx, token)
-		if err != nil {
-			httpapi.Fail(c, core.ErrUnauthenticated.WithCause(err))
+		httpapi.StampAuthzVersion(c, h.authz)
+		if !httpapi.CanAny(c, h.authz, manifest.PermissionKey(key, chosen.Route.Permission)) {
 			return
-		}
-		userID = uid
-		ctx = core.WithUserID(ctx, uid)
-		if perm := chosen.Route.Permission; perm != "" {
-			full := "plugin." + key + ":" + perm
-			if h.authz == nil {
-				httpapi.Fail(c, core.ErrPermissionDenied)
-				return
-			}
-			allowed, err := h.authz.Can(ctx, uid, full)
-			if err != nil {
-				httpapi.Fail(c, err)
-				return
-			}
-			if !allowed {
-				httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": full}))
-				return
-			}
 		}
 	case "public", "webhook":
 	default:
 		httpapi.Fail(c, errRouteNotFound)
 		return
 	}
+	ctx := c.Request.Context()
+	userID, _ := core.UserID(ctx) // 0 on public and webhook routes
 
 	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes))
 	if err != nil {
@@ -205,6 +198,9 @@ func (h *Handler) serveAPI(c *gin.Context) {
 			return
 		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("read request body").WithCause(err))
+		return
+	}
+	if acc := chosen.Route.Accounts; acc != nil && !h.authorizeAccounts(c, acc, params, body) {
 		return
 	}
 
@@ -356,7 +352,9 @@ func (h *Handler) serveAsset(c *gin.Context) {
 	var ct string
 	var err error
 	if !current {
-		if h.assets == nil {
+		// A version this node does not serve costs a package load: refuse
+		// what no package may serve before paying for it.
+		if h.assets == nil || (!prefixAllowed(name) && !looksLikeIcon(name)) {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
@@ -408,22 +406,47 @@ func (h *Handler) serveAsset(c *gin.Context) {
 	c.Data(http.StatusOK, ct, data)
 }
 
+// assetAllowed reports whether a package may serve name: a file below a
+// public directory, or one its manifest names as an icon.
 func assetAllowed(info core.PluginInfo, name string) bool {
+	return prefixAllowed(name) || iconAllowed(info, name)
+}
+
+// prefixAllowed reports whether name is a file below a public package
+// directory. It needs no manifest.
+func prefixAllowed(name string) bool {
 	for _, prefix := range []string{"ui/", "forms/", "i18n/"} {
 		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
 			return true
 		}
 	}
-	if m := info.Manifest; m != nil {
-		icons := []string{m.Icon}
-		for _, at := range m.AccountTypes {
-			icons = append(icons, at.Icon)
-		}
-		for _, icon := range icons {
-			if icon != "" && !strings.HasPrefix(icon, "text:") && name == strings.TrimPrefix(path.Clean("/"+icon), "/") {
-				return true
-			}
+	return false
+}
+
+// iconAllowed reports whether the manifest names name as the plugin's icon or
+// an account type's.
+func iconAllowed(info core.PluginInfo, name string) bool {
+	m := info.Manifest
+	if m == nil {
+		return false
+	}
+	icons := []string{m.Icon}
+	for _, at := range m.AccountTypes {
+		icons = append(icons, at.Icon)
+	}
+	for _, icon := range icons {
+		if icon != "" && !strings.HasPrefix(icon, "text:") && name == strings.TrimPrefix(path.Clean("/"+icon), "/") {
+			return true
 		}
 	}
 	return false
+}
+
+// iconExtensions are the image types the core serves (registry.ContentType):
+// what a manifest icon outside the public directories can be.
+var iconExtensions = []string{".svg", ".png", ".webp", ".ico", ".jpg", ".jpeg", ".gif"}
+
+// looksLikeIcon reports whether name could be a manifest icon, by extension.
+func looksLikeIcon(name string) bool {
+	return slices.Contains(iconExtensions, strings.ToLower(path.Ext(name)))
 }

@@ -158,11 +158,21 @@ func (s *Service) Passkeys(ctx context.Context, userID int64) ([]Passkey, error)
 	return out, rows.Err()
 }
 
-// BeginPasskeyRegistration checks the password and starts adding a passkey.
-func (s *Service) BeginPasskeyRegistration(ctx context.Context, r *http.Request, userID int64, password, ip string) (*PasskeyCeremony, error) {
-	if _, err := s.confirmPassword(ctx, userID, password, ip); err != nil {
-		return nil, err
+// normalizePasskeyName trims a passkey's name; empty means "Passkey".
+func normalizePasskeyName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Passkey"
 	}
+	if utf8.RuneCountInString(name) > 100 {
+		return "", core.InvalidFields(core.FieldError{Field: "name", Code: "too_long", Message: "at most 100 characters"})
+	}
+	return name, nil
+}
+
+// BeginPasskeyRegistration starts adding a passkey; the route has verified
+// the caller (step-up self.passkey.add).
+func (s *Service) BeginPasskeyRegistration(ctx context.Context, r *http.Request, userID int64) (*PasskeyCeremony, error) {
 	wa, err := s.webAuthnFor(r, "")
 	if err != nil {
 		return nil, err
@@ -188,12 +198,9 @@ func (s *Service) BeginPasskeyRegistration(ctx context.Context, r *http.Request,
 
 // FinishPasskeyRegistration verifies the browser's answer and stores the passkey.
 func (s *Service) FinishPasskeyRegistration(ctx context.Context, r *http.Request, userID int64, flowToken, name string, credential json.RawMessage) (*Passkey, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = "Passkey"
-	}
-	if utf8.RuneCountInString(name) > 100 {
-		return nil, core.InvalidFields(core.FieldError{Field: "name", Code: "too_long", Message: "at most 100 characters"})
+	name, err := normalizePasskeyName(name)
+	if err != nil {
+		return nil, err
 	}
 	var session webauthn.SessionData
 	if _, err := s.takeFlow(ctx, s.db.Pool, flowToken, flowPasskeyRegister, userID, &session); err != nil {
@@ -240,6 +247,9 @@ func (s *Service) FinishPasskeyRegistration(ctx context.Context, r *http.Request
 // DeletePasskey removes one of the user's passkeys.
 func (s *Service) DeletePasskey(ctx context.Context, userID, id int64) error {
 	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := s.keepLastFactor(ctx, tx, userID, core.StepUpSelfPasskeyDelete); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `DELETE FROM user_passkeys WHERE id = $1 AND user_id = $2`, id, userID)
 		if err != nil {
 			return err

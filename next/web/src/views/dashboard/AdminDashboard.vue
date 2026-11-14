@@ -16,8 +16,7 @@ import RankingBars from '@/components/stats/RankingBars.vue'
 import UsageCharts from '@/components/stats/UsageCharts.vue'
 import { autoGranularity, browserTZ, formatMs, formatTokens, hitRate, hourAllowed, num, rowTokens, type Granularity, type RankMetric } from '@/components/stats/stats'
 import { useUsageSummary } from '@/views/usage/useUsageSummary'
-import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import AccountStatusCard from './AccountStatusCard.vue'
 import { errorMessage } from '@/utils/errors'
 import { formatMoney, formatNumber } from '@/utils/format'
 
@@ -25,7 +24,6 @@ const props = withDefaults(defineProps<{ revision?: number }>(), { revision: 0 }
 const emit = defineEmits<{ (e: 'update:loading', v: boolean): void }>()
 const { t } = useI18n()
 const router = useRouter()
-const auth = useAuthStore()
 
 // Today's figures.
 const overview = ref<UsageOverview | null>(null)
@@ -72,11 +70,6 @@ const cards = computed(() => {
     firstToken: num(today?.first_token_ms_avg),
     latency: num(today?.latency_ms_avg)
   }
-})
-const accountsTone = computed<'primary' | 'warning' | 'danger'>(() => {
-  const a = cards.value.accounts
-  if (!a) return 'primary'
-  return a.available === 0 && a.total ? 'danger' : a.auto_disabled ? 'warning' : 'primary'
 })
 const first = computed(() => loadingOverview.value && !overview.value)
 
@@ -148,16 +141,7 @@ watch(() => loadingOverview.value || users.loading.value || groups.loading.value
         to="/users"
         data-testid="card-users"
       />
-      <SStatCard
-        v-if="cards.accounts"
-        :label="t('stats.admin.accounts')"
-        :value="`${formatNumber(cards.accounts.available)}/${formatNumber(cards.accounts.total)}`"
-        :sub="t('stats.admin.accountsSub', { auto: formatNumber(cards.accounts.auto_disabled), disabled: formatNumber(cards.accounts.disabled) })"
-        icon="account"
-        :tone="accountsTone"
-        :to="auth.has([...ACCOUNT_KEYS.read]) ? '/accounts' : undefined"
-        data-testid="card-accounts"
-      />
+      <AccountStatusCard v-if="cards.accounts" :counts="cards.accounts" />
       <SStatCard
         :label="t('dashboard.user.todayTokens')"
         :value="formatTokens(cards.tokens)"

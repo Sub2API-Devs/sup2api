@@ -37,6 +37,10 @@ func TestCount(t *testing.T) {
 // A long run of one character class is one BPE piece; v0.8.0 merged it in
 // quadratic time (80 KB took seconds and held a node-wide lock). The count is
 // unchanged, only the time.
+// linearTimeBudget bounds one Count over a long run; race_test.go widens it
+// for the race detector's instrumentation overhead.
+var linearTimeBudget = 500 * time.Millisecond
+
 func TestCountLongRunsInLinearTime(t *testing.T) {
 	for _, c := range []struct {
 		text   string
@@ -52,7 +56,7 @@ func TestCountLongRunsInLinearTime(t *testing.T) {
 		if err != nil || n != c.tokens {
 			t.Fatalf("%q...: %d tokens, %v; want %d", c.text[:3], n, err, c.tokens)
 		}
-		if d := time.Since(start); d > 500*time.Millisecond {
+		if d := time.Since(start); d > linearTimeBudget {
 			t.Fatalf("%q...: %v", c.text[:3], d)
 		}
 	}

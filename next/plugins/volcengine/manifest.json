@@ -9,7 +9,7 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.6",
+  "version": "0.12.7",
   "publisher": "sub2api",
   "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.229 <0.2.0",
+  "hostCompat": ">=0.1.286 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
@@ -350,6 +350,7 @@
   "accountTypes": [
     {
       "id": "apikey",
+      "upstreamFields": ["base_url", "asset_base_url"],
       "label": {
         "en": "Volcengine Ark · Official general",
         "zh": "字节火山方舟 · 官方通用"
@@ -448,6 +449,7 @@
     },
     {
       "id": "relay",
+      "upstreamFields": ["base_url", "video_endpoint", "asset_endpoint", "asset_base_url"],
       "label": {
         "en": "Doubao video",
         "zh": "豆包视频"
@@ -541,6 +543,7 @@
   "userPermissions": [
     {
       "key": "assets:read",
+      "defaultRoles": ["admin"],
       "label": {
         "en": "View the Ark asset library",
         "zh": "查看方舟素材库"
@@ -552,6 +555,7 @@
     },
     {
       "key": "assets:manage",
+      "defaultRoles": ["admin"],
       "label": {
         "en": "Manage the Ark asset library",
         "zh": "管理方舟素材库"
@@ -567,79 +571,121 @@
       "method": "GET",
       "path": "/accounts",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "GET",
       "path": "/asset-groups",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "POST",
       "path": "/asset-groups",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update",
+        "from": ["body:account_id"]
+      }
     },
     {
       "method": "GET",
       "path": "/asset-groups/:id",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "PATCH",
       "path": "/asset-groups/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "DELETE",
       "path": "/asset-groups/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "GET",
       "path": "/assets",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "POST",
       "path": "/assets",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "GET",
       "path": "/assets/:id",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "PATCH",
       "path": "/assets/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "DELETE",
       "path": "/assets/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "GET",
       "path": "/accounts/:account_id/upstream/asset-groups",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read",
+        "from": ["path:account_id"]
+      }
     },
     {
       "method": "GET",
       "path": "/accounts/:account_id/upstream/assets",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read",
+        "from": ["path:account_id"]
+      }
     }
   ],
   "ui": {

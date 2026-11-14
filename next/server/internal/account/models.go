@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // ModelsResult is returned by the "fetch models" endpoints (CONTRACTS §19).
@@ -54,6 +55,10 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
+	if err := s.checkCustomUpstream(ctx, s.scopeOf(ctx, perm.AccountCreate), bt); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	proxyURL := ""
 	if in.ProxyURL != nil {
 		proxyURL = strings.TrimSpace(*in.ProxyURL)
@@ -66,12 +71,13 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	var hc *http.Client
 	switch {
 	case proxyURL != "":
-		spec, err := core.ParseProxyURL(proxyURL)
+		// Reaching a proxy by address takes a proxy write key, as when saving.
+		byURL, err := s.parseProxyURL(ctx, proxyURL)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
-		if hc, err = s.d.Proxies.HTTPClientFor(ctx, spec); err != nil {
+		if hc, err = s.d.Proxies.HTTPClientFor(ctx, byURL.spec); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
@@ -79,7 +85,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	default:
 		if in.ProxyID != nil {
 			// Same visibility rule as POST /accounts (§21.2).
-			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create"), nil); err != nil {
+			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRefs(ctx, perm.AccountCreate)); err != nil {
 				httpapi.Fail(c, err)
 				return
 			}
@@ -90,7 +96,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 			return
 		}
 	}
-	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
+	p, err := s.prepare(ctx, bt, in.Credentials, nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -122,7 +128,8 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			return
 		}
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:test"), false)
+	scope := s.scopeOf(ctx, perm.AccountTest)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -133,19 +140,18 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			"the plugin providing this account type is not enabled", "提供该账号类型的插件未启用")))
 		return
 	}
-	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
+	base, err := s.credBase(ctx, a)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	secret, settings := plain, a.Settings
+	secret, settings := base.secret, a.Settings
 	if creds := strings.TrimSpace(string(in.Credentials)); creds != "" && creds != "null" {
-		old, err := merge(plain, a.Settings)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
+		p, err := s.prepare(ctx, bt, in.Credentials, base)
+		if err == nil && p.addressChanged {
+			// Same rule as saving the moved address (G2).
+			err = s.checkCustomUpstream(ctx, scope, bt)
 		}
-		p, err := s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx))
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
@@ -208,7 +214,7 @@ func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, a
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, core.ErrUnavailable.WithMessage(t(ctx, "upstream request failed: ", "上游请求失败：") + err.Error())
+		return nil, core.ErrUnavailable.WithMessage(t(ctx, "upstream request failed: ", "上游请求失败：") + transportError(upstreamAddr(u), err))
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxModelsBody))

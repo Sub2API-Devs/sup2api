@@ -103,6 +103,7 @@ func (v *validator) accountTypes() {
 		}
 		v.form(f+".form", at.Form, false)
 		v.guardedSettings(f, at)
+		v.upstreamFields(f, at)
 		v.accountLifecycle(f, at)
 		v.defaultModels(f, at)
 		v.defaultLimits(f+".defaultLimits", at.DefaultLimits)
@@ -279,6 +280,52 @@ func (v *validator) guardedSettings(f string, at manifest.AccountType) {
 			}
 		}
 	}
+}
+
+// upstreamFields validates accountTypes[].upstreamFields: non-empty,
+// distinct keys.
+func (v *validator) upstreamFields(f string, at manifest.AccountType) {
+	seen := map[string]bool{}
+	for i, name := range at.UpstreamFields {
+		uf := fmt.Sprintf("%s.upstreamFields[%d]", f, i)
+		switch {
+		case strings.TrimSpace(name) == "":
+			v.add(uf, "required", "field name is required")
+		case seen[name]:
+			v.add(uf, "duplicate", "field %q is listed twice", name)
+		}
+		seen[name] = true
+	}
+}
+
+// Warnings returns manifest findings that do not block installation; the
+// packaging CLI prints them. Today: a schema form editing an address-like
+// field (base_url, *_endpoint) of an account type whose upstreamFields are
+// neither declared nor derivable, so the core keeps the legacy rule for it.
+func Warnings(m *manifest.Manifest, files map[string][]byte) []FieldError {
+	var out []FieldError
+	for i, at := range m.AccountTypes {
+		if _, known := at.AddressFields(); known || at.Form.Mode != "schema" {
+			continue
+		}
+		var schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		if json.Unmarshal(files[at.Form.Schema], &schema) != nil {
+			continue
+		}
+		var addr []string
+		for _, name := range sortedKeys(schema.Properties) {
+			if name == "base_url" || strings.HasSuffix(name, "_endpoint") {
+				addr = append(addr, name)
+			}
+		}
+		if len(addr) > 0 {
+			out = append(out, FieldError{Field: fmt.Sprintf("accountTypes[%d].upstreamFields", i), Code: "undeclared",
+				Message: fmt.Sprintf("form fields %s look like upstream addresses; declare upstreamFields", strings.Join(addr, ", "))})
+		}
+	}
+	return out
 }
 
 // defaultLimits validates accountTypes[].defaultLimits (CONTRACTS §68.5)

@@ -402,9 +402,7 @@ func (c *realCluster) startShell(id string) *realNode {
 	blobs := PluginBlobs(store, id, root, rt.PeerArtifactClient, 0, 0)
 	rt.PluginBlobs = blobs.Peer()
 	// The core reaches its plugin packages through this socket, as under
-	// sub2api-gateway serve, with a per-boot token. Cores built before the
-	// token contract send none; TEST_REQUIRE_UPDATER_TOKEN=1 rejects that as
-	// production does without allow_tokenless_management.
+	// sub2api-gateway serve, with a per-boot token.
 	managementToken, err := NewManagementToken()
 	if err != nil {
 		t.Fatal(err)
@@ -417,7 +415,7 @@ func (c *realCluster) startShell(id string) *realNode {
 	if err != nil {
 		t.Fatal(err)
 	}
-	management := &http.Server{Handler: RequireManagementToken(managementToken, os.Getenv("TEST_REQUIRE_UPDATER_TOKEN") != "1", ManagementHandler(store, blobs, nil)), ReadHeaderTimeout: 5 * time.Second}
+	management := &http.Server{Handler: RequireManagementToken(managementToken, ManagementHandler(store, blobs, nil)), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = management.Serve(managementListener) }()
 	rt.AuthorizePeer = func(ctx context.Context, p peer.Identity, scope, digest string) error {
 		return store.AuthorizePeer(ctx, p.NodeID, p.BootID, id, scope, digest)

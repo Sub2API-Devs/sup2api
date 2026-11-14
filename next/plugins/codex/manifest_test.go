@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -181,11 +182,17 @@ func TestManifestShape(t *testing.T) {
 	}
 
 	// Route path -> permission: authorization routes, then the usage reset
-	// routes (docs/PLUGIN-CODEX.md §10).
-	wantRoutes := []struct{ path, permission string }{
-		{"/auth/device/start", "codex:manage"}, {"/auth/device/poll", "codex:manage"},
-		{"/auth/siwc/start", "codex:manage"}, {"/auth/siwc/exchange", "codex:manage"},
-		{"/reset-credits/list", "codex:reset"}, {"/reset-credits/consume", "codex:reset"}, {"/reset-credits/summary", "codex:reset"},
+	// routes (docs/PLUGIN-CODEX.md §10). The reset routes act on accounts the
+	// core checks the caller may act on (consume through its account action).
+	wantRoutes := []struct {
+		path, permission string
+		accounts         *manifest.RouteAccounts
+	}{
+		{"/auth/device/start", "codex:manage", nil}, {"/auth/device/poll", "codex:manage", nil},
+		{"/auth/siwc/start", "codex:manage", nil}, {"/auth/siwc/exchange", "codex:manage", nil},
+		{"/reset-credits/list", "codex:reset", &manifest.RouteAccounts{Action: manifest.AccountsUpdate, From: []string{"body:account_id"}}},
+		{"/reset-credits/consume", "codex:reset", &manifest.RouteAccounts{Action: manifest.AccountsUpdate, From: []string{manifest.AccountActionIDs}}},
+		{"/reset-credits/summary", "codex:reset", &manifest.RouteAccounts{Action: manifest.AccountsRead, From: []string{"body:account_ids"}}},
 	}
 	if len(m.Routes) != len(wantRoutes) {
 		t.Fatalf("routes = %+v", m.Routes)
@@ -197,6 +204,9 @@ func TestManifestShape(t *testing.T) {
 	for i, r := range m.Routes {
 		if r.Method != http.MethodPost || r.Path != wantRoutes[i].path || r.Scope != "admin" || r.Permission != wantRoutes[i].permission {
 			t.Errorf("route %d = %+v", i, r)
+		}
+		if got := manifest.EffectiveRouteAccounts(&m, r); !reflect.DeepEqual(got, wantRoutes[i].accounts) {
+			t.Errorf("route %s accounts = %+v, want %+v", r.Path, got, wantRoutes[i].accounts)
 		}
 		// Without a host the routes answer an error, but not "no route".
 		resp, err := p.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: r.Method, Path: r.Path, RoutePath: r.Path, Body: []byte(`{}`)})

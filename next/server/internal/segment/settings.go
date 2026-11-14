@@ -269,6 +269,9 @@ func (s *Service) savePairs(ctx context.Context, items []pairInput) error {
 		if err != nil {
 			return err
 		}
+		if err := GuardOwnSegments(ctx, tx, s.users, segments); err != nil {
+			return err
+		}
 		for _, it := range ordered {
 			if _, err := tx.Exec(ctx, `INSERT INTO segment_groups (segment_id, group_id, granted, rate_override)
 				VALUES ($1, $2, COALESCE($3, false), $5::numeric)

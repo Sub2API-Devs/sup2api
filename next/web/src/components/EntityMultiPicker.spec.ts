@@ -11,7 +11,7 @@ import { resetEntityLookups, type EntityItem } from './entity/lookup'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), denied: [] as string[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: mocks.get } }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ has: (perm: string[]) => !perm.length || perm.some((p) => !mocks.denied.includes(p)) })
+  useAuthStore: () => ({ has: (perm: string[]) => !perm.length || perm.some((p) => !mocks.denied.includes(p)), hasAction: (a: string) => [a, `${a}:own`].some((p) => !mocks.denied.includes(p)) })
 }))
 
 enableAutoUnmount(afterEach)
@@ -166,7 +166,7 @@ describe('EntityMultiPicker', () => {
   })
 
   it('without the lookup an id typed into the text box is added, and the box is empty again', async () => {
-    mocks.denied = ['group:read']
+    mocks.denied = ['group:read', 'account:group:bind']
     mocks.get.mockRejectedValue(new ApiError(403, { code: 'permission_denied', message: 'group:read is required' }))
     const w = picker({ ids: ['2'] })
     await flushPromises()
@@ -189,7 +189,7 @@ describe('EntityMultiPicker', () => {
   })
 
   it('Enter in the text box adds the typed id instead of submitting the form around; an empty box leaves the key alone', async () => {
-    mocks.denied = ['group:read']
+    mocks.denied = ['group:read', 'account:group:bind']
     const w = picker()
     const box = w.get('input')
     const press = async (init: KeyboardEventInit = {}) => {

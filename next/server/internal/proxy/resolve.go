@@ -24,15 +24,9 @@ var _ core.ProxyResolver = (*Service)(nil)
 // then each stored password is decrypted and compared in constant time.
 // Several matches (possible for rows created before this resolver existed)
 // resolve to the smallest id.
-func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerID int64, scope *int64) (int64, bool, error) {
+func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerID int64, scope core.DataScope) (int64, bool, error) {
 	if err := checkSpec(spec); err != nil {
 		return 0, false, err
-	}
-	// Under proxy:own:manage (scope != nil) a private proxy address is refused
-	// before creating anything (CONTRACTS §21.5).
-	if scope != nil && !s.opts.AllowPrivate && netguard.LiteralPrivate(spec.Host) {
-		return 0, false, core.ErrPermissionDenied.WithMessage("proxy address is private and not allowed").
-			WithDetails(map[string]any{"permission": "proxy:manage"})
 	}
 	// Serialise concurrent saves of the same URL for the rest of the
 	// transaction; the lock key ignores the password on purpose (same key
@@ -41,11 +35,11 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, lockKey); err != nil {
 		return 0, false, err
 	}
-	rows, err := tx.Query(ctx, `SELECT id, password_enc FROM proxies
-		WHERE protocol = $1 AND lower(host) = $2 AND port = $3 AND username = $4
-		  AND (password_enc IS NULL) = $5 AND status <> 'disabled'
-		  AND ($6::bigint IS NULL OR created_by = $6)
-		ORDER BY id`, spec.Protocol, spec.Host, spec.Port, spec.Username, spec.Password == "", scope)
+	rows, err := tx.Query(ctx, `SELECT p.id, p.password_enc FROM proxies p
+		WHERE p.protocol = $1 AND lower(p.host) = $2 AND p.port = $3 AND p.username = $4
+		  AND (p.password_enc IS NULL) = $5 AND p.status <> 'disabled'
+		  AND `+core.ProxyRows.SQL(6)+`
+		ORDER BY p.id`, append([]any{spec.Protocol, spec.Host, spec.Port, spec.Username, spec.Password == ""}, core.ProxyRows.Args(scope)...)...)
 	if err != nil {
 		return 0, false, err
 	}
@@ -74,14 +68,20 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	}
 	rows.Close()
 
+	// Creating: every-row or own scopes only, and a restricted one never at
+	// a private address (CONTRACTS §43.3). A proxy already in scope matches
+	// whatever its address.
+	if err := canCreate(ctx, scope); err != nil {
+		return 0, false, err
+	}
+	allowPriv, err := s.checkPrivate(ctx, scope, spec.Host)
+	if err != nil {
+		return 0, false, err
+	}
 	enc, err := s.encryptPassword(&spec.Password)
 	if err != nil {
 		return 0, false, err
 	}
-	// Rows created under proxy:own:manage (scope != nil) must not be private
-	// addresses unless the deployment allows private upstreams (test setup).
-	// Under the full proxy:manage key (scope == nil) every address is allowed.
-	allowPriv := scope == nil || s.opts.AllowPrivate
 	name := autoName(spec)
 	var id int64
 	if err := tx.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status, allow_private, created_by)
@@ -118,8 +118,9 @@ func (s *Service) AuditAutoCreate(ctx context.Context, tx pgx.Tx, proxyID, owner
 
 // HTTPClientFor implements core.ProxyDirectory: a transient, uncached client
 // through spec (CONTRACTS §21.4, models/fetch with proxy_url). A private
-// address is refused here too (the caller could not have saved it via the own
-// key without proxy:manage).
+// address is refused here too, literal or resolved when dialing: nothing
+// tells this port which key the caller holds, so it is as strict as the own
+// key.
 func (s *Service) HTTPClientFor(_ context.Context, spec Spec) (*http.Client, error) {
 	if err := checkSpec(spec); err != nil {
 		return nil, err
@@ -127,5 +128,5 @@ func (s *Service) HTTPClientFor(_ context.Context, spec Spec) (*http.Client, err
 	if !s.opts.AllowPrivate && netguard.LiteralPrivate(spec.Host) {
 		return nil, core.ErrPermissionDenied.WithMessage("proxy address is private and not allowed")
 	}
-	return &http.Client{Transport: newTransport(specURL(spec))}, nil
+	return &http.Client{Transport: newTransport(specURL(spec), s.opts.AllowPrivate)}, nil
 }
