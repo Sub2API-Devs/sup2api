@@ -37,7 +37,7 @@ vi.mock('vue-router', () => ({ useRoute: () => ({ query }), useRouter: () => ({ 
 vi.mock('@sub2api/host', async original => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: async () => ({ items: [], more: false }) } }))
 const perms = vi.hoisted(() => ({ accountRead: true }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => perms.accountRead || ![key].flat().includes('account:read'), hasAction: () => perms.accountRead }) }))
-vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
+vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount', 'mine'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
 vi.mock('./UsageLiveStats.vue', () => ({ default: { name: 'UsageLiveStats', props: ['realtimePath', 'summaryPath', 'revision'], template: '<div data-testid="live-stats" />' } }))
 vi.mock('./UserRanking.vue', () => ({ default: { name: 'UserRanking', emits: ['select'], template: '<div data-testid="ranking" />' } }))
@@ -210,11 +210,12 @@ describe('usage records page', () => {
   })
 
   it('shows the upstream account to operators only; clicking one filters by it', async () => {
-    expect(render().findComponent({ name: 'UsageTable' }).props('showAccount')).toBe(false)
+    // A user's own records: their retried requests' attempts name no account either.
+    expect(render().findComponent({ name: 'UsageTable' }).props()).toMatchObject({ showAccount: false, mine: true })
     lists.length = 0
     const w = render(true)
     const table = w.findComponent({ name: 'UsageTable' })
-    expect(table.props('showAccount')).toBe(true)
+    expect(table.props()).toMatchObject({ showAccount: true, mine: false })
     lists[0].filters.account_name = 'main'
     table.vm.$emit('filter-account-id', 9)
     await flushPromises()
@@ -245,14 +246,14 @@ describe('usage records page', () => {
   })
 
   it('starts from the filters of a link; a user cannot preset another user', async () => {
-    query = { user_id: '3', group_name: 'vip', model: 'gpt-4o', from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' }
+    query = { user_id: '3', group_name: 'vip', model: 'gpt-4o', retried: 'true', from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' }
     render(true)
     expect(lists[0].filters).toMatchObject(query)
     lists.length = 0
     render()
     expect(lists[0].filters.user_id).toBeUndefined()
     expect(lists[0].filters.group_name).toBeUndefined()
-    expect(lists[0].filters).toMatchObject({ model: 'gpt-4o', from: '2026-10-01T00:00:00.000Z' })
+    expect(lists[0].filters).toMatchObject({ model: 'gpt-4o', retried: 'true', from: '2026-10-01T00:00:00.000Z' })
   })
 
   it('a link picks the group and the account by id: shown in their pickers and chips, cleared by Reset', async () => {

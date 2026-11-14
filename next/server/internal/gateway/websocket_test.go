@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -342,6 +343,10 @@ func TestWebSocketHandshakeFailoverDisablesTheAccount(t *testing.T) {
 	if _, disabled := e.accounts.disabled[11]; !disabled {
 		t.Fatal("the account whose key was rejected is still enabled")
 	}
+	// The handshakes are the turn's attempts; the one that opened ends as the turn did.
+	if got := trailShape(r.AttemptTrail); !reflect.DeepEqual(got, []trailStep{{11, 401, errTypeUpstream, core.AttemptSwitch}, {12, 200, "", ""}}) {
+		t.Fatalf("attempt trail %+v", got)
+	}
 	// Every account rejected: the turn fails, the connection stays.
 	e.wsUp.reject["oa-12"] = http.StatusUnauthorized
 	c2 := e.mustDial()
@@ -349,7 +354,7 @@ func TestWebSocketHandshakeFailoverDisablesTheAccount(t *testing.T) {
 	if ev := c2.until("error"); ev[0].Get("status").Int() != 401 || ev[0].Get("error.type").String() != "authentication_error" {
 		t.Fatalf("every key rejected: %v", ev)
 	}
-	if r := e.record(); r.Success || r.ErrorType != errTypeUpstream || r.Attempts != 1 {
+	if r := e.record(); r.Success || r.ErrorType != errTypeUpstream || r.Attempts != 1 || r.AttemptTrail != nil {
 		t.Fatalf("failed turn record: %+v", r)
 	}
 }

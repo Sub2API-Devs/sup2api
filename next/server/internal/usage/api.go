@@ -69,6 +69,11 @@ type Record struct {
 	// converted the request, null when native and nothing was refused.
 	// Hidden from self-service views like upstream_protocol.
 	Conversion json.RawMessage `json:"conversion"`
+	// AttemptTrail is each upstream attempt of a request that took more
+	// than one (anomalies.attempts, CONTRACTS §98), shaped for the caller
+	// (shapeTrail); null for a request sent once and for a row from before
+	// the trail. Only a detail names the accounts.
+	AttemptTrail json.RawMessage `json:"attempt_trail"`
 	// StandardCost is the cost at the global price (standardCost). The
 	// export reads it.
 	StandardCost decimal.Decimal `json:"-"`
@@ -148,7 +153,7 @@ const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.
 	u.error_type, u.error_message, u.attempts, u.input_tokens, u.output_tokens, u.cache_read_tokens,
 	u.cache_creation_tokens, u.cache_creation_1h_tokens, u.total_cost, u.rate_multiplier, u.billing_status,
 	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.upload_ms, u.sticky_hit, u.client_ip, u.conversion,
-	` + standardCost
+	CASE WHEN u.attempts > 1 THEN u.anomalies->>'` + core.AnomalyAttempts + `' END, ` + standardCost
 
 const recordJoins = ` FROM usage_logs u
 	LEFT JOIN users us ON us.id = u.user_id
@@ -164,7 +169,7 @@ func (r *Record) scanTargets() []any {
 		&r.ErrorMessage, &r.Attempts, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens,
 		&r.CacheCreationTokens, &r.CacheCreation1hTokens, &r.TotalCost, &r.RateMultiplier, &r.BillingStatus,
 		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP, &r.Conversion,
-		&r.StandardCost}
+		&r.AttemptTrail, &r.StandardCost}
 }
 
 // hideUpstream removes upstream account details (account, account type,
@@ -176,6 +181,53 @@ func (r *Record) hideUpstream() {
 	// The error message is shown as recorded, 5xx included: self-service
 	// views hide fields, they never rewrite values (user rule, 2026-11-02;
 	// replaces SEC-L3's 5xx blanking).
+}
+
+// trailView is who reads an attempt trail (CONTRACTS §98).
+type trailView int
+
+const (
+	trailAccounts trailView = iota // an operator with account:read: as stored
+	trailRefs                      // an operator without: account_ref instead of account_id
+	trailSelf                      // the request's owner: each attempt's outcome and time
+)
+
+// trailViewFor is the trail view of a usage view (seesAccounts).
+func trailViewFor(self *int64, accounts bool) trailView {
+	switch {
+	case self != nil:
+		return trailSelf
+	case !accounts:
+		return trailRefs
+	}
+	return trailAccounts
+}
+
+// shapeTrail leaves of the row's attempt trail what view may see and returns
+// it; a trail that cannot be read goes (null) rather than unredacted.
+// Without account:read the same account keeps the same account_ref, so a
+// retry on one account still reads as one.
+func (r *Record) shapeTrail(view trailView) *core.AttemptTrail {
+	var tr core.AttemptTrail
+	if len(r.AttemptTrail) == 0 || json.Unmarshal(r.AttemptTrail, &tr) != nil || len(tr.Steps) == 0 {
+		r.AttemptTrail = nil
+		return nil
+	}
+	refs := map[int64]int{}
+	for i := range tr.Steps {
+		st := &tr.Steps[i]
+		switch view {
+		case trailSelf:
+			*st = core.AttemptStep{Status: st.Status, ErrorType: st.ErrorType, Ms: st.Ms}
+		case trailRefs:
+			if _, ok := refs[st.AccountID]; !ok {
+				refs[st.AccountID] = len(refs) + 1
+			}
+			st.AccountRef, st.AccountID, st.AccountName = refs[st.AccountID], 0, ""
+		}
+	}
+	r.AttemptTrail, _ = json.Marshal(&tr)
+	return &tr
 }
 
 // hideAccount removes which account served the request. An operator who may
@@ -341,6 +393,17 @@ func parseFilter(c *gin.Context, self *int64, accounts bool) (*store.Filter, err
 		if at != "" {
 			f.And("u.account_type = ?", at)
 		}
+	}
+	if v := c.Query("retried"); v != "" {
+		retried, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, core.ErrInvalidArgument.WithMessage("invalid retried")
+		}
+		cond := "u.attempts = 1"
+		if retried {
+			cond = "u.attempts > 1"
+		}
+		f.And(cond)
 	}
 	for _, name := range []string{"success", "stream"} {
 		if v := c.Query(name); v != "" {
@@ -511,6 +574,7 @@ func (s *Service) list(c *gin.Context, self *int64) {
 		} else if !accounts {
 			r.hideAccount()
 		}
+		r.shapeTrail(trailViewFor(self, accounts))
 		items = append(items, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -584,10 +648,14 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 	if err := s.db.Pool.QueryRow(ctx, `SELECT id FROM balance_ledger WHERE idempotency_key = $1`, "usage:"+d.RequestID).Scan(&ledgerID); err == nil {
 		d.LedgerID = &ledgerID
 	}
+	accounts := s.seesAccounts(ctx, self)
+	if tr := d.shapeTrail(trailViewFor(self, accounts)); tr != nil && accounts {
+		s.nameTrail(ctx, tr)
+		d.AttemptTrail, _ = json.Marshal(tr)
+	}
 	if self != nil {
 		d.redactForSelf()
 	} else {
-		accounts := s.seesAccounts(ctx, self)
 		if d.PluginKey == requestLogPlugin && d.AccountID != nil && (accounts || core.Can(ctx, s.Authz, "settings:read")) {
 			d.RequestLogAccountID = d.AccountID
 		}
@@ -639,6 +707,11 @@ func (s *Service) shapeAnomalies(ctx context.Context, raw json.RawMessage, accou
 		} else {
 			delete(m, core.AnomalyScheduling)
 		}
+		changed = true
+	}
+	if _, ok := m[core.AnomalyAttempts]; ok {
+		// The detail serves it as attempt_trail, shaped there.
+		delete(m, core.AnomalyAttempts)
 		changed = true
 	}
 	if v, ok := m[anomalyFailurePolicy]; ok && !accounts {
@@ -705,6 +778,21 @@ func (s *Service) shapeScheduling(ctx context.Context, v json.RawMessage, accoun
 		return v, true
 	}
 	return out, true
+}
+
+// nameTrail gives each step of tr its account's name: one query for the
+// record a detail opens, where a list would need one per page and shows the
+// ids alone. Names that cannot be read are left out; the ids still say
+// which accounts.
+func (s *Service) nameTrail(ctx context.Context, tr *core.AttemptTrail) {
+	ids := make([]int64, 0, len(tr.Steps))
+	for _, st := range tr.Steps {
+		ids = append(ids, st.AccountID)
+	}
+	names, _ := s.accountNames(ctx, ids)
+	for i := range tr.Steps {
+		tr.Steps[i].AccountName = names[tr.Steps[i].AccountID]
+	}
 }
 
 // accountNames reads the names of the accounts (deleted ones included, as a

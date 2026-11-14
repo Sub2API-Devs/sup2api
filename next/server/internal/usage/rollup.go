@@ -59,10 +59,11 @@ var (
 	// anomalousRow: one value in the column is a fact, not an anomaly:
 	// usage_extract "plugin" says the plugin answered, which on a
 	// plugin-metered platform is every request; "fallback" (the plugin did
-	// not answer) still counts. The failure policy, availability and scheduling traces
-	// describe how the request was routed, not the record: they never count.
-	anomalousRow = fmt.Sprintf(`((u.anomalies - '%[1]s' - 'failure_policy' - '%[2]s' - '%[4]s') <> '{}'::jsonb OR (u.anomalies ? '%[1]s' AND u.anomalies->>'%[1]s' <> '%[3]s'))`,
-		core.AnomalyUsageExtract, core.AnomalyAvailability, core.UsageExtractPlugin, core.AnomalyScheduling)
+	// not answer) still counts. The failure policy, availability, scheduling
+	// and attempt traces describe how the request was routed, not the
+	// record: they never count.
+	anomalousRow = fmt.Sprintf(`((u.anomalies - '%[1]s' - 'failure_policy' - '%[2]s' - '%[4]s' - '%[5]s') <> '{}'::jsonb OR (u.anomalies ? '%[1]s' AND u.anomalies->>'%[1]s' <> '%[3]s'))`,
+		core.AnomalyUsageExtract, core.AnomalyAvailability, core.UsageExtractPlugin, core.AnomalyScheduling, core.AnomalyAttempts)
 	timedRow      = `u.success AND u.latency_ms > 0`
 	firstTokenRow = `u.success AND u.first_token_ms > 0`
 
