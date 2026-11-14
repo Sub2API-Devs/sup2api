@@ -74,6 +74,16 @@ func enableTwoFactor(t *testing.T, s *Service, userID int64) (string, []string) 
 	return setup.Secret, codes
 }
 
+// lastStepTime is a time inside the last TOTP step the user consumed.
+func lastStepTime(t *testing.T, s *Service, userID int64) time.Time {
+	t.Helper()
+	var step int64
+	if err := s.db.Pool.QueryRow(context.Background(), `SELECT last_step FROM user_totp WHERE user_id = $1`, userID).Scan(&step); err != nil {
+		t.Fatal(err)
+	}
+	return time.Unix(step*totpPeriod, 0)
+}
+
 func clearLastStep(t *testing.T, s *Service, userID int64) {
 	t.Helper()
 	if _, err := s.db.Pool.Exec(context.Background(), `UPDATE user_totp SET last_step = 0 WHERE user_id = $1`, userID); err != nil {
@@ -132,8 +142,9 @@ func TestLoginAsksForTheSecondFactor(t *testing.T) {
 	if _, err := s.LoginSecondFactor(ctx, step.FlowToken, "000000", testIP); !isBadSecondFactor(err) {
 		t.Fatalf("wrong code: %v", err)
 	}
-	// The code that enabled the factor was consumed: it does not log in.
-	if _, err := s.LoginSecondFactor(ctx, step.FlowToken, codeAt(t, secret, time.Now()), testIP); !isBadSecondFactor(err) {
+	// The code that enabled the factor was consumed: it does not log in. It is
+	// the code of the stored step, not of time.Now(), which may be past it.
+	if _, err := s.LoginSecondFactor(ctx, step.FlowToken, codeAt(t, secret, lastStepTime(t, s, id)), testIP); !isBadSecondFactor(err) {
 		t.Fatalf("replayed code: %v", err)
 	}
 	clearLastStep(t, s, id)
