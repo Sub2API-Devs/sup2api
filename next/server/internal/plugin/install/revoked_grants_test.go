@@ -2,11 +2,14 @@ package install
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
 )
@@ -199,5 +202,80 @@ func TestRevocationOutlivesAWithdrawnStagedSet(t *testing.T) {
 	// The running version, which does not ask for log, is not given it.
 	if g, err := grants.Granted(ctx, e.db.Pool, "mini", "0.1.0", e.manifest("0.1.0", false).HostPermissions); err != nil || len(g) != 1 {
 		t.Fatalf("0.1.0 runs with %v (%v)", g, err)
+	}
+}
+
+// decide on revoked permissions, by risk: a revoked one is granted only when
+// named (never carried: the grant rights apply), a required one not named
+// fails, an optional one stays revoked; without a revocation the risk rules
+// are unchanged.
+func TestDecideRevokedPermissions(t *testing.T) {
+	m := &manifest.Manifest{Key: "mini", HostPermissions: []manifest.HostPermission{
+		{ID: "kv"}, {ID: "log", Optional: true}, {ID: "db.schema"}, {ID: "net", Optional: true}}}
+	all := map[string]bool{"kv": true, "log": true, "db.schema": true, "net": true}
+	current := map[string]Grant{}
+	for id := range all {
+		current[id] = Grant{Permission: id, Status: GrantRevoked}
+	}
+	outcome := func(ds []decision, errs []core.FieldError) string {
+		out := map[string]string{}
+		for _, d := range ds {
+			out[d.permission] = fmt.Sprintf("%s/%v", d.status, d.carried)
+		}
+		for _, e := range errs {
+			out[strings.TrimPrefix(e.Field, "permission:")] = e.Code
+		}
+		return fmt.Sprint(out)
+	}
+	for _, c := range []struct {
+		name    string
+		req     ConsentRequest
+		revoked map[string]bool
+		want    string
+	}{
+		{"nothing named", ConsentRequest{}, all,
+			"map[db.schema:consent_required kv:consent_required log:revoked/false net:revoked/false]"},
+		{"required named, optional denied", ConsentRequest{Grants: []GrantInput{{Permission: "kv"}, {Permission: "db.schema"}}, Denied: []string{"log", "net"}}, all,
+			"map[db.schema:granted/false kv:granted/false log:revoked/false net:revoked/false]"},
+		{"everything named", ConsentRequest{Grants: []GrantInput{{Permission: "kv"}, {Permission: "log"}, {Permission: "db.schema"}, {Permission: "net"}}}, all,
+			"map[db.schema:granted/false kv:granted/false log:granted/false net:granted/false]"},
+		{"required denied", ConsentRequest{Grants: []GrantInput{{Permission: "db.schema"}}, Denied: []string{"kv"}}, all,
+			"map[db.schema:granted/false kv:required log:revoked/false net:revoked/false]"},
+		{"no revocation", ConsentRequest{}, nil,
+			"map[db.schema:consent_required kv:granted/false log:granted/false net:denied/false]"},
+	} {
+		if got := outcome(decide(m, c.req, current, c.revoked, true)); got != c.want {
+			t.Errorf("%s:\n got %s\nwant %s", c.name, got, c.want)
+		}
+	}
+}
+
+// An emergency revocation made while an upgrade waits (staged) reaches the
+// staged set too, so activating that version keeps it revoked, and the
+// consent to the next version does not grant it by default.
+func TestRevocationDuringAStagedUpgradeOutlivesItsActivation(t *testing.T) {
+	e := revokedEnv{env: newEnv(t), t: t}
+	ctx := context.Background()
+	e.upload("0.1.0", true)
+	if err := e.consent("0.1.0", ConsentRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	e.activate("0.1.0", true)
+	if r := e.upload("0.2.0", true); r.ConsentStatus != ConsentApproved { // carried over, staged
+		t.Fatalf("0.2.0 not approved on upload: %s", r.ConsentStatus)
+	}
+	if err := e.svc.RevokeGrant(ctx, "mini", "log", e.admin); err != nil {
+		t.Fatal(err)
+	}
+	if s := e.statuses("0.2.0"); s["log"] != GrantRevoked {
+		t.Fatalf("staged log after the revocation: %v", s)
+	}
+	e.activate("0.2.0", true)
+	e.upload("0.3.0", true)
+	if err := e.consent("0.3.0", ConsentRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if s := e.statuses("0.3.0"); s["kv"] != GrantGranted || s["log"] != GrantRevoked {
+		t.Fatalf("staged grants of 0.3.0: %v", s)
 	}
 }
