@@ -269,3 +269,54 @@ func TestAbandonedUpgradeWithdrawsItsConsent(t *testing.T) {
 	}
 	waitFor(t, "0.2.0 served with lock", e.served("0.2.0", "lock"))
 }
+
+// A consent given while an enable prepares another version (nothing active
+// yet) waits for its own version too: the version being enabled is not
+// handed what was approved for the next one, and that one gets it when it
+// is enabled in turn.
+func TestConsentDuringAnEnableWaitsForItsVersion(t *testing.T) {
+	e := newStagedEnv(t)
+	ctx := context.Background()
+	upload := func(version string) {
+		t.Helper()
+		m := e.manifest(version)
+		m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "lock", Optional: true})
+		if _, err := e.svc.Upload(ctx, pkgtest.Build(m, e.root), 0, install.UploadOptions{}); err != nil {
+			t.Fatalf("upload %s: %v", version, err)
+		}
+	}
+	upload("0.1.0")
+	if _, err := e.svc.Consent(ctx, e.h.key, "0.1.0", install.ConsentRequest{
+		Grants: []install.GrantInput{{Permission: "platform.register"}}, Denied: []string{"lock"}}, 0); err != nil {
+		t.Fatal(err)
+	}
+	e.rt.set("0.1.0", false, true)
+	r, err := e.ctl.Enable(ctx, e.h.key, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, active, desired := e.h.plugin(); active != "" || desired != "0.1.0" {
+		t.Fatalf("enabling: active %q desired %q", active, desired)
+	}
+
+	upload("0.2.0")
+	e.consent("0.2.0", "lock")
+	if g := e.grants("0.1.0"); g.Has("lock") || !g.Has("platform.register") {
+		t.Fatalf("0.1.0 being enabled is granted %v after the consent to 0.2.0", g)
+	}
+	if g := e.grants("0.2.0"); !g.Has("lock") {
+		t.Fatalf("0.2.0 is granted %v", g)
+	}
+
+	if err := e.ctl.Cancel(ctx, e.h.key, r.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if s := e.consentStatus("0.2.0"); s != install.ConsentApproved {
+		t.Fatalf("0.2.0 after the cancelled enable of 0.1.0 is %s", s)
+	}
+	// Enable takes the newest approved version, 0.2.0, with its own consent.
+	if _, err := e.ctl.Enable(ctx, e.h.key, 0); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "0.2.0 served with lock", e.served("0.2.0", "lock"))
+}

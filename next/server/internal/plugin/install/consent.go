@@ -164,11 +164,13 @@ type consentable struct {
 	manifest      *manifest.Manifest
 	upgrade       bool
 	current       map[string]Grant
+	staging       bool
 }
 
 // staged reports that the decisions wait for the version's activation:
-// another version is active, and it keeps running with its own grants.
-func (c *consentable) staged() bool { return c.activeVersion != nil }
+// another version runs (or an enable is preparing it), and it keeps running
+// with its own grants.
+func (c *consentable) staged() bool { return c.staging }
 
 // grantDecisions are the decisions as grant rows.
 func grantDecisions(ds []decision) []grants.Decision {
@@ -185,8 +187,11 @@ func grantDecisions(ds []decision) []grants.Decision {
 // signature revocation, publisher revocation and exclusive resources.
 func (s *Service) loadConsentable(ctx context.Context, tx pgx.Tx, key, version string) (*consentable, error) {
 	c := &consentable{}
-	err := tx.QueryRow(ctx, `SELECT status, active_version, publisher_id FROM plugins WHERE key = $1 FOR UPDATE`, key).
-		Scan(&c.pluginStatus, &c.activeVersion, &c.publisherID)
+	// live is the version instances run or prepare: the active one, else
+	// the one an enable rollout is preparing.
+	var live *string
+	err := tx.QueryRow(ctx, `SELECT status, active_version, COALESCE(active_version, desired_version), publisher_id FROM plugins WHERE key = $1 FOR UPDATE`, key).
+		Scan(&c.pluginStatus, &c.activeVersion, &live, &c.publisherID)
 	if store.IsNoRows(err) {
 		return nil, core.ErrNotFound.WithMessage("plugin not found")
 	}
@@ -237,6 +242,7 @@ func (s *Service) loadConsentable(ctx context.Context, tx pgx.Tx, key, version s
 		return nil, err
 	}
 	c.upgrade = c.pluginStatus != StatusAwaitingConsent
+	c.staging = live != nil && *live != version
 	c.current = map[string]Grant{}
 	if c.upgrade {
 		if c.current, err = LoadGrants(ctx, tx, key); err != nil {
@@ -609,15 +615,17 @@ func (s *Service) Reject(ctx context.Context, key, version string, actorID int64
 // RevokeGrant marks one host permission grant revoked, staged ones included.
 func (s *Service) RevokeGrant(ctx context.Context, key, permission string, actorID int64) error {
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		// The plugin row first, as consent and the rollout commit lock it
+		// before the grant rows they write (no lock-order deadlock).
+		if _, err := tx.Exec(ctx, `UPDATE plugins SET row_version=row_version+1,updated_at=now() WHERE key=$1`, key); err != nil {
+			return err
+		}
 		revoked, err := grants.Revoke(ctx, tx, key, permission, nullID(actorID))
 		if err != nil {
 			return err
 		}
 		if !revoked {
 			return core.ErrNotFound.WithMessage("grant not found")
-		}
-		if _, err := tx.Exec(ctx, `UPDATE plugins SET row_version=row_version+1,updated_at=now() WHERE key=$1`, key); err != nil {
-			return err
 		}
 		return audit.Audit(ctx, tx, actorID, "plugin.grant.revoke", "plugin", key, map[string]any{"permission": permission})
 	})
