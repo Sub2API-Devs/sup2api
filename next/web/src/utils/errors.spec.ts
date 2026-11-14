@@ -5,6 +5,17 @@ import { errorMessage, fieldErrors } from './errors'
 
 const invalid = (fields: { field: string; code?: string; message: string }[]) => new ApiError(400, { code: 'invalid_argument', message: 'invalid argument', details: { fields } })
 
+describe('errorMessage', () => {
+  it('words a version whose package is gone (410 package_gone) in both languages', () => {
+    const e = new ApiError(410, { code: 'package_gone', message: 'the package of this version is no longer available; upload it again' })
+    i18n.global.locale.value = 'zh'
+    expect(errorMessage(e)).toBe(i18n.global.t('plugins.errors.packageGone'))
+    expect(errorMessage(e)).toContain('安装包已不在任何节点上')
+    i18n.global.locale.value = 'en'
+    expect(errorMessage(e)).toContain('no longer available on any node')
+  })
+})
+
 describe('fieldErrors', () => {
   it('translates the codes a form knows and keeps the server message otherwise', () => {
     const e = invalid([
