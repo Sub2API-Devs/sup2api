@@ -34,11 +34,15 @@ type Role struct {
 
 var roleKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
 
+// roleKeyImmutable is why PATCH /roles/:id refuses a different key.
+const roleKeyImmutable = "a role's key cannot be changed after creation"
+
 var (
 	errRoleNotFound        = core.ErrNotFound.WithMessage("role not found")
 	errBuiltinRole         = core.ErrConflict.WithMessage("built-in roles cannot be deleted")
 	errNotBuiltinRole      = core.ErrConflict.WithMessage("only built-in roles can be reset")
 	errSuperuserRoleFrozen = core.ErrConflict.WithMessage("the super admin role cannot be changed")
+	errRoleKeyImmutable    = core.InvalidFields(core.FieldError{Field: "key", Code: "immutable", Message: roleKeyImmutable}).WithMessage(roleKeyImmutable)
 	errLastSuperAdmin      = core.ErrConflict.WithMessage("the last super admin cannot be removed")
 )
 
@@ -223,19 +227,27 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 
 // UpdateRoleInput is the body of PATCH /roles/:id.
 type UpdateRoleInput struct {
+	// Key, when sent, must be the role's key: a key never changes
+	// (errRoleKeyImmutable).
+	Key         *string            `json:"key,omitempty"`
 	Name        core.LocalizedText `json:"name"`
 	Description core.LocalizedText `json:"description"`
 }
 
 // UpdateRole changes name/description of a role actorID may edit
-// (editableRole; built-in roles included). A role's key never changes.
+// (editableRole; built-in roles included). A role's key never changes: a
+// different key in the body is refused, the same one ignored.
 func (s *Service) UpdateRole(ctx context.Context, actorID, id int64, in UpdateRoleInput) (*Role, error) {
 	if in.Name != nil && in.Name.Get("en") == "" {
 		return nil, core.InvalidFields(core.FieldError{Field: "name", Code: "required", Message: "name is required"})
 	}
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
-		if _, err := s.editableRole(ctx, tx, actorID, id); err != nil {
+		r, err := s.editableRole(ctx, tx, actorID, id)
+		if err != nil {
 			return err
+		}
+		if in.Key != nil && *in.Key != r.Key {
+			return errRoleKeyImmutable
 		}
 		if _, err := tx.Exec(ctx, `UPDATE roles SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = now() WHERE id = $1`,
 			id, nilIfEmpty(in.Name), nilIfEmpty(in.Description)); err != nil {

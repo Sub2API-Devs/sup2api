@@ -3,14 +3,14 @@ import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SChip, SDropdown, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SFormModal, SPageHeader, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
-import type { LText, PermissionModule, User } from '@/api/types'
+import type { PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
 import { fetchFirstPage } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { useAssignableRoles } from '@/composables/useAssignableRoles'
-import { lt } from '@/i18n'
-import { notifyError } from '@/utils/errors'
+import { inAllLocales, lt } from '@/i18n'
+import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import PermissionTree from './PermissionTree.vue'
 import RoleAssignable from './RoleAssignable.vue'
@@ -49,14 +49,18 @@ init()
 
 // ------------------------------------------------------------------ editor state
 
-const form = reactive({ nameEn: '', nameZh: '', description: '' })
+// The name and description are entered once, in the console's language, and
+// saved the same in every locale (inAllLocales).
+const form = reactive({ name: '', description: '' })
 const perms = ref(new Set<string>())
 const assignable = ref(new Set<string>())
 const assignCustom = ref(false)
-const original = ref({ nameEn: '', nameZh: '', description: '', perms: [] as string[], assignable: [] as string[], assignCustom: false })
+const original = ref({ name: '', description: '', perms: [] as string[], assignable: [] as string[], assignCustom: false })
 const saving = ref(false)
 /** What the last save lacked (403 details.missing / missing_assignable). */
 const saveMissing = ref('')
+/** Field errors of the last save (PATCH /roles/:id invalid_argument). */
+const editErrors = ref<Record<string, string>>({})
 
 /**
  * A built-in role is changed by whoever manages it: on the caller's assignable list and within the
@@ -68,15 +72,9 @@ const builtinLocked = computed(
 const readOnly = computed(() => !canDefine.value || !!selected.value?.superuser || builtinLocked.value)
 const permsMissing = computed(() => !!selected.value && !selected.value.superuser && !Array.isArray(selected.value.permission_keys))
 
-function splitName(v: LText | undefined): { en: string; zh: string } {
-  if (!v) return { en: '', zh: '' }
-  if (typeof v === 'string') return { en: v, zh: v }
-  return { en: v.en || '', zh: v.zh || '' }
-}
-
-const metaDirty = computed(
-  () => form.nameEn !== original.value.nameEn || form.nameZh !== original.value.nameZh || form.description !== original.value.description
-)
+const nameDirty = computed(() => form.name !== original.value.name)
+const descriptionDirty = computed(() => form.description !== original.value.description)
+const metaDirty = computed(() => nameDirty.value || descriptionDirty.value)
 const permsDirty = computed(() => [...perms.value].sort().join() !== original.value.perms.join())
 const assignableDirty = computed(
   () => [...assignable.value].sort().join() !== original.value.assignable.join() || assignCustom.value !== original.value.assignCustom
@@ -87,14 +85,14 @@ async function selectRole(r: RoleRow, force = false) {
   if (!force && r.id === selectedId.value) return
   if (!force && dirty.value && !readOnly.value && !(await confirm({ message: t('roles.discardChanges') }))) return
   selectedId.value = r.id
-  const n = splitName(r.name)
   const keys = [...(r.permission_keys || [])].sort()
   const manages = [...(r.assignable_role_keys || [])].sort()
-  Object.assign(form, { nameEn: n.en, nameZh: n.zh, description: lt(r.description) })
+  Object.assign(form, { name: lt(r.name), description: lt(r.description) })
   perms.value = new Set(keys)
   assignable.value = new Set(manages)
   assignCustom.value = !!r.assign_custom
   saveMissing.value = ''
+  editErrors.value = {}
   original.value = { ...form, perms: keys, assignable: manages, assignCustom: !!r.assign_custom }
   loadMembers(r)
 }
@@ -130,10 +128,15 @@ async function loadMembers(r: RoleRow) {
 async function save() {
   const r = selected.value
   if (!r || readOnly.value) return
+  editErrors.value = {}
+  if (nameDirty.value && !form.name.trim()) {
+    editErrors.value.name = t('common.required')
+    return
+  }
   if (permsDirty.value && permsMissing.value && !(await confirm({ message: t('roles.overwriteUnknown'), danger: true }))) return
   // Each changed part has its own endpoint; they run in order and stop at the first refusal.
   const steps = [
-    metaDirty.value && (() => api.patch(`/roles/${r.id}`, { name: { en: form.nameEn.trim(), zh: form.nameZh.trim() }, description: form.description.trim() })),
+    metaDirty.value && (() => api.patch(`/roles/${r.id}`, metaPatch())),
     permsDirty.value && (() => api.put(`/roles/${r.id}/permissions`, { permission_keys: [...perms.value].sort() })),
     assignableDirty.value && (() => api.put(`/roles/${r.id}/assignable`, { role_keys: [...assignable.value].sort(), assign_custom: assignCustom.value }))
   ].filter((step) => !!step)
@@ -149,12 +152,23 @@ async function save() {
     toast(t('common.saved'), 'success')
   } catch (e) {
     missing = missingText(e)
-    notifyError(e)
+    showSaveError(e)
   }
   // Something was written (all of it, or the parts before a refusal): show what the role now is.
   if (done) await showSaved(r, done === steps.length).catch(notifyError)
   saveMissing.value = missing
   saving.value = false
+}
+
+/**
+ * The PATCH /roles/:id body: only the changed texts, so an untouched built-in
+ * name keeps its default in every locale.
+ */
+function metaPatch() {
+  return {
+    ...(nameDirty.value && { name: inAllLocales(form.name.trim()) }),
+    ...(descriptionDirty.value && { description: inAllLocales(form.description.trim()) })
+  }
 }
 
 async function showSaved(r: RoleRow, complete: boolean) {
@@ -166,6 +180,15 @@ async function showSaved(r: RoleRow, complete: boolean) {
     selectRole(fresh, true)
   }
   if (auth.me?.roles.includes(r.key)) auth.refreshPermissions().catch(() => undefined)
+}
+
+/** Editor fields that show their own errors (PATCH /roles/:id runs first); any other refusal is a toast. */
+const EDITOR_FIELDS = ['key', 'name']
+
+function showSaveError(e: unknown) {
+  const fields = Object.entries(fieldErrors(e, undefined, ROLE_FIELD_CODES)).filter(([k]) => EDITOR_FIELDS.includes(k))
+  editErrors.value = Object.fromEntries(fields)
+  if (!fields.length) notifyError(e)
 }
 
 /** The permissions and managed roles a refused save lacked, as one line. */
@@ -188,16 +211,16 @@ function resetEditor() {
 
 // ------------------------------------------------------------------ create / delete
 
-/** Field error codes of POST /roles shown in the console's language. */
-const CREATE_FIELD_CODES = { reserved: 'roles.keyReserved' }
+/** Field error codes of POST and PATCH /roles shown in the console's language. */
+const ROLE_FIELD_CODES = { reserved: 'roles.keyReserved', immutable: 'roles.keyImmutable' }
 
 const createOpen = ref(false)
 const creating = ref(false)
 const createErrors = ref<Record<string, string>>({})
-const createForm = reactive({ key: '', nameEn: '', nameZh: '', description: '' })
+const createForm = reactive({ key: '', name: '', description: '' })
 
 function openCreate() {
-  Object.assign(createForm, { key: '', nameEn: '', nameZh: '', description: '' })
+  Object.assign(createForm, { key: '', name: '', description: '' })
   createErrors.value = {}
   createOpen.value = true
 }
@@ -207,13 +230,12 @@ async function submitCreate() {
   const key = createForm.key.trim()
   // Same rule as roleKeyRe in server/internal/authz/roles.go.
   if (!ROLE_KEY_PATTERN.test(key)) createErrors.value.key = t('roles.keyInvalid')
-  if (!createForm.nameEn.trim() && !createForm.nameZh.trim()) createErrors.value.name = t('common.required')
+  const name = createForm.name.trim()
+  if (!name) createErrors.value.name = t('common.required')
   if (Object.keys(createErrors.value).length) return
   creating.value = true
   try {
-    const en = createForm.nameEn.trim() || createForm.nameZh.trim()
-    const zh = createForm.nameZh.trim() || en
-    const created = await api.post<RoleRow>('/roles', { key, name: { en, zh }, description: createForm.description.trim() })
+    const created = await api.post<RoleRow>('/roles', { key, name: inAllLocales(name), description: inAllLocales(createForm.description.trim()) })
     toast(t('common.created'), 'success')
     createOpen.value = false
     await loadRoles()
@@ -223,11 +245,7 @@ async function submitCreate() {
       selectRole(r, true)
     }
   } catch (e) {
-    // The name is one field in the form but two (name.en / name.zh) on the server.
-    if (applyFormError(e, createErrors, CREATE_FIELD_CODES)) {
-      const fe = createErrors.value
-      fe.name ||= fe['name.en'] || fe['name.zh'] || ''
-    }
+    applyFormError(e, createErrors, ROLE_FIELD_CODES)
   } finally {
     creating.value = false
   }
@@ -326,14 +344,14 @@ async function restoreDefaults() {
           <SAlert v-if="saveMissing" tone="danger" data-testid="role-save-missing">{{ saveMissing }}</SAlert>
 
           <SGrid :cols="1" :md-cols="3">
-            <SField :label="t('roles.nameEn')">
-              <SInput v-model="form.nameEn" :disabled="readOnly" />
+            <SField :label="t('roles.key')" :hint="t('roles.keyLocked')" :error="editErrors.key">
+              <SInput :model-value="selected.key" mono disabled data-testid="role-key" />
             </SField>
-            <SField :label="t('roles.nameZh')">
-              <SInput v-model="form.nameZh" :disabled="readOnly" />
+            <SField :label="t('common.name')" :error="editErrors.name">
+              <SInput v-model="form.name" :disabled="readOnly" data-testid="role-name" />
             </SField>
             <SField :label="t('common.description')">
-              <SInput v-model="form.description" :disabled="readOnly" />
+              <SInput v-model="form.description" :disabled="readOnly" data-testid="role-description" />
             </SField>
           </SGrid>
 
@@ -358,16 +376,11 @@ async function restoreDefaults() {
 
     <SFormModal v-model:open="createOpen" :title="t('roles.create')" :loading="creating" :submit-text="t('common.create')" @submit="submitCreate">
       <SField :label="t('roles.key')" required :hint="t('roles.keyHint')" :error="createErrors.key">
-        <SInput v-model="createForm.key" mono placeholder="auditor" />
+        <SInput v-model="createForm.key" mono placeholder="auditor" data-testid="role-create-key" />
       </SField>
-      <SGrid>
-        <SField :label="t('roles.nameEn')" :error="createErrors.name">
-          <SInput v-model="createForm.nameEn" placeholder="Auditor" />
-        </SField>
-        <SField :label="t('roles.nameZh')">
-          <SInput v-model="createForm.nameZh" placeholder="审计" />
-        </SField>
-      </SGrid>
+      <SField :label="t('common.name')" required :error="createErrors.name">
+        <SInput v-model="createForm.name" :placeholder="t('roles.namePlaceholder')" data-testid="role-create-name" />
+      </SField>
       <SField :label="t('common.description')" :error="createErrors.description">
         <STextarea v-model="createForm.description" :rows="2" />
       </SField>

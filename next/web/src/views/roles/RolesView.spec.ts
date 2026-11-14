@@ -24,15 +24,20 @@ enableAutoUnmount(afterEach)
 
 const SFormModal = { props: ['open'], emits: ['submit'], template: '<form v-if="open" @submit.prevent="$emit(\'submit\')"><slot /></form>' }
 
-async function create(key: string) {
+async function openCreate() {
   auth.me = null
   auth.perms = null
   lookups.roles = []
   const w = mount(RolesView, { global: { plugins: [i18n, createPinia()], stubs: { SFormModal, teleport: true } } })
   await flushPromises()
-  await w.find('button').trigger('click')
-  await w.find('input[placeholder="auditor"]').setValue(key)
-  await w.find('input[placeholder="Auditor"]').setValue('Role')
+  await w.get('[data-testid="role-create"]').trigger('click')
+  return w
+}
+
+async function create(key: string, name = 'Role') {
+  const w = await openCreate()
+  await w.get('[data-testid="role-create-key"]').setValue(key)
+  await w.get('[data-testid="role-create-name"]').setValue(name)
   await w.find('form').trigger('submit')
   await flushPromises()
   return w
@@ -53,6 +58,28 @@ describe('RolesView role key', () => {
       expect(mocks.post).not.toHaveBeenCalled()
       expect(w.text()).toContain(i18n.global.t('roles.keyInvalid'))
     }
+  })
+})
+
+describe('RolesView create dialog', () => {
+  it('notes that the key is fixed and has one name field', async () => {
+    const w = await openCreate()
+    expect(w.text()).toContain(i18n.global.t('roles.keyHint'))
+    expect(i18n.global.t('roles.keyHint', {}, { locale: 'zh' })).toContain('创建后不可修改')
+    expect(w.findAll('form input').length).toBe(2)
+  })
+
+  it('saves the one name in every locale', async () => {
+    mocks.post.mockClear()
+    await create('auditor')
+    expect(mocks.post).toHaveBeenCalledWith('/roles', { key: 'auditor', name: { zh: 'Role', en: 'Role' }, description: { zh: '', en: '' } })
+  })
+
+  it('requires the name', async () => {
+    mocks.post.mockClear()
+    const w = await create('auditor', '  ')
+    expect(mocks.post).not.toHaveBeenCalled()
+    expect(w.text()).toContain(i18n.global.t('common.required'))
   })
 })
 
@@ -77,17 +104,17 @@ describe('RolesView permissions (T77)', () => {
   ]
 
   let meID = 100
-  async function open(id: number, { superuser = false, perms = ['role:define'], manages = [] as string[] } = {}) {
+  async function open(id: number, { superuser = false, perms = ['role:define'], manages = [] as string[], list = roles as object[] } = {}) {
     // A new identity each time: the managed-roles list is cached per user.
     auth.me = { id: ++meID, roles: [], superuser }
     mocks.get.mockImplementation(async (path: string) =>
       path === '/me/assignable-roles' ? manages.map(key => ({ key, name: key, builtin: true, grantable: true, missing: [], missing_assignable: [], missing_assign_custom: false })) : [])
     auth.perms = perms
-    lookups.roles = roles
+    lookups.roles = list
     const w = mount(RolesView, { global: { plugins: [i18n, createPinia()], stubs: { SFormModal, teleport: true } } })
     await flushPromises()
-    const target = roles.find(r => r.id === id)!
-    await w.findAll('button').find(b => b.text().includes(String(target.name)))!.trigger('click')
+    const target = (list as typeof roles).find(r => r.id === id)!
+    await w.findAll('button').find(b => b.text().includes(target.key))!.trigger('click')
     await flushPromises()
     return w
   }
@@ -186,5 +213,63 @@ describe('RolesView permissions (T77)', () => {
     const su = await open(3, { superuser: true })
     expect(su.find('[data-testid="role-assignable"]').exists()).toBe(false)
     expect(su.find('[data-testid="role-restore"]').exists()).toBe(false)
+  })
+
+  it('shows the key greyed out and fixed, and one name field', async () => {
+    const w = await open(2)
+    const key = w.get('[data-testid="role-key"]')
+    expect((key.element as HTMLInputElement).value).toBe('lead')
+    expect(key.attributes('disabled')).toBeDefined()
+    expect(w.text()).toContain(i18n.global.t('roles.keyLocked'))
+    expect((w.get('[data-testid="role-name"]').element as HTMLInputElement).value).toBe('Lead')
+  })
+
+  it('saves a changed name in every locale and nothing it did not change', async () => {
+    mocks.patch.mockClear()
+    const w = await open(2)
+    await w.get('[data-testid="role-name"]').setValue(' Lead 2 ')
+    await w.get('[data-testid="role-save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/roles/2', { name: { zh: 'Lead 2', en: 'Lead 2' } })
+  })
+
+  it('shows a built-in name in the console language and keeps it when only the description changes', async () => {
+    const prev = i18n.global.locale.value
+    i18n.global.locale.value = 'zh'
+    mocks.patch.mockClear()
+    const list = [...roles, role({ id: 4, key: 'auditor', name: { en: 'Auditor', zh: '审计员' }, builtin: true })]
+    const w = await open(4, { superuser: true, list })
+    expect((w.get('[data-testid="role-name"]').element as HTMLInputElement).value).toBe('审计员')
+    await w.get('[data-testid="role-description"]').setValue('只读')
+    await w.get('[data-testid="role-save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/roles/4', { description: { zh: '只读', en: '只读' } })
+    i18n.global.locale.value = prev
+  })
+
+  it('requires a name before saving', async () => {
+    mocks.patch.mockClear()
+    const w = await open(2)
+    await w.get('[data-testid="role-name"]').setValue('  ')
+    await w.get('[data-testid="role-save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patch).not.toHaveBeenCalled()
+    expect(w.text()).toContain(i18n.global.t('common.required'))
+  })
+
+  it('shows a refused key change next to the key in the console language', async () => {
+    const prev = i18n.global.locale.value
+    i18n.global.locale.value = 'zh'
+    const message = "a role's key cannot be changed after creation"
+    mocks.patch.mockRejectedValueOnce(new ApiError(400, { code: 'invalid_argument', message, details: { fields: [{ field: 'key', code: 'immutable', message }] } }))
+    const w = await open(2)
+    await w.get('[data-testid="role-name"]').setValue('Lead 2')
+    await w.get('[data-testid="role-save"]').trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('角色标识创建后不可修改')
+    expect(w.text()).not.toContain(message)
+    // The edit stays for another try.
+    expect((w.get('[data-testid="role-name"]').element as HTMLInputElement).value).toBe('Lead 2')
+    i18n.global.locale.value = prev
   })
 })

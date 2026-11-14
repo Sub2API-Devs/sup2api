@@ -1567,3 +1567,12 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 改动：`blobs.Store` 增加 `Has`（`Dir` 看文件；`Shell` 向外壳 GET `Range: bytes=0-0`，外壳用 `http.ServeContent` 回 206，从节点缺包时外壳先从主节点拉取，与 `Get` 相同，网关不用改）与 `Source.Has`。`Service.Package` 命中缓存时先 `Has`，存储里没有（或检查出错）就丢掉该版本的缓存、按未缓存重新取（市场版本可再下载），取不到 410 `package_gone`；放进缓存时去掉同一版本的旧项。同意在事务前 `checkPackage`：`Has` 为真直接通过，否则走 `Package`（同一判断），所以 410 先于版本状态的 409。
 - 测试：api `TestReviewOfAVersionWhosePackageIsGone`（上传 → review 200 进缓存 → 删 blob → 不重启 review 410、同意 410 → 重新上传后 review、同意都 200；修复前删 blob 后 review 仍 200）；blobs `TestDirRejectsWrongBytesAndReportsMissing`、`TestShellStoreSpeaksTheManagementSocket`（`Has` 只要 1 个字节）；install `TestPackageCacheFollowsTheStoreOnEveryNode`（独立审查补充：两个共用数据库与包存储、各有缓存的节点，并发读取下删包后都是 410、重新存入后都恢复，删包与重新存入交替时只会读到包或 410，`-race` 通过；修复前删包后仍返回缓存）。
 - 回滚：revert 本组提交。无迁移；`ApplyDefaults`/`Withdraw` 多保留的 `revoked` 行不授予任何实例，旧核心照常剪掉或忽略。
+
+### 角色编辑：标识置灰、单一名称
+
+- 问题（用户 2026-11-14）：角色编辑页看不到角色标识（key），名称分“名称（英文）”“名称（中文）”两栏，用户只想要一个名称。
+- 改动（无迁移，数据结构不变：`name`、`description` 仍是 LocalizedText jsonb）：
+  - 服务端：`UpdateRoleInput` 加可选 `key`；在 `editableRole` 之后比较，与现有 key 不同返回 400 `invalid_argument`（`fields[{field:"key", code:"immutable"}]`，message `a role's key cannot be changed after creation`），相同则忽略（CONTRACTS §15.7）。
+  - 控制台 `RolesView`：编辑页第一项“标识”，置灰禁用，提示“创建后不可修改”；名称只一个输入框（`common.name`），初值取当前界面语言的显示值（`lt`）；新建对话框的标识可填，旁注“创建后不可修改”并照旧按 `ROLE_KEY_PATTERN` 校验，名称一个输入框且必填。保存时把同一个值写进每种语言（`inAllLocales`，`@/i18n`，`lt` 的反向），PATCH 只带改动过的字段，所以只改描述不会把内置角色的默认中/英名称覆盖成一种语言；“恢复默认”照旧恢复默认中英名称。PATCH 的 `key`/`name` 字段错误显示在对应输入框下（`immutable` 译为“角色标识创建后不可修改”），其他错误照旧 toast。
+- 测试：authz `TestUpdateRoleKeyImmutable`（自定义角色与内置角色带不同 key 都 400 `immutable` 且名称不变；相同 key 正常改名）；web `RolesView.spec`（标识置灰禁用并显示提示、单一名称保存写两份且不带未改字段、内置角色按界面语言显示名称且只改描述时不发名称、名称必填、PATCH 400 `immutable` 在标识下显示中文且保留编辑、新建对话框提示与单一名称）。
+- 回滚：revert 本组提交；旧核心忽略请求体里的 `key`，控制台从不发送它。

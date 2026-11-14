@@ -483,3 +483,36 @@ WHERE target_type = 'role' AND action LIKE 'role.%' AND user_id = $1 ORDER BY id
 		t.Fatalf("role.reset detail: %q %v", assign, err)
 	}
 }
+
+// A role's key never changes: PATCH /roles/:id refuses a different key with
+// a field error on key (built-in roles included) and ignores the same one.
+func TestUpdateRoleKeyImmutable(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	r, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := func(k string) *string { return &k }
+
+	for _, id := range []int64{r.ID, roleID(t, s, RoleOperator)} {
+		_, err := s.UpdateRole(ctx, root, id, UpdateRoleInput{Key: key("renamed"), Name: lt("Renamed", "改名")})
+		if !isCode(err, "invalid_argument") || fieldCode(err, "key") != "immutable" {
+			t.Fatalf("role %d: different key: %v", id, err)
+		}
+		if got, _ := s.GetRole(ctx, id); got.Name.Get("en") == "Renamed" {
+			t.Fatalf("role %d renamed by a refused update", id)
+		}
+	}
+
+	got, err := s.UpdateRole(ctx, root, r.ID, UpdateRoleInput{Key: key("ops"), Name: lt("Ops 2", "运营 2")})
+	if err != nil {
+		t.Fatalf("same key: %v", err)
+	}
+	if got.Key != "ops" || got.Name.Get("zh") != "运营 2" {
+		t.Fatalf("same key: got %s %v", got.Key, got.Name)
+	}
+}
