@@ -69,8 +69,10 @@ type decision struct {
 // covers what is granted now is carried over, whether the request names it
 // or not (it was approved before, so granting it again takes no grant
 // right); every other required permission must be granted explicitly.
+// A revoked permission (grants.Revoked) is granted only when the request
+// names it: required, it must be; optional, it stays revoked, denied or not.
 // Granted scopes may be narrower than requested, never wider.
-func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, upgrade bool) ([]decision, []core.FieldError) {
+func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, revoked map[string]bool, upgrade bool) ([]decision, []core.FieldError) {
 	var errs []core.FieldError
 	requested := map[string]manifest.HostPermission{}
 	for _, hp := range m.HostPermissions {
@@ -129,12 +131,17 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 			out = append(out, decision{permission: hp.ID, scope: scope, status: GrantGranted, carried: carried(hp.ID, scope)})
 			continue
 		}
-		if denied[hp.ID] {
-			if !hp.Optional {
+		if denied[hp.ID] || revoked[hp.ID] {
+			switch {
+			case hp.Optional && revoked[hp.ID]:
+				out = append(out, decision{permission: hp.ID, scope: reqScope, status: GrantRevoked})
+			case hp.Optional:
+				out = append(out, decision{permission: hp.ID, scope: reqScope, status: GrantDenied})
+			case denied[hp.ID]:
 				errs = append(errs, core.FieldError{Field: f, Code: "required", Message: fmt.Sprintf("permission %q is required and cannot be denied", hp.ID)})
-				continue
+			default:
+				errs = append(errs, core.FieldError{Field: f, Code: "consent_required", Message: fmt.Sprintf("permission %q was revoked and must be granted explicitly", hp.ID)})
 			}
-			out = append(out, decision{permission: hp.ID, scope: reqScope, status: GrantDenied})
 			continue
 		}
 		if risk == manifest.RiskLow {
@@ -164,6 +171,7 @@ type consentable struct {
 	manifest      *manifest.Manifest
 	upgrade       bool
 	current       map[string]Grant
+	revoked       map[string]bool
 	staging       bool
 }
 
@@ -249,6 +257,9 @@ func (s *Service) loadConsentable(ctx context.Context, tx pgx.Tx, key, version s
 			return nil, err
 		}
 	}
+	if c.revoked, err = grants.Revoked(ctx, tx, key); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -256,7 +267,7 @@ func (s *Service) loadConsentable(ctx context.Context, tx pgx.Tx, key, version s
 // its post-consent state.
 func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version string, req ConsentRequest, actorID int64, c *consentable, auto bool) (*ConsentResult, error) {
 	m := c.manifest
-	decisions, ferrs := decide(m, req, c.current, c.upgrade)
+	decisions, ferrs := decide(m, req, c.current, c.revoked, c.upgrade)
 	if len(ferrs) > 0 {
 		return nil, core.InvalidFields(ferrs...).WithMessage("consent does not match the requested permissions")
 	}
@@ -375,6 +386,9 @@ func (s *Service) consent(ctx context.Context, key, version string, req ConsentR
 		return nil, guardErr
 	}
 	defer release()
+	if err := s.checkPackage(ctx, key, version); err != nil {
+		return nil, err
+	}
 
 	var res *ConsentResult
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {

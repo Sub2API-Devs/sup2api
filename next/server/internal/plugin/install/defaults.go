@@ -27,7 +27,9 @@ func NewDefaultsApplier(perms core.PermissionCatalog) *DefaultsApplier {
 
 // ApplyDefaults syncs the user permissions of m, granting newly created ones
 // to the roles of grants (roleGrants), and drops host permission grants the
-// manifest no longer requests. It runs inside the caller's transaction.
+// manifest no longer requests, except revocations: a version asking for the
+// permission again does not get it by default (grants.Revoked). It runs
+// inside the caller's transaction.
 // Plugins bring no sticky rules (CONTRACTS §5.6).
 func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grants map[string][]string) error {
 	if a.perms != nil {
@@ -40,7 +42,7 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 		ids = append(ids, hp.ID)
 	}
 	if _, err := tx.Exec(ctx,
-		`DELETE FROM plugin_permission_grants WHERE plugin_key = $1 AND NOT (permission = ANY($2))`, m.Key, ids); err != nil {
+		`DELETE FROM plugin_permission_grants WHERE plugin_key = $1 AND NOT (permission = ANY($2)) AND status <> 'revoked'`, m.Key, ids); err != nil {
 		return fmt.Errorf("prune grants: %w", err)
 	}
 	return nil

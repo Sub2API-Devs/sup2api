@@ -58,6 +58,11 @@ export function lt(v: unknown): string {
   return String(v)
 }
 
+/** The reverse of lt for a text entered once: the same value in every locale. */
+export function inAllLocales(v: string): Record<Locale, string> {
+  return Object.fromEntries(LOCALES.map((l) => [l, v])) as Record<Locale, string>
+}
+
 /** Merges messages under a namespace path such as "plugin.guard". */
 export function addMessages(namespace: string, byLocale: Record<string, Record<string, unknown>>) {
   for (const [locale, msgs] of Object.entries(byLocale)) {

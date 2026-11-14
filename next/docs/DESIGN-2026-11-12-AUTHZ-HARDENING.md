@@ -1546,3 +1546,33 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 影响对象：admin（能改、重置 operator/supplier/user，不能再给 supplier、operator 调余额）、财务类角色（需要超管授 `balance:adjust:any`）、脚本（调余额的 403 多一种 `not_plain_user`）。
 - 回滚：revert 本组提交（0097 的第 7 步与第 6 步口径随之还原；测试库重建即可，生产未跑过 0097）。已发布后回滚走反向脚本（删 `defaults_rev`，补缺的授予保留，重置清掉的授予不恢复，见回滚说明）。
 
+
+## 0.1.287：撤销过的低风险权限不自动恢复、已删除的安装包不再从缓存放行（2026-11-14，独立验证遗留的两条低严重度旧行为）
+
+### 撤销过的宿主权限
+
+- 问题：管理员撤销的低风险宿主权限（如 `kv`），插件升级同意时被 `decide` 的“低风险默认授予”给回（审计 `carried=false`），控制台也把低风险权限锁成“自动”并放进 `grants` 提交。
+- 改动（无迁移，只用两张授予表已有的 `status = revoked` 行）：
+  - `grants.Revoked`：插件授予表与各版本待生效授予里，每个权限最新（`granted_at` 最大，相同时撤销优先）的一行是 `revoked` 即“撤销过”。取最新而不是“任一行”，是因为显式恢复可能只写进某个版本的待生效集合，而更早的、永远不会激活的待生效集合里会残留 `revoked`。
+  - `decide` 多一个参数 `revoked`：撤销过的权限只在请求 `grants` 列出时授予；必需的未列出 400 `consent_required`、列在 `denied` 400 `required`；可选的记 `revoked`（不是 `denied`，否则下一次同意看到最新一行是 `denied`，又按低风险默认给回）。高风险、极高风险照旧要显式同意和授予权限。`loadConsentable` 每次同意都读 `Revoked`。
+  - 撤销跨版本保留：`ApplyDefaults` 剪掉新版本不再申请的授予时保留 `revoked` 行；`grants.Withdraw` 撤回待生效集合时，其中的 `revoked` 行在插件授予表没有该权限时移入（`ON CONFLICT DO NOTHING`：有行说明一起被撤销过或之后有了新的决定）。
+  - review：`host_permissions[].revoked`（`loadPriorGrants` = `LoadGrants` + `Revoked`，上传与 GET review 共用，`noteRevoked` 标记）；`carryOverConsent` 遇到撤销过的权限不沿用（diff 已经把它算作新增，这里再显式挡一次）。
+  - 控制台：`ConsentView` 撤销过的低风险权限不再锁成“自动”、默认不勾选，撤销过的中风险权限也不预勾；`HostPermissionTable` 标“已撤销，勾选才重新授予”；必需的不勾无法提交（`missingRequired`）。
+- 不在本次范围：内置插件随镜像升级时系统同意照旧显式授予全部宿主权限（§5.7 内置插件约定；必需权限不授予会让镜像升级卡在 `awaiting_consent`、节点不就绪）。
+- 测试：install `TestRevokedLowRiskGrantIsNotGrantedByDefault`（撤销 kv、log → 上传不沿用、review 标记 → 不列 kv 400 `consent_required` → 列 kv 恢复、log 列在 denied 仍为 `revoked`、审计 `carried=false` → 不申请 log 的版本激活后 log 的 `revoked` 行保留 → 再申请 log 的版本不给 → 显式授予 log 后下一版本默认给回）、`TestRevocationOutlivesAWithdrawnStagedSet`（只在待生效集合里撤销 → 撤回 → 重新同意仍为 `revoked`，运行中的版本拿不到）；web `ConsentView.spec`（撤销过的低风险权限可勾选、默认不勾、必需的不勾不提交、勾上才放进 `grants`）。修复前两条 install 测试都失败（同意不列 kv 时待生效集合里 kv 为 `granted`）。独立审查补充：`TestDecideRevokedPermissions`（`decide` 按风险的取值表：撤销过的只在列出时授予且不算沿用，高风险照旧要授予权限；没有撤销时规则不变）、`TestRevocationDuringAStagedUpgradeOutlivesItsActivation`（升级待生效时紧急撤销，该版本激活后仍为 `revoked`，下一版本不默认给回）。
+
+### 已删除的安装包
+
+- 问题：插件包在核心外被删除后、核心重启前，review 读进程内缓存的解包结果仍返回 200；同意只读数据库里的 manifest，包不在也能批准。
+- 改动：`blobs.Store` 增加 `Has`（`Dir` 看文件；`Shell` 向外壳 GET `Range: bytes=0-0`，外壳用 `http.ServeContent` 回 206，从节点缺包时外壳先从主节点拉取，与 `Get` 相同，网关不用改）与 `Source.Has`。`Service.Package` 命中缓存时先 `Has`，存储里没有（或检查出错）就丢掉该版本的缓存、按未缓存重新取（市场版本可再下载），取不到 410 `package_gone`；放进缓存时去掉同一版本的旧项。同意在事务前 `checkPackage`：`Has` 为真直接通过，否则走 `Package`（同一判断），所以 410 先于版本状态的 409。
+- 测试：api `TestReviewOfAVersionWhosePackageIsGone`（上传 → review 200 进缓存 → 删 blob → 不重启 review 410、同意 410 → 重新上传后 review、同意都 200；修复前删 blob 后 review 仍 200）；blobs `TestDirRejectsWrongBytesAndReportsMissing`、`TestShellStoreSpeaksTheManagementSocket`（`Has` 只要 1 个字节）；install `TestPackageCacheFollowsTheStoreOnEveryNode`（独立审查补充：两个共用数据库与包存储、各有缓存的节点，并发读取下删包后都是 410、重新存入后都恢复，删包与重新存入交替时只会读到包或 410，`-race` 通过；修复前删包后仍返回缓存）。
+- 回滚：revert 本组提交。无迁移；`ApplyDefaults`/`Withdraw` 多保留的 `revoked` 行不授予任何实例，旧核心照常剪掉或忽略。
+
+### 角色编辑：标识置灰、单一名称
+
+- 问题（用户 2026-11-14）：角色编辑页看不到角色标识（key），名称分“名称（英文）”“名称（中文）”两栏，用户只想要一个名称。
+- 改动（无迁移，数据结构不变：`name`、`description` 仍是 LocalizedText jsonb）：
+  - 服务端：`UpdateRoleInput` 加可选 `key`；在 `editableRole` 之后比较，与现有 key 不同返回 400 `invalid_argument`（`fields[{field:"key", code:"immutable"}]`，message 按请求语言：`a role's key cannot be changed after creation` / `角色标识创建后不可修改`），相同则忽略（CONTRACTS §15.7）。
+  - 控制台 `RolesView`：编辑页第一项“标识”，置灰禁用，提示“创建后不可修改”；名称只一个输入框（`common.name`），初值取当前界面语言的显示值（`lt`）；新建对话框的标识可填，旁注“创建后不可修改”并照旧按 `ROLE_KEY_PATTERN` 校验，名称一个输入框且必填。保存时把同一个值写进每种语言（`inAllLocales`，`@/i18n`，`lt` 的反向），PATCH 只带改动过的字段（按去掉首尾空格后比较，只多打空格不算改动），所以只改描述不会把内置角色的默认中/英名称覆盖成一种语言；“恢复默认”照旧恢复默认中英名称。PATCH 的 `key`/`name` 字段错误显示在对应输入框下（`immutable` 译为“角色标识创建后不可修改”），其他错误照旧 toast。
+- 测试：authz `TestUpdateRoleKeyImmutable`（自定义角色与内置角色带不同 key 都 400 `immutable` 且名称不变；中文请求的 message 为中文；相同 key 正常改名）；web `RolesView.spec`（标识置灰禁用并显示提示、单一名称保存写两份且不带未改字段、内置角色按界面语言显示名称且只改描述时不发名称、名称必填、PATCH 400 `immutable` 在标识下显示中文且保留编辑、新建对话框提示与单一名称）。
+- 回滚：revert 本组提交；旧核心忽略请求体里的 `key`，控制台从不发送它。

@@ -117,14 +117,20 @@ func Promote(ctx context.Context, tx pgx.Tx, key, version string) error {
 // Withdraw takes back the set staged for version when its upgrade is
 // abandoned (reason: the rollout's final phase): the version waits for a
 // new consent, and the system audits plugin.grants.withdraw with the
-// permissions that were granted. Nothing staged: no-op.
+// permissions that were granted. A revocation in the set is kept as a
+// plugin grant row unless the plugin has one for that permission (it was
+// revoked with it, or decided since), so it still stands (Revoked).
+// Nothing staged: no-op.
 func Withdraw(ctx context.Context, tx pgx.Tx, key, version, reason string) error {
 	var (
 		n       int
 		granted []string
 	)
 	if err := tx.QueryRow(ctx, `
-		WITH gone AS (DELETE FROM plugin_staged_grants WHERE plugin_key = $1 AND version = $2 RETURNING permission, status)
+		WITH gone AS (DELETE FROM plugin_staged_grants WHERE plugin_key = $1 AND version = $2 RETURNING *),
+		kept AS (INSERT INTO plugin_permission_grants (plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)
+			SELECT plugin_key, permission, scope, status, version, manifest_hash, granted_by, granted_at FROM gone WHERE status = 'revoked'
+			ON CONFLICT (plugin_key, permission) DO NOTHING)
 		SELECT count(*), COALESCE(array_agg(permission ORDER BY permission) FILTER (WHERE status = 'granted'), '{}') FROM gone`,
 		key, version).Scan(&n, &granted); err != nil || n == 0 {
 		return err
@@ -150,4 +156,31 @@ func Revoke(ctx context.Context, tx pgx.Tx, key, permission string, by *int64) (
 			WHERE plugin_key = $1 AND permission = $2 AND status = 'granted' RETURNING 1)
 		SELECT (SELECT count(*) FROM active) + (SELECT count(*) FROM staged)`, key, permission, by).Scan(&n)
 	return n > 0, err
+}
+
+// Revoked reports the host permissions of key whose latest decision, over
+// the plugin's grants and every staged set, is a revocation: an
+// administrator revoked them and no consent has granted them since. A
+// consent grants them only when it names them (CONTRACTS §5.7).
+func Revoked(ctx context.Context, q store.Querier, key string) (map[string]bool, error) {
+	rows, err := q.Query(ctx, `SELECT permission FROM (
+		SELECT DISTINCT ON (permission) permission, status FROM (
+			SELECT permission, status, granted_at FROM plugin_permission_grants WHERE plugin_key = $1
+			UNION ALL
+			SELECT permission, status, granted_at FROM plugin_staged_grants WHERE plugin_key = $1) d
+		ORDER BY permission, granted_at DESC, status = 'revoked' DESC) latest
+		WHERE status = 'revoked'`, key)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var perm string
+		if err := rows.Scan(&perm); err != nil {
+			return nil, err
+		}
+		out[perm] = true
+	}
+	return out, rows.Err()
 }

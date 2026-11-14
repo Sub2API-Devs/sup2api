@@ -199,6 +199,7 @@ export default {
     diffAdded: '新增',
     diffWidened: '扩大',
     carried: '已授予，沿用',
+    revoked: '已撤销，勾选才重新授予',
     diffRemoved: '移除',
     diffNone: '权限没有变化。',
     provides: '插件提供',

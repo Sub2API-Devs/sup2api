@@ -1,6 +1,7 @@
 package blobs
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func sumOf(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
@@ -34,6 +36,15 @@ func TestDirRejectsWrongBytesAndReportsMissing(t *testing.T) {
 	}
 	if _, err := d.Get(ctx, "../../etc/passwd"); err == nil {
 		t.Fatal("non-digest name accepted")
+	}
+	if ok, err := d.Has(ctx, sumOf(data)); !ok || err != nil {
+		t.Fatalf("has stored: %v %v", ok, err)
+	}
+	if ok, err := d.Has(ctx, sumOf([]byte("absent"))); ok || err != nil {
+		t.Fatalf("has missing: %v %v", ok, err)
+	}
+	if _, err := d.Has(ctx, "../../etc/passwd"); err == nil {
+		t.Fatal("non-digest name accepted by Has")
 	}
 }
 
@@ -79,7 +90,10 @@ func TestShellStoreSpeaksTheManagementSocket(t *testing.T) {
 	if err != nil {
 		t.Skip("unix sockets unavailable:", err)
 	}
-	var mu sync.Mutex
+	var (
+		mu     sync.Mutex
+		ranges []string
+	)
 	stored := map[string][]byte{}
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sum := strings.TrimPrefix(r.URL.Path, "/system/plugin-blobs/")
@@ -96,7 +110,8 @@ func TestShellStoreSpeaksTheManagementSocket(t *testing.T) {
 				http.NotFound(w, r)
 				return
 			}
-			_, _ = w.Write(b)
+			ranges = append(ranges, r.Header.Get("Range"))
+			http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b)) // as the shell serves it
 		}
 	})}
 	go srv.Serve(ln)
@@ -113,6 +128,18 @@ func TestShellStoreSpeaksTheManagementSocket(t *testing.T) {
 	if _, err = s.Get(ctx, sumOf([]byte("absent"))); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing: %v", err)
 	}
+	// Has asks for one byte, not the package.
+	if ok, err := s.Has(ctx, sumOf(data)); !ok || err != nil {
+		t.Fatalf("has stored: %v %v", ok, err)
+	}
+	if ok, err := s.Has(ctx, sumOf([]byte("absent"))); ok || err != nil {
+		t.Fatalf("has missing: %v %v", ok, err)
+	}
+	mu.Lock()
+	if last := ranges[len(ranges)-1]; last != "bytes=0-0" {
+		t.Fatalf("Has asked for range %q", last)
+	}
+	mu.Unlock()
 	// A shell answering with other bytes is rejected.
 	mu.Lock()
 	stored[sumOf(data)] = []byte("swapped")

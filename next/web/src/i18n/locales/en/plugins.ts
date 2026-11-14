@@ -199,6 +199,7 @@ export default {
     diffAdded: 'New',
     diffWidened: 'Widened',
     carried: 'Granted before, kept',
+    revoked: 'Revoked; granted again only if ticked',
     diffRemoved: 'Removed',
     diffNone: 'No permission changes.',
     provides: 'What the plugin provides',
