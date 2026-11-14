@@ -31,7 +31,8 @@ func (k keyTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.Acces
 // (the route, narrowed by an access key), and the roles the caller manages
 // decide whom (authz's CanActOnUsers, by the caller's roles, itself
 // included), plain users only (no role but user) unless those roles also
-// grant balance:adjust:any (core.ActOnBalance). The super admin adjusts
+// grant balance:adjust:any (core.ActOnBalance), which an access key, as it
+// narrows what the caller may do, must name as well. The super admin adjusts
 // everyone's; an admin plain users', and with balance:adjust:any those of
 // suppliers and operators too, never an admin's, itself included; an
 // operator given balance:adjust plain users'. Each action on oneself leaves
@@ -71,10 +72,13 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 	e.svc.Users = az
 	engine := gin.New()
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, keyTokens{keys: map[string]core.AccessKeyIdentity{
-		"super_adjust": {UserID: super, KeyID: 11, Permissions: []string{"balance:adjust"}},
-		"super_read":   {UserID: super, KeyID: 12, Permissions: []string{"balance:read"}},
-		"admin_adjust": {UserID: admin, KeyID: 13, Permissions: []string{"balance:adjust"}},
-		"admin_read":   {UserID: admin, KeyID: 14, Permissions: []string{"balance:read"}},
+		"super_adjust":   {UserID: super, KeyID: 11, Permissions: []string{"balance:adjust", "balance:adjust:any"}},
+		"super_read":     {UserID: super, KeyID: 12, Permissions: []string{"balance:read"}},
+		"admin_adjust":   {UserID: admin, KeyID: 13, Permissions: []string{"balance:adjust"}},
+		"admin_read":     {UserID: admin, KeyID: 14, Permissions: []string{"balance:read"}},
+		"super_plain":    {UserID: super, KeyID: 15, Permissions: []string{"balance:adjust"}},
+		"admin_any":      {UserID: adminAny, KeyID: 16, Permissions: []string{"balance:adjust", "balance:adjust:any"}},
+		"admin_any_bare": {UserID: adminAny, KeyID: 17, Permissions: []string{"balance:adjust"}},
 	}}, az))
 	e.h = engine
 	adjust := func(actor int64, key string, target int64) (int, map[string]any) {
@@ -99,6 +103,9 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 		{"super admin's key with balance:adjust itself", super, "super_adjust", super, allowed},
 		{"super admin's key with balance:adjust a user", super, "super_adjust", user, allowed},
 		{"super admin's key without it", super, "super_read", super, noPermission},
+		{"super admin's key with balance:adjust alone a user", super, "super_plain", user, allowed},
+		{"super admin's key with balance:adjust alone an operator", super, "super_plain", operator, notPlain},
+		{"super admin's key with balance:adjust alone itself", super, "super_plain", super, notPlain},
 		{"admin a user", admin, "", user, allowed},
 		{"admin a user without roles", admin, "", roleless, allowed},
 		{"admin a supplier", admin, "", supplier, notPlain},
@@ -114,6 +121,9 @@ func TestAdjustBalanceManagedUsers(t *testing.T) {
 		{"admin with balance:adjust:any a supplier", adminAny, "", supplier, allowed},
 		{"admin with balance:adjust:any an operator", adminAny, "", operator, allowed},
 		{"admin with balance:adjust:any another admin", adminAny, "", admin, notManaged},
+		{"admin with balance:adjust:any, its key naming it, a supplier", adminAny, "admin_any", supplier, allowed},
+		{"admin with balance:adjust:any, its key with balance:adjust alone, a supplier", adminAny, "admin_any_bare", supplier, notPlain},
+		{"admin with balance:adjust:any, its key with balance:adjust alone, a user", adminAny, "admin_any_bare", user, allowed},
 		{"operator by default", operator, "", user, noPermission},
 		{"operator with balance:adjust a supplier", adjusting, "", supplier, notPlain},
 		{"operator with balance:adjust a user", adjusting, "", user, allowed},

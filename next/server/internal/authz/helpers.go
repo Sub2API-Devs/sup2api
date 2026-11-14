@@ -142,8 +142,8 @@ func cannotActOnPeer(ctx context.Context, roleKey string) *core.Error {
 }
 
 // notPlainUser is the denial of a balance adjustment for a target holding
-// roleKey, a role besides the default one, by an actor without
-// balance:adjust:any (canActOnUsers, core.ActOnBalance).
+// roleKey, a role besides the default one, by an actor (or its access key)
+// without balance:adjust:any (canActOnUsers, core.ActOnBalance).
 func notPlainUser(ctx context.Context, roleKey string) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx,
 		"you can only adjust the balance of users holding no role but user",
@@ -190,8 +190,9 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.U
 // the account over. The actor's side is its roles too: an access key narrows
 // what the caller may do (the route's permission), not whom. ActOnIdentity
 // on a superuser through an access key needs a step-up proof (期 4 S3, in
-// place of decision 1's session-only rule); ActOnBalance on a target holding
-// a role besides user needs balance:adjust:any in the actor's roles.
+// place of decision 1's session-only rule). ActOnBalance on a target holding
+// a role besides user needs balance:adjust:any in the actor's roles and,
+// being a permission key, in its access key too, as balance:adjust is.
 // An action on oneself that passes (only a superuser's, with the default
 // lists; also a custom role whose list names itself: assign_custom never
 // covers the holder's own roles, RolesPermissions) is audited here, the one
@@ -224,7 +225,7 @@ func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID in
 		case key == RoleUser:
 		case !actor.CanAssign(key):
 			return cannotActOnPeer(ctx, key)
-		case action == core.ActOnBalance && !actor.Has(string(perm.BalanceAdjustAny)):
+		case action == core.ActOnBalance && !core.RestrictToAccessKey(ctx, actorID, actor).Has(string(perm.BalanceAdjustAny)):
 			return notPlainUser(ctx, key)
 		}
 	}

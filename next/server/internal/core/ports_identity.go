@@ -324,8 +324,8 @@ const (
 	// (期 4 S3, replacing decision 1's session-only rule).
 	ActOnIdentity
 	// ActOnBalance adjusts balances: ActOnData, and a target holding a role
-	// besides the default one also takes balance:adjust:any (plain users
-	// only with balance:adjust alone).
+	// besides the default one also takes balance:adjust:any, in the actor's
+	// roles and its access key (plain users only with balance:adjust alone).
 	ActOnBalance
 )
 
@@ -337,8 +337,9 @@ type UserGuard interface {
 	// role a target holds, the default user role aside, is one the actor may
 	// assign, and what the targets' roles grant is within the actor's (a
 	// superuser manages everyone). For ActOnIdentity a superuser target
-	// through an access key needs a step-up proof. Actor 0 (the system)
-	// passes.
+	// through an access key needs a step-up proof; for ActOnBalance a target
+	// holding a role besides user needs balance:adjust:any, which an access
+	// key must name. Actor 0 (the system) passes.
 	CanActOnUsers(ctx context.Context, actorID int64, action UserAction, targetIDs ...int64) error
 }
 
