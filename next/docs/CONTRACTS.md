@@ -296,7 +296,7 @@
 
 | key | 值 | 默认 |
 |---|---|---|
-| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd, client_disconnect_policy, client_disconnect_wait_seconds}`（后两项见 §25.8） | `reject`、`"0"`、`"10"`、`continue`、120 |
+| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd, client_disconnect_policy}`（最后一项见 §25.8；`client_disconnect_wait_seconds` 2026-11-14 删除，已存的值忽略） | `reject`、`"0"`、`"10"`、`continue` |
 | `sticky` | `{enabled, default_ttl_seconds, keep_on_account_disabled}` | `true`、3600、`false` |
 | `gateway` | `{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}` | 3、2000、300 |
 | `auto_disable` | `{enabled, status_codes, keywords}`（§42.2） | `true`、`"401"`、new-api 的 7 条关键词 |
@@ -2079,13 +2079,13 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 | `free` | 立即中止上游，`billable=false`，已报告的 token 仍留在记录里。 |
 
 - **估算与已报告用量的合并改为分侧取值**，取代上一段的「每项取较大值」：输入侧四项（`input`、`cache_read`、`cache_creation`、`cache_creation_1h`）只要响应报告过任意一项就整体采用响应的数，否则整体采用估算；输出取两者较大值。原因：估算把整段提示算作输入，响应把同一段提示的缓存部分算在缓存项下，逐项取较大值在输入不含缓存的协议（Anthropic）上把提示计了两遍。实现 `gateway/pipeline.go` 的 `canceledTokens`。
-- **`continue` 的等待上限** `client_disconnect_wait_seconds`，5–1800，默认 120。到时以 `errDisconnectWaitTimeout` 取消上游。流空闲超时、`relay_timeout_seconds` 照常生效。读取期间请求不退出，账号与 API Key 的并发名额照常占用。
-- **上游请求的 context 不再派生自客户端请求**（`gateway/dispatch.go` 的 `forwardBuilt`）：由 `gateway/disconnect.go` 的 `upstreamDrain` 在客户端 context 结束时取消它，`continue` 且 `forward` 正在转发成功响应时改为启动等待计时器。
+- **`continue` 不另设等待上限**（2026-11-14 用户决定：与请求本身的超时保持一致，不单独配置）：续读只受这次上游交换原有的超时约束，即环境变量 `relay_timeout_seconds`（上游整体超时）和 `streaming_idle_timeout_seconds`（流式空闲超时，§74.3），与客户端还在时相同（`relay_timeout_seconds` 未设置即不限，这时非流式响应读正文没有上限，流式只受空闲超时约束）；到时上游被取消，按 `precharge` 处理。原设置 `client_disconnect_wait_seconds`（5–1800，默认 120）删除，接口不再返回、PUT 不再接受，已存的值留在行里但不读；滚动期间旧核心仍按它等待。读取期间请求不退出，账号与 API Key 的并发名额照常占用。
+- **上游请求的 context 不再派生自客户端请求**（`gateway/dispatch.go` 的 `forwardBuilt`）：由 `gateway/disconnect.go` 的 `upstreamDrain` 在客户端 context 结束时取消它，`continue` 且 `forward` 正在转发成功响应时不取消，读到结束或被上游超时取消。
 - **`continue` 只覆盖核心直接转发的响应**（`forwardSSE`、`forwardJSON`、`forwardJSONConverted`）。插件 `Execute` 执行的请求、`task.submit`、资源与额度流、WebSocket 不续读，按 `precharge` 处理。
-- 旧的 `billing` 行没有这两个字段，读出默认值，**所以升级后既有部署即按 `continue` 运行**；存储值不在取值集合内时策略取默认值，等待秒数夹到范围内。设置读取失败时网关按 `precharge` 处理。
+- 旧的 `billing` 行没有这个字段，读出默认值，**所以升级后既有部署即按 `continue` 运行**；存储值不在取值集合内时策略取默认值。设置读取失败时网关按 `precharge` 处理。
 - **什么算「读完」**：有输出因客户端已离开而被丢弃，且上游正常结束、没有以流内错误事件收尾。客户端收完最后一个字节才断开的请求没有丢输出，照常记为成功。关停不再等待在途请求时调用 `Gateway.AbandonReads()`（`app/phases.go` 的 `cancelRequests`），续读立即中止，按 `precharge` 处理。
-- 策略经 `core.ClientDisconnectSource` 读取，`billing.Service` 实现；网关拿不到时按 `precharge` 处理。网关包的测试环境同样默认 `precharge`，只有针对 `continue` 的用例显式开启。
-- 测试：`gateway/disconnect_test.go`（三种策略、等待超时、续读中关停的端到端，`canceledTokens`）、`e2e/ac26_client_disconnect_test.go`（整机验收）、`gateway/precharge_cancel_test.go`（判定）、`billing/settings_disconnect_test.go`（设置读写与校验）。
+- 策略经 `core.ClientDisconnectSource.ClientDisconnectPolicy` 读取，`billing.Service` 实现；网关拿不到时按 `precharge` 处理。网关包的测试环境同样默认 `precharge`，只有针对 `continue` 的用例显式开启。
+- 测试：`gateway/disconnect_test.go`（三种策略、续读被上游整体超时结束、续读中关停的端到端，`canceledTokens`）、`e2e/ac26_client_disconnect_test.go`（整机验收）、`gateway/precharge_cancel_test.go`（判定）、`billing/settings_disconnect_test.go`（设置读写与校验）。
 
 ### 25.9 请求体里重复的对象键与过深嵌套一律拒绝（2026-10-31，团队审核 P1）
 
@@ -5145,6 +5145,12 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **LLM 理由上限 500 → 2000 字**（`llmReasonRunes`，问题集与 `llm_verdict` 审核器共用 `clipReason`）：正常理由一两句话（线上近 3 天命中记录最长 173 字），上限只防模型失控；超过时截到 1999 字并以“…”结尾，界面能看出被截过。理由写进每条记录的 trace 和缓存命中，一条调用结果最坏约 6 KB；命中超过缓存上限 60 KB（`maxHitBytes`）时只是不缓存，审核不受影响。
 - **界面**：逐级审核表格的理由不再是单行省略的列，改为在表格下方按调用（级 · 审核器）整段显示（保留换行，长词断行），弹窗宽度下也完整可见。封禁用户表的原因仍占一行，点击在行下方展开全文：用到 UI 3.13 的 `STable` `expandToggle: false` 和单元格 `toggleExpand()`，所以 **`hostUICompat` 改为 `^3.13`，`hostCompat` 抬到 `>=0.1.281 <0.2.0`**（0.1.280 是最后一个带 UI 3.12 的核心；线上核心 0.1.284 满足）。
 
+**0.11.2（无迁移；只合入 develop、未发布；`hostCompat`、`hostUICompat` 不变）**：
+- **默认内容直接显示、可查看、可恢复**（用户要求：默认 Jev 题目在界面上看不到）：审核器编辑里不再有“使用自己的题集”开关。Jev 和题表式 LLM 审核器的题目始终以列表直接显示和编辑；`config.questions` 为空（用默认题集）的审核器打开时显示当前默认题集（`GET /jev/default-questions` 的 `default`，设置里替换过就是替换后的题集）。`llm_verdict` 的 `system_prompt`、`categories` 为空时同样直接显示内置提示词和内置分类（同一接口的 `llm_system_prompt`、`llm_categories`）。顶部徽标标明“使用默认（版本）”“已基于默认修改”或“自定义”；“查看默认题目 / 查看默认提示词”在侧栏只读显示默认内容，逐题标出与正在编辑的内容相同、已修改或没有；“恢复为默认”确认后把正在编辑的内容换回默认，不自动保存，保存后才生效。保存规则：一部分在存的配置里为空（跟随默认）且编辑后的内容与默认相同时，仍按空保存，继续跟随默认；改动任何一处就按内容保存为审核器自己的；存的配置里本来就有的内容（即使与默认相同）照原样保存。所以只打开再保存一个用默认的审核器，配置和判定指纹都不变。设置页的默认题集选“内置”时也只读显示内置题集。接口不变（`GET /jev/default-questions` 已返回这些默认内容，权限仍是 `moderation:read`），不迁移数据。
+- **内置 Jev 题集换成线上 9 题**（`content-audit-v3-zh`）：线上 Jev 审核器（id 2）2026-11-13 的题面：删除原第 10 题 `custom/ai-detect-bypass`（降 AI 率不算违规），`custom/prompt-extraction` 加例外（要求对自身流程、技能或工具内容保密的指令不算），阈值改为 0.75 / 0.8 / 0.85，前言不变；题面、label、阈值以 `engine.go` `builtinQuestions` 为准（`unit_test.go` 核对每题的类别、名称和阈值）。题表式 LLM 审核器用同一个默认题集；`llm_verdict` 的内置分类和提示词里没有这些题，不变。原 10 题的线上内容哈希保留为旧版本 `content-audit-v2-zh`，还存着它副本的审核器照旧报这个版本。**用默认题集、且设置里没有替换默认题集的审核器升级后按新题集判定**：它们的判定指纹包含默认题集内容，随之改变，这些流程以前缓存的结论不再命中（预期）。`judgingVersion` 不加一（仍是 2）：内置题集已经通过默认题集内容进入指纹，加一只会让不用默认题集的流程（如只有 OpenAI 审核器的）也白白失效；`snapshot.go` 的注释已写明这一点。
+- **失败记录带脱敏错误摘要**：失败的调用在 trace 里除了 `err`（错误类型）和 `status`，**网络错误**（`err = network`）新增 `err_detail`：错误原文（去掉 `network: ` 前缀，即请求 URL、代理、失败的拨号或握手），去掉 URL 的查询串、片段和用户信息，像密钥的 `Bearer`/`Basic` 凭据，名字里带 `token`、`secret`、`password`、`api_key`、`private_key`、`authorization` 的键（含 `refresh_token`、`client_secret` 这类复合键）的值，`sk-` 一类前缀的密钥和字母数字混合的 32 位以上长串（UUID 形式的请求 id 保留），最多 200 字（`errdetail.go`）。**只记网络错误**：其他错误类型和状态码已经说清楚，或者原文里可能有上游返回的内容、从而回显用户输入（上游错误体、无法解析的 2xx 响应片段），这些不写 `err_detail`；它们的原文只在渠道测试和试跑的结果里显示，从不存进记录（不受 `store_text` 影响，也不会随缓存命中复制到别的记录）。记录详情的逐级审核里，结论徽标的提示和表格下方的“理由”区块显示“错误类型: 摘要”。0.11.2 之前写的记录没有这个字段，显示不变。
+- **连接阶段网络错误重试一次**：审核器调用（OpenAI 审核、Jev、三种 LLM 协议，`liveChannel.do`）还没拿到连接就失败时——TCP 连接、代理握手（HTTP `CONNECT`、SOCKS5）、TLS 握手，请求一个字节都没发出——在这次调用的超时（渠道超时，以及它所在的级和流程的超时）没到时立即再发一次，只一次；拿到连接以后（请求可能已被上游收到）的错误不重试。判定用 `httptrace` 的 `GotConn`：没触发就是连接阶段；而且错误要是暂时性的网络错误（`*net.OpError` 或握手中断的 EOF）。域名不存在（NXDOMAIN）、证书校验失败、代理对 `CONNECT` 回了错误状态、URL 协议不支持，再试一次结果也一样，不重试。每次重试计入 `GET /status` 的 `connect_retries` 和指标 `connect_retries`（本节点启动以来）。背景：线上一次失败是 SOCKS5 代理接受认证后约 5 秒没回 `CONNECT` 结果就断开。测试：`upstream_retry_test.go`（拒绝连接后重试成功、两次都失败只试两次、超时后不重试、请求发出后断开不重试、SOCKS5 握手后断开重试一次、LLM 协议同样重试、NXDOMAIN / 证书 / 代理拒绝 CONNECT / 不支持的协议不重试、重试计数；脱敏规则在 `errdetail_test.go`）。
+
 下面各小节里 AI 分析的内容是 0.9.x 及以前的行为，标"0.10.0 删除"。
 
 用户已确认的取舍：
@@ -5203,6 +5209,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **0.9.2（2026-11-12）**：只改原生界面和设置表单的 UI schema。封禁、添加观察、绑定和绑定预览里的用户 / 分组 / 账号改用宿主的实体选择器（§96.7）；设置页的白名单 / 黑名单改用 `entity-select` 部件（值仍是字符串数组）；提示词预览、流程和性能卡的分组筛选同样改用选择器。绑定页不再拉全量账号，只按 id 查已绑定账号的名称。**`hostUICompat` 改为 `^3.12`，`hostCompat` 抬到 `>=0.1.280 <0.2.0`**。接口、能力、宿主权限、迁移、设置 schema 都不变。
 - **0.9.3（2026-11-12）**：`block_message` 的默认值改为英文 `Your request was blocked by content moderation. Please revise your input and try again.`（`settings.go` 的 `DefaultBlockMessage`，`forms/settings.schema.json` 的 `default` 与它一致，有测试比对）。只影响没有保存过 `block_message` 的安装；已保存的值（包括以前的中文默认）原样使用，不做迁移。`hostCompat`、`hostUICompat`、接口、能力、宿主权限、迁移都不变。
 - **0.11.1**：版本 0.11.1，无迁移。没设范围的流程按 `input` 审、LLM 理由上限 2000 字（超出以“…”结尾）、逐级审核的理由整段显示，见 72 节开头"0.11.1"。封禁用户表的原因从单元格展开行，用到 UI 3.13，**`hostUICompat` 改为 `^3.13`，`hostCompat` 抬到 `>=0.1.281 <0.2.0`**。接口、能力、宿主权限、设置 schema 都不变，升级不需要管理员重新批准。
+- **0.11.2**：版本 0.11.2，无迁移。审核器编辑直接显示默认内容并可查看、恢复，内置 Jev 题集换成线上 9 题，失败调用的 trace 带脱敏错误摘要 `err_detail`，连接阶段网络错误重试一次，见 72 节开头"0.11.2"。没有用到新的平台能力，`hostCompat`、`hostUICompat`、接口、能力、宿主权限、设置 schema 都不变，升级不需要管理员重新批准。
 
 ### 72.4 抽取
 
@@ -5296,7 +5303,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 8. **判定缓存**（0.8.0；0.6–0.7 是只存通过的片段放行缓存）。规则照 new-api `verdict_cache.go`、`gate.go`，单位按 72.4 换成片段：
    - **范围**：`e{cache_epoch}:{flow_id}:{fp}`。
      - `cache_epoch` 是清空计数（`config_state.cache_epoch`）。
-     - `fp` 是流程的判定指纹（16 位十六进制），由会改变这个流程判定结果的东西算出：各级的 `combine`、`n`、`fallback` 和审核器列表；每个被引用的审核器的类型、渠道和已存的 `config` 原文；该渠道的类型、协议、`base_url`、`model`；用默认题集的审核器再加当前默认题集；以及代码里的常量 `judgingVersion`（内置题集、默认阈值、提示词模板这类写在代码里的判定默认值变了就加一；LLM 审核器默认发图片、默认提示词提到图片之后是 2）。
+     - `fp` 是流程的判定指纹（16 位十六进制），由会改变这个流程判定结果的东西算出：各级的 `combine`、`n`、`fallback` 和审核器列表；每个被引用的审核器的类型、渠道和已存的 `config` 原文；该渠道的类型、协议、`base_url`、`model`；用默认题集的审核器再加当前默认题集；以及代码里的常量 `judgingVersion`（默认阈值、提示词模板这类写在代码里的判定默认值变了就加一；内置题集不用加：用默认题集的审核器已经按题集内容算进指纹，0.11.2 换题集时没有加；LLM 审核器默认发图片、默认提示词提到图片之后是 2）。
      - 不进指纹：流程名、`model_filter`、`sample_rate`、总超时，渠道的名称、密钥、代理、超时、计费模型。改这些不影响缓存；改指纹里的任何一项，该流程的旧结论自动读不到。
    - **存储**：宿主 KV 的命名空间 `verdict`（各节点共用），加本节点的内存 LRU（`cache_entries` 条，另有 64 MiB 的字节上限，先到为准）作为它的缓存。**先 KV，后内存（0.8.1）**：值只在从 KV 读到、或被本节点的运行写进 KV 之后才进入内存，内存里没有 KV 里没有过的值。0.7.x 的命名空间 `pass` 里的缓存键不再读写，到期消失（告警状态仍在 `pass`，72.14）。
      - 片段键 `s:{范围}:{片段哈希}`，值是以空格分隔的若干项：`p<unix 秒>`（这个片段通过，数字是写入时间）和 `h<命中 id>@<unix 秒>`（指向一个命中条目）。一个片段最多保留 8 个指针（最新的）。**写入通过不抹掉指针**。
@@ -5384,7 +5391,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 13 个类别的默认阈值照抄 new-api `engine.go:26-31`，`config.thresholds` 可以逐类覆盖（范围大于 0 且不超过 1）。
   - 图片每次随机发一张；裸 base64 先嗅探 MIME 类型。带图请求返回 400 时，去掉图片重试一次。
 - **`typesafe`**：`POST {base}/v1/systemone`，请求体 `{model, state, questions}`。
-  - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用内置题集，题目原文照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题）。
+  - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用默认题集（设置里的 `jev_default_set`，没有时用内置题集）。内置题集到 0.11.1 照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题），0.11.2 起是线上 Jev 审核器 2026-11-13 的 9 题（`content-audit-v3-zh`，见 72 节开头"0.11.2"）。
   - **长上下文（0.8.0，照 new-api）**：每次调用都带请求头 `TypeSafe-Danger-Zone-Long-Context: true`。一次请求的预算是文字（一个字算一个 token）加图片合计 200000 token、base64 合计 24 MiB（0.7.2 及以前是 24k token，不带这个请求头）。按 new-api 文档，长上下文更慢、准确度略低、单价不变。
   - `config.review_images` 默认开，有图片时另带请求头 `TypeSafe-Danger-Zone-Images: true`。**图片规则（0.8.0）**：
     - System One 的规格：每边 280–1568 px、总像素 78,400–2,458,624、单张解码后 ≤16 MiB。内联的 PNG / JPEG 在规格内 → 原样发送，只读文件头，不解码像素。
@@ -5394,7 +5401,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - 重画的限制：同时最多 2 张，所有正在重画的图片的估算解码内存合计不超过 112 MiB（放不下的等待）；一次调用里重画最多用这次调用剩余时间的一半、且不超过 5 秒，到点时没画好的图和它后面需要重画的图都跳过。**文字总是送审**，不会因为图片慢而审不成。new-api 的上限是 5000 万像素，没有内存和时间这两项限制；插件进程内存上限是 512 MB（72.2 第 3 条）。
     - 规格化之后内容相同的图片只发一次；按顺序装，装不下预算的图片及其后的不发。
   - 上游返回 413 或 `max_tokens_exceeded` 且带了多张图时，只保留第一张图重试一次。
-  - `rules_version`：题表内容等于内置题集时报 `content-audit-v2-zh`；等于 new-api 已删除的两套旧内置题集时报 `content-audit-13-en-v1`、`content-audit-13-zh-v1`（0.8.0，此前显示为 `custom-…`）；其余为 `custom-` 加内容哈希。
+  - `rules_version`：题表内容等于内置题集时报 `content-audit-v3-zh`（0.11.1 及以前为 `content-audit-v2-zh`）；等于已删除的旧内置题集时报 `content-audit-13-en-v1`、`content-audit-13-zh-v1`（new-api 删除的两套，0.8.0，此前显示为 `custom-…`）或 `content-audit-v2-zh`（0.11.2 起，0.11.1 的 10 题）；其余为 `custom-` 加内容哈希。
 - **`llm_verdict`**：就是 §20.5 的 agent，提示词、分类、`tool_choice`、`max_turns`、温度、`max_tokens` 都放进 `config`。上游以 400 拒绝 `temperature` 参数时（有的模型已不再接受，如 claude-haiku-5-5 回 "`temperature` is deprecated for this model"），去掉该参数重发一次，此后这个审核器不再带它，直到配置重新加载（0.7.2）。
   - 判定：结论为 `block` 算命中；结论为 `flag` 时，`config.flag_as_hit` 为真才算命中（默认否）。
   - 分数：block = 1.0，flag = 0.5，pass = 0。
@@ -5613,7 +5620,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议（`analysis_id` 0.10.0 删除，带了也忽略）。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8）。0.10.0：条目带 `locked`、`lock`，筛选 `locked`，计数 `counts.locked`；名单用户的条目一律 409 `locked`（72 节开头"0.10.0 第 4 期"）。0.11.0：`PUT`/`DELETE /watchlist/:user_id/lock`（manage）锁定、解锁，`allowlisted`、`blocklisted` 由锁定条目得出（72 节开头"0.11.0（contract）"） |
 | POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`observe` 按 post 执行，`enforce` 按 pre 执行，`none`（或不带）是没有名单条目的用户，按默认级别决定（0.8.0；此前固定为 post）；返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认。0.8.0：new-api 的 `llm` 审核器导入为 `llm_questions` |
-| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；因调用方的 ctx 结束而没做成的不计，72.5 第 8 步"KV 出错"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）；后三个是本节点启动以来的计数。0.8.1 加 `runtime.kv_writing`（此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）和 `runtime.kv_skipped`（本节点启动以来整次没写缓存的运行数：人工处理可能在它的请求查缓存之后改过缓存，或本节点的内存缓存在那之后被换掉了，72.5 第 8 步的"写"）。概览页"队列与运行状态"卡片显示 `cache_bytes`、`kv_errors`、`kv_writing`、`images_refused`，0.8.2 起还有 `kv_skipped`（0.8.1 里它只在这里和健康指标里）；`redraw_panics` 只在这里和健康指标里 |
+| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；因调用方的 ctx 结束而没做成的不计，72.5 第 8 步"KV 出错"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）、`runtime.connect_retries`（0.11.2：审核器调用在连接阶段失败后重试的次数）；后三个是本节点启动以来的计数。0.8.1 加 `runtime.kv_writing`（此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）和 `runtime.kv_skipped`（本节点启动以来整次没写缓存的运行数：人工处理可能在它的请求查缓存之后改过缓存，或本节点的内存缓存在那之后被换掉了，72.5 第 8 步的"写"）。概览页"队列与运行状态"卡片显示 `cache_bytes`、`kv_errors`、`kv_writing`、`images_refused`，0.8.2 起还有 `kv_skipped`（0.8.1 里它只在这里和健康指标里）；`redraw_panics` 只在这里和健康指标里 |
 | POST `/blocks`（改） | manage | 0.8.0：白名单用户不能封禁，字段错误码 `allowlisted`（取代 `exempt`） |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
 
@@ -6204,6 +6211,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **0.5.5（2026-11-10）**：manifest 只把菜单的 `section` 从 `system` 改回 `gateway`（§90：功能页归各自的区）；`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。0.5.4 的菜单仍在 `system` 区，排在 `/settings` 之后。
 - **0.5.6（2026-11-11）**：线上有人改了配置没保存，以为"改了不生效"。事件和配置接口多了字段，好让事件一眼看出按哪一版配置、执行了哪些动作：评估写的权重事件带 `detail.steps`（每个改变了有效权重的策略一步）和 `detail.config_version`，`GET /config`、`PUT /config` 返回 `updated_at`，见下文"接口"；控制台的改动见 §74.6。旧前端忽略新字段照常工作。`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。
 - **0.5.7（2026-11-12）**：只改原生界面。自写的 `IdPicker` 删除，账号、分组、模型筛选和批量重置、分组配置、账号覆盖弹窗都改用宿主的 `EntityPicker`（§96.6）；模型是精确匹配，候选是价格表里的模型加当前页出现过的模型，不在其中的名称可以按输入原样使用。新建分组配置 / 账号覆盖时，已有配置的分组 / 账号仍会列出，选中就报错并禁止保存（原来是不列出）；非规范写法的 id（`013`）不接受。**`hostUICompat` 改为 `^3.11`，`hostCompat` 抬到 `>=0.1.279 <0.2.0`**。接口、能力、授权、配置文档格式都不变，没有新迁移。
+- **0.5.8（2026-11-13）**：线上把“首字 p95 过慢”调整项关掉后，状态表“命中规则”列仍显示它命中，被当成关掉的规则还在生效。调整项的开关只关策略，规则本身仍启用、照常判定（`last_rules`、位图照写；不再有启用的降权策略引用它，所以按宽松模式，样本不足也判定，比开着时更容易显示命中），但没有启用的策略引用它，命中不降权、不清粘性（线上核对：配置第 9 版以来 7876 条事件的 `steps` 和清粘性都不含它）。`GET /status` 的规则加 `used`（`rules.Resolved.UsedRules`，与 `FiredRules` 共用同一份引用标记）；控制台“命中规则”列只列被使用的规则，展开明细里未被使用的规则标“只观察”并说明、本窗结果用中性色；接口没有 `used`（旧节点）时按被使用处理。接口只加字段，能力、授权、配置文档格式都不变，没有新迁移，`hostCompat`、`hostUICompat` 不变。
 - **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
 
 #### 计数
@@ -6300,7 +6308,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 | `POST /config/validate` | 0.2.0 起，需要 `dynweight:manage`。与 `PUT /config` 同一套校验但不保存：拒绝时回同样的 400，通过时回 `{config（规范化后）, version, warnings}`（0.5.6 起另有 `updated_at`，因为不保存恒为 0）。控制台保存前先调它，有警告时请管理员确认 |
 | `GET /defaults` | 默认的层，包括默认规则和策略 |
 | `GET /channels` | 可选的通知渠道 |
-| `GET /status?account_id&group_id&model&degraded=1` | 有状态或保留期内有计数的键（尚未评估过的键也列出，`eval_window` 为 0；状态的基准与调度最近给的基准不同时，与 new-api 一样按没有状态显示：有效权重等于新基准，调度也不用它，下一次评估按 `base_mismatch` 重置），按 有效/基准 比值升序，分页。每项另有：`weight_min`（生效下限换算出的权重）、`state`（`normal` / `degrading` / `climbing`）、`group_configured`、`no_climb_strategy`、`next_eval_at`（最早的评估时刻 = 本窗口结束 + 宽限）、上一窗口的 `error_evaluable`、`ttfb_samples`、`latency_samples`、`thresholds` / `latency_thresholds`（`[{ms, count}]`）；`rules` 列出生效层的每条启用规则：`scope`、`periods`、`hit_periods`，以及状态用的就是这套规则且调整开启时的 `hit`、`fired`、`bitmap`（最近窗口是否命中，最新在末尾，触发后清空）、`samples`、`lookback`、`no_samples`、`unjudged`（0.3.0 起：严格模式下样本不足、这个窗口没有判定）；`current` 是进行中的窗口（已写入的计数）：`window_start`、`elapsed_seconds`、`total`、`fail`、`stream_total`、`stream_fail`（都已扣除豁免状态码的失败）、`ttfb_samples`、`latency_samples` 和阈值计数 |
+| `GET /status?account_id&group_id&model&degraded=1` | 有状态或保留期内有计数的键（尚未评估过的键也列出，`eval_window` 为 0；状态的基准与调度最近给的基准不同时，与 new-api 一样按没有状态显示：有效权重等于新基准，调度也不用它，下一次评估按 `base_mismatch` 重置），按 有效/基准 比值升序，分页。每项另有：`weight_min`（生效下限换算出的权重）、`state`（`normal` / `degrading` / `climbing`）、`group_configured`、`no_climb_strategy`、`next_eval_at`（最早的评估时刻 = 本窗口结束 + 宽限）、上一窗口的 `error_evaluable`、`ttfb_samples`、`latency_samples`、`thresholds` / `latency_thresholds`（`[{ms, count}]`）；`rules` 列出生效层的每条启用规则：`scope`、`used`（0.5.8 起：有启用的调整项引用它；没有引用的规则照常判定、命中不执行任何动作，事件的 `rules` 也不列它，也不受 `min_samples_strict` 约束）、`periods`、`hit_periods`，以及状态用的就是这套规则且调整开启时的 `hit`、`fired`、`bitmap`（最近窗口是否命中，最新在末尾，触发后清空）、`samples`、`lookback`、`no_samples`、`unjudged`（0.3.0 起：严格模式下样本不足、这个窗口没有判定）；`current` 是进行中的窗口（已写入的计数）：`window_start`、`elapsed_seconds`、`total`、`fail`、`stream_total`、`stream_fail`（都已扣除豁免状态码的失败）、`ttfb_samples`、`latency_samples` 和阈值计数 |
 | `GET /events?account_id&group_id&model&kind` | 权重事件，分页。每项带 `account_name`（调度最近一次看到的账号名）。评估写的 `rules_change` 重置和权重变化事件在 `detail.window` 里带这个窗口的证据；0.5.6 起权重变化事件（`weight_down`、`weight_up_start`、`weight_restored`、`weight_revived`）另带 `detail.steps`：按执行顺序，每个改变了有效权重的策略一步 `{strategy, type, mode, value, from, to}`（`type` 是它权重动作的类型 `weight_degrade`/`weight_climb`，夹到下限或基准时这一步的方向可能与类型相反，所以单独给出；`mode`、`value` 是它权重动作的方式和数值，`from`、`to` 是这一步前后的有效权重，`to` 已夹到 [下限, 基准] 并把取整为 0 的归零；命中但没改变权重的策略不列，没有步骤时不写）；这些事件和 `rules_change` 重置另带 `detail.config_version`（评估节点当时加载的配置版本，整数；0 是从未保存、用出厂默认；某节点还没重载新配置时是旧版本号，这正是它要让人看出来的）。下限被调高时，评估先把权重抬到新下限再执行策略，这一段不算步骤，所以第一步的 `from` 可能大于事件的 `from`，只有抬升时事件没有步骤。0.5.6 以前写的事件、滚动升级期间旧节点写的事件都没有这两项。`base_mismatch` 重置、手动和状态变化重置、`affinity_cleared` 不带这两项。日志行和通知的内容不变 |
 | `POST /reset {account_id?, account_ids?, group_id?, model?}` | 至少指定账号或分组，`account_ids` 最多 500 个（0.2.0 起；0.5.0 起上限引用 `manifest.MaxAccountBatch`），`account_id` 与一个元素的 `account_ids` 等价。见上文"重置"；回答 `{reset}` 为重置的键数 |
 | `GET /stats` | 0.2.0 起。本节点的运行指标，见上文 |
@@ -7102,6 +7110,17 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点的请求头、分组 / 全局层的覆盖、批量编辑。
 - 代码：`sdk/paramoverride`（校验、编译、执行，2026-11-09 从 core 迁出，供清单校验共用；`core/param_override.go` 保留别名）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
 
+### 84.1 内置参数覆盖：Claude 默认 `max_tokens`（2026-11-14，用户要求）
+
+用户原话要点：默认 max_tokens “不应该是必填，而应该是可以打开的参数覆盖功能……打开之后相当于每一个 Anthropic 账号的调用都加上了一个参数覆盖”。取代 §88 的 `claude_default_max_tokens`（必填 `default`、强制生效）。
+
+- **设置**：网关设置行 `gateway` 的 `claude_max_tokens`：`{"enabled": bool, "models": {"<客户端模型名>": 整数, "default": 整数}}`，默认 `{"enabled": false, "models": {"default": 8192}}`（行里没有这一项时 `models` 给出 `default` 8192 作为建议值，关闭时不生效）。`PUT /settings/gateway` 整体替换；`models` 最多 100 项（每项一条覆盖操作，同 §84 上限），模型名 1–200 个字符（按 Unicode 字符计，不按字节）且首尾无空格，值 1–1048576，`default` 可有可无，编译出的覆盖不得超过 §84 的 64 KiB；错误在字段 `claude_max_tokens`（`too_many`、`invalid_model`、`out_of_range`、`too_large`，控制台按这个字段名精确匹配）。存储值 ≤ 0 的项读时丢弃，超上限的夹到上限。旧键 `claude_default_max_tokens` 不再读写，保存设置后从行里消失；滚动期间旧核心读不到它时按 `{"default": 8192}` 运行。
+- **执行**：开启时编译成一个 §84 格式的覆盖（`gateway/claude_max_tokens.go`）：每个模型一条 `{"mode":"set","path":"max_tokens","value":N,"keep_origin":true,"conditions":[{"path":"original_model","mode":"full","value":"<模型>"}]}`，按模型名排序，最后一条不带条件的 `default`。与账号覆盖同一个引擎、同一个挂接点（`rewriteBody`），在声明式上游的部分之后、**账号自己的覆盖之前**执行，所以账号覆盖可以再改它；只作用于上游协议为 `anthropic.messages` 的尝试（含插件 Execute 路径），不设置请求头，运行失败按 §84 的运行失败处理（名称 `built-in request parameter override`）。客户端带了 `max_tokens` 不改；没有匹配的模型、也没有 `default` 时不补。
+- **转换请求**：转换到 Anthropic 的请求，`max_tokens` 是 Anthropic 必填字段，客户端没给输出上限时转换器必须写（CONVERT-MATRIX D5）：规则开启且有值时用规则的值，否则用转换器的兜底 8192；开 thinking 时的抬高规则不变。规则随后看到的已经是带 `max_tokens` 的请求体，不会重复写。
+- **关闭时**：原生 Anthropic 请求原样转发；转换请求按上一条兜底。
+- 控制台：网关设置“Claude 默认 max_tokens”一行改为开关，开启后才编辑模型表。
+- 测试：`gateway/param_override_test.go` 的 `TestClaudeMaxTokensBuiltinOverride`（默认关闭、按模型、按 default、保留客户端值、账号覆盖在后）、`gateway/round4_test.go` 的 `TestConversionGatewaySettings`（读写、校验与错误字段名、按字符计的模型名长度、总大小上限、只对 anthropic.messages 而不对 count_tokens）。
+
 ## 85. 钩子点 `gateway.attempt`：选定账号后、发往账号前（2026-11-08，moderation 0.7.0 需要，72.17；核心 0.1.258）
 
 `gateway.request` 在调度前执行，看不到请求会发往哪个账号。有些插件要按账号决定，例如流程绑定到账号的审核。为此新增通用钩子点 `gateway.attempt`，核心不针对任何插件做特殊处理。
@@ -7248,7 +7267,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 迁移 `0093_conversion_loss_policy.sql`：`accounts.conversion_loss_policy`、`groups.conversion_loss_policy`（`allow|safe|strict`，NULL 继承）、`usage_logs.conversion`（jsonb，NULL = 原生且无拒绝）。均为可空无默认值的列。
 - `GET/POST/PATCH /accounts`、`/accounts/:id` 与 `/groups`、`/groups/:id`：`conversion_loss_policy`：`"allow"|"safe"|"strict"|null`；PATCH 缺省保持、null 清除；非法值 400 `invalid_argument`，`details.fields[{field: "conversion_loss_policy", code: "invalid"}]`。权限与该资源的其他字段相同。账号的策略经调度快照（`core.AccountRef`）、分组的经 API Key 认证（`core.GroupInfo`）到达网关，随既有缓存失效。
 - `GET /account-types`：`endpoints[]` 增加 `grade`（native / good / fair / discouraged / local）与 `via`（经过的协议，客户端在前；组合时三项；原生与 local 省略）；`native` 保留（等于 grade 为 native）。按 88.2 计算，不区分流式（同等级的兄弟端点由网关按请求选）。
-- `GET/PUT /settings/gateway`：`claude_default_max_tokens`（对象，模型名 → 整数 0–1048576，默认 `{"default": 8192}`；PUT 整体替换，缺 `default` 时补 8192，最多 200 个模型，模型名 1–200 字符且首尾无空格）——转换到 Anthropic 且客户端没给输出上限时按客户端模型取值，否则取 `default`（D5）；`media_download_max_mb`（1–1024，默认 64）——转换到 Gemini 时下载单个媒体文件的上限（D6）。
+- `GET/PUT /settings/gateway`：`claude_max_tokens`（2026-11-14 取代 `claude_default_max_tokens`，见 §84.1）；`media_download_max_mb`（1–1024，默认 64）——转换到 Gemini 时下载单个媒体文件的上限（D6）。
 - 使用记录列表与详情：`conversion`（`/me/usage` 为 null，与 `upstream_protocol` 一致）；筛选 `conversion=native|converted|good|fair|discouraged|local|lossy`（`native` 含 NULL 与 grade native；`converted` 为三个转换等级；`lossy` 为有请求或响应侧损失），只对管理员视图。
 
 ### 88.6 使用记录 `conversion`

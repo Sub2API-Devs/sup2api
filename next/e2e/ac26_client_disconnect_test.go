@@ -25,13 +25,12 @@ func TestAC26_ClientDisconnectPolicy(t *testing.T) {
 	m := e.Mock()
 
 	saved := admin.OK(t, http.MethodGet, "/settings/billing", nil)
-	setPolicy := func(t *testing.T, policy string, waitSeconds int) {
+	setPolicy := func(t *testing.T, policy string) {
 		t.Helper()
-		admin.OK(t, http.MethodPut, "/settings/billing",
-			map[string]any{"client_disconnect_policy": policy, "client_disconnect_wait_seconds": waitSeconds})
+		admin.OK(t, http.MethodPut, "/settings/billing", map[string]any{"client_disconnect_policy": policy})
 	}
 	t.Cleanup(func() {
-		setPolicy(t, saved.Get("client_disconnect_policy").String(), int(saved.Get("client_disconnect_wait_seconds").Int()))
+		setPolicy(t, saved.Get("client_disconnect_policy").String())
 		m.ClearRule(t, acctKey)
 	})
 	reserve := saved.Get("output_reserve_tokens").Int()
@@ -57,7 +56,6 @@ func TestAC26_ClientDisconnectPolicy(t *testing.T) {
 	cases := []struct {
 		name    string
 		policy  string
-		wait    int
 		chunkMS int
 		// expectations
 		output    int64 // output tokens billed
@@ -65,15 +63,14 @@ func TestAC26_ClientDisconnectPolicy(t *testing.T) {
 		billed    bool
 		minLasted time.Duration // the record cannot exist sooner than this
 	}{
-		{name: "continue reads to the end", policy: "continue", wait: 60, chunkMS: 100, output: output, billed: true, minLasted: 2 * time.Second},
-		{name: "continue gives up after the wait", policy: "continue", wait: 5, chunkMS: 600, output: reserve, extract: "precharge", billed: true, minLasted: 5 * time.Second},
-		{name: "precharge", policy: "precharge", wait: 60, chunkMS: 100, output: reserve, extract: "precharge", billed: true},
-		{name: "free", policy: "free", wait: 60, chunkMS: 100, billed: false},
+		{name: "continue reads to the end", policy: "continue", chunkMS: 100, output: output, billed: true, minLasted: 2 * time.Second},
+		{name: "precharge", policy: "precharge", chunkMS: 100, output: reserve, extract: "precharge", billed: true},
+		{name: "free", policy: "free", chunkMS: 100, billed: false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			e := e.With(t)
-			setPolicy(t, c.policy, c.wait)
+			setPolicy(t, c.policy)
 			slow(t, c.chunkMS)
 			before := Money(t, e.Balance(tn.User))
 			left := time.Now()
@@ -115,7 +112,7 @@ func TestAC26_ClientDisconnectPolicy(t *testing.T) {
 
 	t.Run("a served stream is unaffected", func(t *testing.T) {
 		e := e.With(t)
-		setPolicy(t, "continue", 60)
+		setPolicy(t, "continue")
 		slow(t, 20)
 		g := e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "hello", true), nil)
 		u := e.UsageByRequest(admin, tn.User.UserID, g.RequestID)

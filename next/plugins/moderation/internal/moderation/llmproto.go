@@ -177,10 +177,6 @@ func (p *llmProtocol) call(ctx context.Context, ch *liveChannel, req llmRequest)
 	for k, v := range p.header(ch.Key) {
 		hreq.Header.Set(k, v)
 	}
-	client := ch.client
-	if client == nil {
-		client = http.DefaultClient
-	}
 	// A non-streaming answer arrives whole, so its first byte comes as late
 	// as the last one: only the channel timeout (ctx) bounds it. A stream
 	// must show its first model output within ttft_timeout_ms.
@@ -190,7 +186,7 @@ func (p *llmProtocol) call(ctx context.Context, ch *liveChannel, req llmRequest)
 		ctx, fb, release = withFirstByte(ctx, ch)
 		defer release()
 	}
-	resp, err := client.Do(hreq.WithContext(ctx))
+	resp, err := ch.do(hreq.WithContext(ctx))
 	if err != nil {
 		return llmTurn{}, ctxErr(ctx, &networkError{err})
 	}

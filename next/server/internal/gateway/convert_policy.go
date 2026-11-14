@@ -116,7 +116,7 @@ func (c *call) prepareRoute(ctx context.Context, rt *typeRoute) bool {
 func (c *call) convertOptions(ctx context.Context) convert.Options {
 	if c.conversion.opts == nil {
 		c.conversion.opts = &convert.Options{Ctx: ctx, Model: c.model, Stream: c.stream, Fetch: c.mediaFetcher(),
-			ClaudeDefaultMaxTokens: c.gw.claudeMaxTokens}
+			ClaudeDefaultMaxTokens: c.gw.ClaudeMaxTokens.maxTokens}
 	}
 	return *c.conversion.opts
 }

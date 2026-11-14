@@ -272,6 +272,7 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"kv_writing":       float64(p.stats.kvWriting.Load()),
 		"kv_skipped":       float64(p.stats.kvSkipped.Load()),
 		"redraw_panics":    float64(jevRedrawPanics.Load()),
+		"connect_retries":  float64(connectRetries.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),
 		"blocked_users":    float64(p.blockedCount()),

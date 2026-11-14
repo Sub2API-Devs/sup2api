@@ -4,20 +4,16 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// Causes that cancel an upstream exchange which was still being read after
-// its client left: the wait passed, or the server stopped waiting for
-// requests in flight.
-var (
-	errDisconnectWaitTimeout = errors.New("client disconnect wait exceeded")
-	errServerClosing         = errors.New("server closing")
-)
+// errServerClosing cancels an upstream exchange which was still being read
+// after its client left when the server stops waiting for requests in
+// flight. The exchange's own timeouts (relay, stream idle) still apply.
+var errServerClosing = errors.New("server closing")
 
 // AbandonReads stops every upstream answer that is only still being read for
 // its usage, and keeps new ones from starting. Shutdown calls it when it
@@ -28,33 +24,31 @@ func (g *Gateway) AbandonReads() { g.abandonReads() }
 // disconnectPolicy is what a request pays when its client hangs up while the
 // upstream is answering (settings "billing", CONTRACTS §25.8). One request
 // sees one policy: it is read once and kept.
-func (c *call) disconnectPolicy(ctx context.Context) core.ClientDisconnect {
-	if c.disconnect == nil {
-		v := c.loadDisconnectPolicy(ctx)
-		c.disconnect = &v
+func (c *call) disconnectPolicy(ctx context.Context) string {
+	if c.disconnect == "" {
+		c.disconnect = c.loadDisconnectPolicy(ctx)
 	}
-	return *c.disconnect
+	return c.disconnect
 }
 
 // loadDisconnectPolicy asks the balance gate. Without the setting, or when
 // it cannot be read, the request gets the pre-charge policy: the one that
 // needs nothing kept alive.
-func (c *call) loadDisconnectPolicy(ctx context.Context) core.ClientDisconnect {
-	fallback := core.ClientDisconnect{Policy: core.DisconnectPrecharge}
+func (c *call) loadDisconnectPolicy(ctx context.Context) string {
 	if c.g == nil {
-		return fallback
+		return core.DisconnectPrecharge
 	}
 	src, ok := c.g.d.Balance.(core.ClientDisconnectSource)
 	if !ok {
-		return fallback
+		return core.DisconnectPrecharge
 	}
 	// The request's own context may be over by now, so the lookup gets a
 	// deadline of its own rather than none.
 	lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.gw.platformTimeout())
 	defer cancel()
-	got, err := src.ClientDisconnect(lctx)
-	if err != nil {
-		return fallback
+	got, err := src.ClientDisconnectPolicy(lctx)
+	if err != nil || got == "" {
+		return core.DisconnectPrecharge
 	}
 	return got
 }
@@ -62,14 +56,15 @@ func (c *call) loadDisconnectPolicy(ctx context.Context) core.ClientDisconnect {
 // upstreamDrain decides what happens to one upstream exchange when the client
 // of its request goes away. The upstream request no longer hangs off the
 // client's context: this watcher cancels it instead - at once, or, under the
-// "continue" policy and only while forward is relaying an answer, once the
-// wait has passed. Until then the answer is read to its end with nobody
-// listening, so the request is billed what the upstream reports.
+// "continue" policy and only while forward is relaying an answer, not at
+// all: the answer is read to its end with nobody listening, within the
+// exchange's own timeouts (relay, stream idle), so the request is billed
+// what the upstream reports.
 //
 // A nil *upstreamDrain is valid and never keeps anything alive.
 type upstreamDrain struct {
 	cancel context.CancelCauseFunc
-	wait   time.Duration // 0: never keep reading
+	keep   bool // the answer may be read on after the client left
 	unhook []func() bool
 
 	mu      sync.Mutex
@@ -77,20 +72,14 @@ type upstreamDrain struct {
 	left    bool // the client is gone
 	dropped bool // output was withheld from it
 	stopped bool
-	timer   *time.Timer
 }
 
 // watchClient ties the upstream exchange behind cancel to the client context
 // ctx. keep says whether this attempt may be read on after the client left.
 func (c *call) watchClient(ctx context.Context, cancel context.CancelCauseFunc, keep bool) *upstreamDrain {
-	d := &upstreamDrain{cancel: cancel}
-	if keep {
-		if p := c.disconnectPolicy(ctx); p.Policy == core.DisconnectContinue {
-			d.wait = p.Wait
-		}
-	}
+	d := &upstreamDrain{cancel: cancel, keep: keep && c.disconnectPolicy(ctx) == core.DisconnectContinue}
 	d.unhook = append(d.unhook, context.AfterFunc(ctx, d.clientLeft))
-	if d.wait > 0 {
+	if d.keep {
 		d.unhook = append(d.unhook, context.AfterFunc(c.g.readsAbandoned, func() { cancel(errServerClosing) }))
 	}
 	return d
@@ -103,8 +92,8 @@ func (d *upstreamDrain) clientLeft() {
 	d.leave()
 }
 
-// leave records that the client is gone and either cancels the exchange or
-// starts the wait. The caller holds mu.
+// leave records that the client is gone and cancels the exchange unless its
+// answer is being read on. The caller holds mu.
 func (d *upstreamDrain) leave() {
 	if d.left || d.stopped {
 		return
@@ -112,15 +101,13 @@ func (d *upstreamDrain) leave() {
 	d.left = true
 	if !d.armed {
 		d.cancel(context.Canceled)
-		return
 	}
-	d.timer = time.AfterFunc(d.wait, func() { d.cancel(errDisconnectWaitTimeout) })
 }
 
 // arm marks the exchange as worth finishing: forward is about to relay a
 // successful answer. A client that left before this has already canceled it.
 func (d *upstreamDrain) arm() {
-	if d == nil || d.wait <= 0 {
+	if d == nil || !d.keep {
 		return
 	}
 	d.mu.Lock()
@@ -131,7 +118,7 @@ func (d *upstreamDrain) arm() {
 // dropOutput reports whether what would be written now goes nowhere: the
 // client is already known to be gone from an answer that is being kept.
 func (d *upstreamDrain) dropOutput() bool {
-	if d == nil || d.wait <= 0 {
+	if d == nil || !d.keep {
 		return false
 	}
 	d.mu.Lock()
@@ -141,8 +128,8 @@ func (d *upstreamDrain) dropOutput() bool {
 }
 
 // writeFailed is told that a write to the client failed. It reports whether
-// the answer is read on regardless, starting the wait if the client context
-// has not yet said the client is gone.
+// the answer is read on regardless, recording the client as gone if its
+// context has not yet said so.
 func (d *upstreamDrain) writeFailed() bool {
 	if d == nil {
 		return false
@@ -180,9 +167,6 @@ func (d *upstreamDrain) stop() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.stopped = true
-	if d.timer != nil {
-		d.timer.Stop()
-	}
 }
 
 // clientWriter is the response writer forward relays through. Once output is

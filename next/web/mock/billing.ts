@@ -1472,24 +1472,24 @@ on('GET', '/me/ledger', (req) => paginate(ledgerFilter(ledgerRows.filter((l) => 
 
 // ------------------------------------------------------------------ settings
 
-const billingSettings = { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10', client_disconnect_policy: 'continue', client_disconnect_wait_seconds: 120 }
+const billingSettings = {
+  pre_consume_tokens: 500,
+  missing_price_policy: 'reject',
+  min_balance: '0',
+  big_cost_warning_usd: '10',
+  client_disconnect_policy: 'continue'
+}
 const stickySettings = { enabled: true, default_ttl_seconds: 3600, keep_on_account_disabled: false }
 const DISCONNECT_POLICIES = ['precharge', 'continue', 'free']
-const DISCONNECT_WAIT = { min: 5, max: 1800 }
 
-/** Whether Go would bind the client disconnect policy of the body: a string, and a whole number of seconds. */
-const disconnectBinds = (b: any) =>
-  ['string', 'undefined'].includes(typeof b.client_disconnect_policy) && (b.client_disconnect_wait_seconds === undefined || Number.isInteger(b.client_disconnect_wait_seconds))
+/** Whether Go would bind the client disconnect policy of the body: a string. */
+const disconnectBinds = (b: any) => ['string', 'undefined'].includes(typeof b.client_disconnect_policy)
 
 /** The fields of the client disconnect policy (CONTRACTS §25.8) the body gets wrong; one it leaves out keeps its value. */
 function disconnectFields(b: any) {
   const fields: Array<{ field: string; code: string; message: string }> = []
   if (b.client_disconnect_policy !== undefined && !DISCONNECT_POLICIES.includes(b.client_disconnect_policy)) {
     fields.push({ field: 'client_disconnect_policy', code: 'invalid', message: 'must be precharge, continue or free' })
-  }
-  const wait = b.client_disconnect_wait_seconds
-  if (wait !== undefined && (wait < DISCONNECT_WAIT.min || wait > DISCONNECT_WAIT.max)) {
-    fields.push({ field: 'client_disconnect_wait_seconds', code: 'invalid', message: `must be an integer from ${DISCONNECT_WAIT.min} to ${DISCONNECT_WAIT.max}` })
   }
   return fields
 }
@@ -1498,7 +1498,7 @@ on('GET', '/settings/billing', () => billingSettings)
 on('PUT', '/settings/billing', (req) => {
   const b = { ...(req.body || {}) }
   // A null pointer field binds as left out, as in Go.
-  for (const k of ['client_disconnect_policy', 'client_disconnect_wait_seconds']) if (b[k] === null) delete b[k]
+  if (b.client_disconnect_policy === null) delete b.client_disconnect_policy
   if (!disconnectBinds(b)) return fail(400, 'invalid_argument', 'invalid request body')
   if (!['reject', 'free'].includes(b.missing_price_policy)) {
     return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'missing_price_policy', code: 'enum', message: 'must be reject or free' }] })
@@ -1510,7 +1510,6 @@ on('PUT', '/settings/billing', (req) => {
   if (fields.length) return fail(400, 'invalid_argument', 'invalid', { fields })
   Object.assign(billingSettings, { pre_consume_tokens: b.pre_consume_tokens, missing_price_policy: b.missing_price_policy, min_balance: String(b.min_balance), big_cost_warning_usd: String(b.big_cost_warning_usd) })
   if (b.client_disconnect_policy !== undefined) billingSettings.client_disconnect_policy = b.client_disconnect_policy
-  if (b.client_disconnect_wait_seconds !== undefined) billingSettings.client_disconnect_wait_seconds = b.client_disconnect_wait_seconds
   return billingSettings
 })
 on('GET', '/settings/sticky', () => stickySettings)
@@ -1520,17 +1519,66 @@ on('PUT', '/settings/sticky', (req) => {
   return stickySettings
 })
 
-// Gateway settings (CONTRACTS §8, §14.4): ranges 1–10, 100–30000, 50–2000.
-const gatewaySettings = { max_attempts: 3, platform_call_timeout_ms: 2000, default_hook_timeout_ms: 300, platform_hotpath_timeout_ms: 300 }
-const GATEWAY_RANGES: Record<keyof typeof gatewaySettings, [number, number]> = {
+// Gateway settings (CONTRACTS §8, §14.4): ranges 1–10, 100–30000, 50–2000;
+// claude_max_tokens (CONVERT-MATRIX §6.1) is replaced as a whole.
+const gatewaySettings = {
+  max_attempts: 3,
+  platform_call_timeout_ms: 2000,
+  default_hook_timeout_ms: 300,
+  platform_hotpath_timeout_ms: 300,
+  claude_max_tokens: { enabled: false, models: { default: 8192 } as Record<string, number> }
+}
+const GATEWAY_RANGES: Record<Exclude<keyof typeof gatewaySettings, 'claude_max_tokens'>, [number, number]> = {
   max_attempts: [1, 10],
   platform_call_timeout_ms: [100, 30000],
   default_hook_timeout_ms: [50, 2000],
   platform_hotpath_timeout_ms: [50, 2000]
 }
+
+const CLAUDE_MAX_TOKENS = { models: 100, nameLength: 200, max: 1048576, overrideBytes: 64 << 10 }
+const isObject = (v: unknown) => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/** Whether Go would bind claude_max_tokens: left out or null, or an object with an optional boolean and whole numbers. */
+const claudeMaxTokensBinds = (r: any) =>
+  r == null ||
+  (isObject(r) &&
+    (r.enabled == null || typeof r.enabled === 'boolean') &&
+    (r.models == null || (isObject(r.models) && Object.values(r.models).every(Number.isInteger))))
+
+/** The size of the override the server compiles the models to (gateway/claude_max_tokens.go), in UTF-8 bytes. */
+function claudeMaxTokensOverrideBytes(models: Record<string, number>) {
+  const set = (value: number, conditions?: object[]) => ({
+    mode: 'set',
+    path: 'max_tokens',
+    value,
+    keep_origin: true,
+    ...(conditions && { conditions })
+  })
+  const ops = Object.keys(models)
+    .filter(m => m !== 'default')
+    .sort()
+    .map(m => set(models[m], [{ path: 'original_model', mode: 'full', value: m }]))
+  if ('default' in models) ops.push(set(models.default))
+  return new TextEncoder().encode(JSON.stringify({ operations: ops })).length
+}
+
+/** The first problem of the rule's models, as the server's field error on claude_max_tokens. */
+function claudeMaxTokensError(models: Record<string, number>) {
+  const { models: most, nameLength, max, overrideBytes } = CLAUDE_MAX_TOKENS
+  const err = (code: string, message: string) => ({ field: 'claude_max_tokens', code, message })
+  const entries = Object.entries(models)
+  if (entries.length > most) return err('too_many', `at most ${most} models`)
+  for (const [k, v] of entries) {
+    if (!k || k.trim() !== k || [...k].length > nameLength)
+      return err('invalid_model', `model names must be 1-${nameLength} characters without surrounding spaces`)
+    if (v < 1 || v > max) return err('out_of_range', `values must be between 1 and ${max}`)
+  }
+  if (claudeMaxTokensOverrideBytes(models) > overrideBytes) return err('too_large', 'the model names are too long in total')
+}
 on('GET', '/settings/gateway', () => gatewaySettings)
 on('PUT', '/settings/gateway', (req) => {
   const b = req.body || {}
+  if (!claudeMaxTokensBinds(b.claude_max_tokens)) return fail(400, 'invalid_argument', 'invalid request body')
   const fields: Array<{ field: string; code: string; message: string }> = []
   for (const [k, [min, max]] of Object.entries(GATEWAY_RANGES)) {
     const v = b[k]
@@ -1538,8 +1586,21 @@ on('PUT', '/settings/gateway', (req) => {
       fields.push({ field: k, code: 'out_of_range', message: `${k} must be an integer between ${min} and ${max}` })
     }
   }
+  // Replaced as a whole when given; models left out read back as the suggested default, {} stays empty.
+  const rule = b.claude_max_tokens && {
+    enabled: !!b.claude_max_tokens.enabled,
+    models: { ...(b.claude_max_tokens.models ?? { default: 8192 }) }
+  }
+  const ruleError = rule && claudeMaxTokensError(rule.models)
+  if (ruleError) fields.push(ruleError)
   if (fields.length) return fail(400, 'invalid_argument', 'invalid gateway settings', { fields })
-  Object.assign(gatewaySettings, { max_attempts: b.max_attempts, platform_call_timeout_ms: b.platform_call_timeout_ms, default_hook_timeout_ms: b.default_hook_timeout_ms, platform_hotpath_timeout_ms: b.platform_hotpath_timeout_ms })
+  Object.assign(gatewaySettings, {
+    max_attempts: b.max_attempts,
+    platform_call_timeout_ms: b.platform_call_timeout_ms,
+    default_hook_timeout_ms: b.default_hook_timeout_ms,
+    platform_hotpath_timeout_ms: b.platform_hotpath_timeout_ms
+  })
+  if (rule) gatewaySettings.claude_max_tokens = rule
   return gatewaySettings
 })
 

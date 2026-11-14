@@ -18,9 +18,11 @@ import { imagesRefusedNote, outcomeState, stageNumber, stageState, unjudgedStage
 // warning icon (only its text was reviewed). Each cell keeps to one line: the
 // stage result, the question set, the error and the images sent are in
 // tooltips. The reasons are not a column (a table wider than a dialog cut
-// them off): under the table, each call that gave one or whose images were
-// refused lists its stage and auditor, the refused-images note and the whole
-// reason (line breaks kept), the same on a desktop, in a dialog and on a phone.
+// them off): under the table, each call that gave one, whose images were
+// refused or that failed with an error text (err_detail, 0.11.2) lists its
+// stage and auditor, the refused-images note, the error and the whole reason
+// (line breaks kept), the same on a desktop, in a dialog and on a phone. The
+// verdict's tooltip carries the error as well.
 const props = defineProps<{ trace: Trace; requestLink?: boolean }>()
 const emit = defineEmits<{ (e: 'show-request', requestId: string): void }>()
 const t = useModHost().t
@@ -49,8 +51,8 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'latency_ms', label: t('trace.latency'), align: 'right', nowrap: true, mobile: 'detail' }
 ])
 
-/** The calls listed under the table: those with a reason (LLM auditors) or whose images were refused. */
-const reasons = computed(() => rows.value.filter((r) => r.reason || r.images_refused))
+/** The calls listed under the table: those with a reason (LLM auditors), whose images were refused or with an error text. */
+const reasons = computed(() => rows.value.filter((r) => r.reason || r.images_refused || r.err_detail))
 
 /** "Stage 2 · fallback", in the stage cell and over a reason. */
 const stageText = (r: Row) => `${t('trace.stageN', { n: r.stage })}${r.fallback ? ` · ${t('flows.role.fallback')}` : ''}`
@@ -63,8 +65,10 @@ function refusedText(o: Outcome): string {
   return note ? t(note.key, note.params) : ''
 }
 
-/** The error of a call ("timeout 504"), in its verdict's tooltip. */
+/** The error of a call ("timeout 504"). */
 const errText = (o: Outcome) => (o.err ? `${enumLabel('err', o.err)}${o.status ? ` ${o.status}` : ''}` : undefined)
+/** The verdict's tooltip of a failed call: the error and its text. */
+const errTip = (o: Outcome) => (o.err && o.err_detail ? `${errText(o)}: ${o.err_detail}` : errText(o))
 
 /** Images sent and skipped, in the top hit's tooltip. */
 const imagesText = (o: Outcome) => (o.sent_images || o.skipped_images ? t('trace.images', { sent: o.sent_images || 0, skipped: o.skipped_images || 0 }) : undefined)
@@ -108,7 +112,7 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
       </template>
       <template #cell-verdict="{ row }">
         <span class="mod-cell-line">
-          <SBadge :tone="VERDICT_TONE[outcomeState(row)]" :title="errText(row)">{{ t(`trace.${outcomeState(row)}`) }}</SBadge>
+          <SBadge :tone="VERDICT_TONE[outcomeState(row)]" :title="errTip(row)">{{ t(`trace.${outcomeState(row)}`) }}</SBadge>
           <SIcon v-if="row.images_refused" name="warning" class="mod-text-warning" :label="refusedText(row)" />
         </span>
       </template>
@@ -129,6 +133,7 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
           <dt>{{ stageText(r) }} · {{ catalog.auditorName(r.auditor_id) }}</dt>
           <dd class="mod-body-text">
             <p v-if="r.images_refused" class="mod-text-warning">{{ refusedText(r) }}</p>
+            <p v-if="r.err_detail" class="mod-text-warning mod-prewrap">{{ errText(r) }}: {{ r.err_detail }}</p>
             <p v-if="r.reason" class="mod-prewrap">{{ r.reason }}</p>
           </dd>
         </div>

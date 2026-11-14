@@ -438,7 +438,8 @@ func TestJevNormalizeSlotsHonourContext(t *testing.T) {
 }
 
 func TestRulesVersionLegacyHashes(t *testing.T) {
-	if builtinVersions[legacyWireHashEN] != RulesVersionEN || builtinVersions[legacyWireHashZH] != RulesVersionZH13 || len(builtinVersions) != 3 {
+	if builtinVersions[legacyWireHashEN] != RulesVersionEN || builtinVersions[legacyWireHashZH] != RulesVersionZH13 ||
+		builtinVersions[legacyWireHashZHv2] != RulesVersionZHv2 || len(builtinVersions) != 4 {
 		t.Fatalf("builtinVersions = %v", builtinVersions)
 	}
 	if RulesVersionEN != "content-audit-13-en-v1" || RulesVersionZH13 != "content-audit-13-zh-v1" ||
@@ -446,7 +447,11 @@ func TestRulesVersionLegacyHashes(t *testing.T) {
 		legacyWireHashZH != "b01b9f2d0e8df50000f90eed1681717e197afc2f73698f108bbb045eada6d3dd" {
 		t.Fatal("legacy versions or hashes differ from new-api")
 	}
-	if v := RulesVersionOf(&builtinQuestions); v != "content-audit-v2-zh" || RulesVersionZH != "content-audit-v2-zh" {
+	// The 10-question set built in up to 0.11.1.
+	if RulesVersionZHv2 != "content-audit-v2-zh" || legacyWireHashZHv2 != "30e7aacadcba4eddab230c74955c966b3d5f80c610dc3f36f2ab5be2946ed748" {
+		t.Fatal("the 0.11.1 built-in version or hash changed")
+	}
+	if v := RulesVersionOf(&builtinQuestions); v != "content-audit-v3-zh" || RulesVersionZH != "content-audit-v3-zh" || len(builtinQuestions.Items) != 9 {
 		t.Fatalf("built-in set = %s", v)
 	}
 	def, _ := DefaultQuestions(nil)

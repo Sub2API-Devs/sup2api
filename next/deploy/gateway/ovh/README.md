@@ -4,6 +4,19 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-14 核心 **0.1.285**（`b12c9aede`，develop 头，合并了 `fix/disconnect-wait-and-claude-max-tokens` `bdbb2875e`；北京时间 05:21–05:23；计划 `db8e5317a6b261e70cf08175c44864f4` rolling-v1 completed，05:21:39→05:23:39 约 120 秒，两节点轮流让出（先 ccp 后 ovh），`/readyz`（ovh 3130 与 api.prophey.ai）全程 200；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
+- 内容：① 计费设置删除 `client_disconnect_wait_seconds`，“读完再计费”的续读只受请求本身超时（`relay_timeout_seconds` / 流式空闲超时）约束，服务停止时仍中止（CONTRACTS §25.8）；② 网关设置 `claude_default_max_tokens` 改为 `claude_max_tokens {enabled, models}`，默认关闭的内置参数覆盖，开启时 keep_origin 写 `max_tokens`、在账号覆盖之前执行；关闭时转换到 Anthropic 的请求仍由转换器补 8192（CONTRACTS §84.1、CONVERT-MATRIX D5）。
+- 发布前只读确认（`settings` 表）：`gateway` 行没有 `claude_default_max_tokens`（一直是默认 `{"default":8192}`，关闭状态行为不变）；`billing` 行 `client_disconnect_wait_seconds=120`、`client_disconnect_policy=continue`（120 留在行里，新核心不读，回滚到 0.1.284 仍按它生效）。
+- 发布前核对：自 0.1.284（`75780e65a`）起核心侧只改 `next/server`、`next/web`、`next/docs`、`next/e2e`、CHANGELOG 与本文件；`runtime-contract`、`sdk`、核心迁移未变（最后仍是 0096）；`next/plugins` 只有 moderation 0.11.x / dynweight 0.5.8 的提交，本次不发布。
+- 构建：`stage/0.1.285/`（取自无插件重建的 `stage/0.1.283/` 模板；sign/release 取自 0.1.284）。内置集合 = 线上运行版本：0.1.284 的 stage 去掉 `moderation-0.10.0`、换成线上的 `stage/moderation-0.11.1/packages/moderation-0.11.1.s2plugin`（sha256 `fc7c7464…7886`，build.sh 断言），dynweight 仍 0.5.7，其余逐字节相同（`diff -r`）。核心 sha256 `78fbc7afd494115defbce1754001555d8a332e5f87a7ddbd41e11e0eb8ecf484`。
+- 测试：`test.sh` 全部通过：server 全量 57 个包、`-race` lookup / usage、sdk 15 个包；控制台 vitest 240 个文件 1992 条，moderation 界面 20 个文件 195 条，dynweight 界面 4 个文件 50 条。TEST-OK。
+- 清单 `c8a2abea87a5a9e022a2928e50759f947edbf0fc24301bb5db33c74d6e4bd020`，bundle `de0c7fb6594d094a137926f89a37adfa626dc58ea89f7dd760354fda9e35688e`，strategy rolling。`release.sh` 只 import，`--preflight-only` 选中 rolling-v1、无 blocker（expected_revision 542）后正式执行。内置集合与线上一致，没有触发插件 rollout。
+- new-api 渠道没有关（用户要求滚动发布、不停渠道）；不备份数据库。
+- 核验（`~/rel285/`，只读）：两节点 `sub2api version` 0.1.285；10 个插件 active=current=desired 与发布前相同（moderation 0.11.1、dynweight 0.5.7 …），两节点实例 ready、restarts 0；`GET /settings/gateway` 返回 `claude_max_tokens {"enabled":false,"models":{"default":8192}}`、不再有 `claude_default_max_tokens`；`GET /settings/billing` 不再有 `client_disconnect_wait_seconds`；ovh 日志自重启起无 WARN / ERROR；`errs.sh` 05:00–05:21 共 861 次、滚动期间 104 次、05:23:39–05:26 共 100 次，5xx 0、499 0。
+- 滚动期间在旧核心控制台保存网关设置会丢掉 `claude_max_tokens`（旧核心不认识），属正常。
+- 回滚：核心导入 0.1.284 清单 `c908e08b01644e3ff4872a08ac8236b190650dcaf4a97a1f22d847b36223358b` 建反向计划（同一 schema，rolling）；0.1.284 的内置集合带的是 moderation 0.10.0，但内置同步只在内置版本更新时升级（`plugin/install/builtin.go`，active < 内置才升），不会把线上 0.11.1 降回去，插件不用处理。设置无需处理：旧核心读不到 `claude_max_tokens` 即按 `{"default":8192}`，`client_disconnect_wait_seconds` 120 仍在行里。
+- 脚本 `stage/0.1.285/`；工作树 `~/sup2api/release-0.1.285`；核验脚本与输出在 `~/rel285/`（`verify285.py`、`observe-run.out`）。上游同步 PR 未提（需要用户原话同意）。
+
 2026-11-13 moderation **0.11.1**（`790208acb`，develop 头，合并了 `fix/moderation-trace-reason` `4bcecfd43`；只升级插件，核心 0.1.284 不动；北京时间 15:09:32 rollout 268，约 5 秒，两节点同时切换）：
 - 内容（CONTRACTS §72 0.11.1）：TraceView 理由移到表格下方逐条全文显示（原来单行省略、只有 title 悬停，弹窗里表格溢出时整列不可见）；`llmReasonRunes` 500→2000，`clipReason` 截断加“…”（llm_questions 与 agent 共用）；`auditScope` NULL/无效 → input；BlocksTab 原因可展开；hostCompat `>=0.1.281 <0.2.0`、hostUICompat `^3.13`。无迁移。
 - 发布前（14:06:21）按用户同意通过管理接口把流程 #1「默认 · Jev 初审 + deepseek 复核」v2、#2「jev + llm」v3 的 scope 从 NULL（=all）设为 input（`~/rel284/flowscope.py`，改前数据 `~/rel284/flows-20261113060125.json`，比对只有 scope / updated_at 变化）；之后新记录被审文本不再含 `[assistant]` / `[tool]` 片段（`~/rel284/scopecheck.py`：改后 12 条全部干净，改前 300 条有 183 条含这些片段）。

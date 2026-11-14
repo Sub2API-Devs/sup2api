@@ -2,6 +2,8 @@
 
 状态：设计与实现在同一分支 `feat/client-disconnect-policy`。契约落在 CONTRACTS §8 和 §25.8。
 
+> 2026-11-14 修订（用户决定）：`client_disconnect_wait_seconds` 删除，`continue` 的续读不另设上限，只受请求本身的超时（`relay_timeout_seconds`、流式空闲超时）约束，与客户端还在时一致。下文关于等待上限的内容已作废，以 CONTRACTS §25.8 为准。
+
 ## 1. 要解决的问题
 
 客户端在流式响应中途断开时，核心拿不到上游最后才发的用量，现行做法是按预扣估算计费（CONTRACTS §25.8，2026-11-08）。这条路径有一个多收的缺陷：

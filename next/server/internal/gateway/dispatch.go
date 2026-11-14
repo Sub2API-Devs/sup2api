@@ -622,10 +622,10 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 		}
 	}
-	// A declared type's own part of the body, then the account's request
-	// parameter override (CONTRACTS §84), precede the build: the plugin
-	// builds from, and may still patch, what the account decided
-	// (param_override.go).
+	// A declared type's own part of the body, the built-in override
+	// (claude_max_tokens, CONTRACTS §84.1), then the account's request
+	// parameter override (§84) precede the build: the plugin builds from,
+	// and may still patch, what they decided (param_override.go).
 	upBody, upModel, failure := c.rewriteBody(ctx, acc, rt, pacct, upBody, upModel, n)
 	if failure != nil {
 		return *failure
@@ -822,9 +822,10 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 
 	// Send. The upstream request does not hang off ctx: when the client goes
-	// the watcher cancels it - at once, or after the configured wait when the
-	// answer is being read to its end for billing (disconnect.go). Plugin
-	// executions and task submissions settle on their own and are never kept.
+	// the watcher cancels it - at once, or not at all when the answer is
+	// being read to its end for billing, within the timeouts below
+	// (disconnect.go). Plugin executions and task submissions settle on
+	// their own and are never kept.
 	// The cause names the timeout that cut the request (forward records it).
 	uctx, ucancel := context.WithCancelCause(context.WithoutCancel(ctx))
 	defer ucancel(nil)
