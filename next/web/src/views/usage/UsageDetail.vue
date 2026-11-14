@@ -14,6 +14,7 @@ import { accountLabel, availabilityTrace, factText, hookTone, isConverted, known
 import UsageAccountMark from './UsageAccountMark.vue'
 import UsageAvailabilityTrace from './UsageAvailabilityTrace.vue'
 import UsageSchedulingTrace from './UsageSchedulingTrace.vue'
+import UsageAttemptTrace from './UsageAttemptTrace.vue'
 import UsageConversionBadges from './UsageConversionBadges.vue'
 import UsageConversionTrace from './UsageConversionTrace.vue'
 import UsageBillingFacts from './UsageBillingFacts.vue'
@@ -26,7 +27,8 @@ import type { FailureDecision } from '@/views/settings/failurePolicy'
 import RequestLogViewer from '@/views/ccgateway/RequestLogViewer.vue'
 
 // Expanded usage record: billing detail (A.14), request info, tokens, hooks, sticky.
-const props = defineProps<{ row: UsageRow; path?: string }>()
+// `mine`: the caller's own records, whose attempts show no accounts.
+const props = defineProps<{ row: UsageRow; path?: string; mine?: boolean }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const accountTypes = useAccountTypes()
@@ -216,6 +218,7 @@ const schedulingHint = computed(() => u.value.error_type === 'no_account' && !!s
         </SDisclosure>
       </SCard>
     </SGrid>
+    <UsageAttemptTrace :row="u" :mine="mine" />
     <UsageSchedulingTrace :row="u" />
     <UsageAvailabilityTrace :row="u" />
     <UsageConversionTrace :row="u" />

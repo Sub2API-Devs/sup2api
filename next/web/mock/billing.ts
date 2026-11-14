@@ -1177,6 +1177,47 @@ for (let i = 0; i < 90; i++) {
 }
 usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))
 
+// Retried requests (attempt_trail, CONTRACTS §98), among the console user's
+// recent anthropic / relay requests: switched once, the same account twice
+// and then another, failed on every account, a chain long enough to fold,
+// and a row from before the trail (only the count). The trail is stored as
+// the list sends it, by account ID; the detail adds the names.
+{
+  type Step = Record<string, any>
+  const upstream = (account_id: number, status: number, ms: number, message: string, next?: string): Step =>
+    ({ account_id, status, error_type: 'upstream_error', ms, message, ...(next ? { next } : {}) })
+  const overloaded = 'overloaded_error: Overloaded'
+  const reset = 'upstream connect error or disconnect/reset before headers'
+  const trails: Array<Step[] | null> = [
+    [upstream(12, 529, 1180, overloaded, 'switch'), { account_id: 13, status: 200, ms: 3040 }],
+    [upstream(16, 502, 640, reset, 'same'), upstream(16, 502, 702, reset, 'switch'), { account_id: 12, status: 200, ms: 2950 }],
+    [upstream(12, 529, 1210, overloaded, 'switch'), upstream(13, 529, 980, overloaded, 'switch'), upstream(16, 503, 1530, 'service unavailable')],
+    [12, 13, 16, 13].map((id, i) => upstream(id, 529, 900 + i * 110, overloaded, 'switch')).concat({ account_id: 12, status: 200, ms: 2710 }),
+    null
+  ]
+  const picked = usageRows.filter((u) => u.user_id === 1 && u.id >= 5000 && ['anthropic', 'relay'].includes(u.plugin_key)).slice(0, trails.length)
+  picked.forEach((u, k) => {
+    const steps = trails[k]
+    // Within the last hour, so they open on the request log's default range.
+    u.created_at = new Date(Date.now() - (3 + k * 9) * 60000).toISOString()
+    if (!steps) {
+      u.attempts = 2
+      return
+    }
+    const last = steps[steps.length - 1]
+    const account = ACCOUNTS.find((a) => a.id === last.account_id)!
+    Object.assign(u, { attempts: steps.length, attempt_trail: { v: 1, steps, omitted: 0 }, account_id: account.id, account_name: account.name, plugin_key: account.plugin_key, account_type: account.type })
+    if (last.status !== 200) {
+      Object.assign(u, {
+        success: false, status_code: last.status, error_type: 'upstream_error', error_message: last.message, input_tokens: 0, output_tokens: 0,
+        cache_read_tokens: 0, cache_creation_tokens: 0, total_cost: '0', billing_status: 'free', matched_tier: '', first_token_ms: undefined, _detail: undefined, _price: null
+      })
+    }
+    u.latency_ms = steps.reduce((n, x) => n + x.ms, 0)
+  })
+  usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))
+}
+
 // Ledger: usage debits + a few admin credits, oldest first to compute balance_after.
 {
   const running = new Map<number, number>()
@@ -1224,6 +1265,8 @@ function publicUsage(u: any, self = false) {
     delete rest.account_id
     delete rest.account_name
     rest.conversion = null
+    // Self-service: each attempt's outcome and time, nothing about the account.
+    if (rest.attempt_trail) rest.attempt_trail = { ...rest.attempt_trail, steps: rest.attempt_trail.steps.map((s: any) => ({ status: s.status, error_type: s.error_type, ms: s.ms })) }
   }
   return rest
 }
@@ -1253,6 +1296,8 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.billing_status && u.billing_status !== q.billing_status) return false
     if (q.conversion && !conversionMatch(u.conversion, q.conversion)) return false
     if (q.model && u.model !== q.model) return false
+    if (q.retried === 'true' && !((u.attempts ?? 1) > 1)) return false
+    if (q.retried === 'false' && (u.attempts ?? 1) > 1) return false
     if (q.success === 'true' && !u.success) return false
     if (q.success === 'false' && u.success) return false
     return true
@@ -1270,10 +1315,13 @@ function usageDetail(u: any, self = false) {
     unclassified_tokens: 0, completeness: 'complete', source: 'json',
     pricing_policy: 'platform_default_cache_write_compat'
   } } : {}
+  const row = publicUsage(u, self)
+  // The detail names the accounts of the trail; the list has their IDs only.
+  if (row.attempt_trail && !self) row.attempt_trail = { ...row.attempt_trail, steps: row.attempt_trail.steps.map((s: any) => ({ ...s, account_name: ACCOUNTS.find((a) => a.id === s.account_id)?.name })) }
   return {
-    ...publicUsage(u, self),
+    ...row,
     billing_detail: u._detail ? { ...u._detail, ledger_id: u.ledger_id ?? null } : null,
-    price: u._price, metrics, attempts: 1,
+    price: u._price, metrics, attempts: u.attempts ?? 1,
     // Self-service details carry no anomalies, like the server.
     ...(u._anomalies && !self ? { anomalies: u._anomalies } : {}),
     user_agent: 'claude-cli/mock (external, cli; usage-detail-preview)'
@@ -1380,6 +1428,20 @@ function overviewOf(rows: any[], tz: string) {
   }
 }
 
+/** The export's call chain (CONTRACTS §98): "#16×2 → #12" for an operator, the count for the
+ *  caller's own records and for a row without a trail; empty for a request sent once. */
+function callChain(u: any, self: boolean, zh: boolean): string {
+  if (!(u.attempts > 1)) return ''
+  if (self || !u.attempt_trail) return zh ? `${u.attempts} 次` : `${u.attempts} attempts`
+  const runs: Array<{ id: number; times: number }> = []
+  for (const s of u.attempt_trail.steps) {
+    const last = runs[runs.length - 1]
+    if (last?.id === s.account_id) last.times++
+    else runs.push({ id: s.account_id, times: 1 })
+  }
+  return runs.map((r) => `#${r.id}${r.times > 1 ? `×${r.times}` : ''}`).join(' → ')
+}
+
 /** GET …/usage/export (CONTRACTS §66.5): a short CSV with the BOM, like the server. */
 function usageCSV(rows: any[], q: Record<string, string>, self: boolean) {
   const zh = q.lang === 'zh'
@@ -1396,7 +1458,8 @@ function usageCSV(rows: any[], q: Record<string, string>, self: boolean) {
     ['输出', 'Output', (u) => u.output_tokens],
     ['缓存读', 'Cache read', (u) => u.cache_read_tokens],
     ['缓存写', 'Cache write', (u) => u.cache_creation_tokens],
-    ['费用', 'Cost', (u) => u.total_cost]
+    ['费用', 'Cost', (u) => u.total_cost],
+    ['调用链路', 'Call chain', (u) => callChain(u, self, zh)]
   ]
   const shown = cols.filter((c) => !(self && c[3]))
   const cell = (v: unknown) => {

@@ -39,6 +39,12 @@ describe('entity search fields', () => {
     expect(queryUsageFilters(link, false)).toEqual({ group_id: '7', api_key_id: '104' })
   })
 
+  it('a link presets the retried filter for anyone, as true or false only (CONTRACTS §98)', () => {
+    expect(queryUsageFilters({ retried: 'true' }, false)).toEqual({ retried: 'true' })
+    expect(queryUsageFilters({ retried: 'false' }, true)).toEqual({ retried: 'false' })
+    for (const retried of ['1', 'yes', 'TRUE']) expect(queryUsageFilters({ retried }, true)).toEqual({})
+  })
+
   it.each(['abc', '0', '007', '-1', '1.5', ' 7'])('a link id that is not one (%o) is dropped; a model, being a name, is kept', id => {
     expect(queryUsageFilters({ user_id: id, group_id: id, api_key_id: id, account_id: id, model: id }, true, true)).toEqual({ model: id })
   })
@@ -81,14 +87,14 @@ describe('usageSearchLayout', () => {
   it('puts the model, user and API key on an operator\'s first row and the rest behind More filters', () => {
     const { primary, advanced } = usageSearchLayout(admin)
     expect(primary).toEqual(['model', 'user', 'api_key'])
-    expect(advanced).toEqual(['group', 'request_id', 'account', 'client_ip', 'protocol', 'conversion', 'success', 'billing_status'])
+    expect(advanced).toEqual(['group', 'request_id', 'account', 'client_ip', 'protocol', 'conversion', 'success', 'retried', 'billing_status'])
     expect(usageSearchLayout({ ...admin, accounts: false }).advanced.slice(0, 3)).toEqual(['group', 'request_id', 'client_ip'])
   })
 
   it('gives a user the group in place of the user, and no operator fields', () => {
     const { primary, advanced, params } = usageSearchLayout(self)
     expect(primary).toEqual(['model', 'group', 'api_key'])
-    expect(advanced).toEqual(['request_id', 'client_ip', 'protocol', 'success', 'billing_status'])
+    expect(advanced).toEqual(['request_id', 'client_ip', 'protocol', 'success', 'retried', 'billing_status'])
     for (const key of ['user_id', 'user_email', 'account_id', 'node_id', 'conversion']) expect(params).not.toContain(key)
     // the group is picked on the first row; a group name a link brought is still managed, as a chip
     expect(usageSearchLayout(self).tagged).not.toContain('group_id')
@@ -98,6 +104,7 @@ describe('usageSearchLayout', () => {
   it('swaps the status for the HTTP status and error type under failed requests, and does not tag the status set there', () => {
     const { advanced, tagged } = usageSearchLayout({ ...self, errors: true })
     expect(advanced).not.toContain('success')
+    expect(advanced).toContain('retried')
     expect(advanced.slice(-2)).toEqual(['status_code', 'error_type'])
     expect(tagged).not.toContain('success')
     expect(usageSearchLayout(self).tagged).toContain('success')
@@ -105,7 +112,7 @@ describe('usageSearchLayout', () => {
 
   it('keeps the parameters without a field, tagging all but the first row\'s', () => {
     const { params, tagged } = usageSearchLayout(admin)
-    for (const key of ['group_id', 'group_name', 'account_id', 'account_name', 'client_request_id', 'platform', 'endpoint', 'plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol', 'stream', 'status_code']) {
+    for (const key of ['group_id', 'group_name', 'account_id', 'account_name', 'retried', 'client_request_id', 'platform', 'endpoint', 'plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol', 'stream', 'status_code']) {
       expect(params).toContain(key)
       expect(tagged).toContain(key)
     }

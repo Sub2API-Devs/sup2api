@@ -32,6 +32,7 @@ export default {
   nonStream: '非流式',
   search: {
     logType: '日志类型',
+    retried: '重试',
     // 模型、用户、API Key、分组、账号是实体选择器（EntityPicker），占位用它自带的实体名；
     // 这里是其余输入框的占位，以及筛选标签的名称（按查询参数）。
     client_ip: '调用 IP（精确）',
@@ -183,6 +184,31 @@ export default {
   },
   hooks: {
     title: '钩子决策'
+  },
+  attempts: {
+    title: '调用链路',
+    retried: '重试 {n} 次',
+    retriedShort: '重试 {n}',
+    step: '第 {n} 次',
+    accountRef: '账号 {n}',
+    ok: '成功',
+    failed: '失败',
+    next: { same: '同账号重试', switch: '换账号重试' },
+    omitted: '另有 {n} 次尝试未列出',
+    legacy: '这条记录早于调用链路功能，只记录了尝试次数',
+    hint: '失败的尝试不计费，只有最后一次的用量计入本条记录。',
+    mineHint: '本请求在上游失败后被自动重试；失败的尝试不计费。',
+    filterYes: '重试过',
+    filterNo: '未重试',
+    // 一次尝试可能以这些网关错误类型结束；其它类型按记录原样显示。
+    errorTypes: {
+      upstream_error: '上游错误',
+      client_canceled: '客户端取消',
+      internal: '内部错误',
+      rate_limited: '限流',
+      invalid_request: '请求无效',
+      model_availability: '模型不可用'
+    }
   },
   scheduling: {
     title: '账号调度记录',

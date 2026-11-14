@@ -28,15 +28,15 @@ export const CONVERSION_FILTERS = ['native', 'converted', 'good', 'fair', 'disco
 export const conversionFilterLabel = (v: string) =>
   v === 'converted' || v === 'lossy' ? `usage.conversion.filters.${v}` : `accounts.conversion.grades.${v}`
 
-const QUERY_FILTERS = ['user_id', 'group_id', 'group_name', 'model', 'model_contains', 'api_key_id', 'account_id', 'from', 'to'] as const
+const QUERY_FILTERS = ['user_id', 'group_id', 'group_name', 'model', 'model_contains', 'api_key_id', 'account_id', 'retried', 'from', 'to'] as const
 /** Link filters of an operator only: a user cannot preset another user. */
 const OPERATOR_QUERY_FILTERS: readonly string[] = ['user_id', 'group_name', 'account_id']
 
 /**
  * The filters a link presets (?user_id=…&from=…&to=…). `accounts`: the
  * operator may read accounts (the API refuses the account filter to any
- * other). An id that is not one (?user_id=abc) is dropped rather than sent to
- * the list and the lookup.
+ * other). An id that is not one (?user_id=abc), or a retried= other than
+ * true / false, is dropped rather than sent to the list and the lookup.
  */
 export function queryUsageFilters(query: LocationQuery, admin: boolean, accounts = false): Record<string, string> {
   const out: Record<string, string> = {}
@@ -46,6 +46,7 @@ export function queryUsageFilters(query: LocationQuery, admin: boolean, accounts
     if (OPERATOR_QUERY_FILTERS.includes(k) && !admin) continue
     if (k === 'account_id' && !accounts) continue
     if (NUMERIC_ID_PARAMS.has(k) && !isEntityId(v)) continue
+    if (k === 'retried' && v !== 'true' && v !== 'false') continue
     out[k] = v
   }
   // The model picker shows one of the two: the exact model leaves no search beside it.
@@ -135,6 +136,7 @@ export function usageSearchLayout(c: UsageSearchContext) {
     'protocol',
     ...(c.admin ? ['conversion'] : []),
     ...(c.errors ? [] : ['success']),
+    'retried',
     'billing_status',
     ...(c.errors ? ['status_code', 'error_type'] : [])
   ]
@@ -174,6 +176,7 @@ export function useUsageSearchLabels(
       protocol: choices('protocol', [...types, ...(current && !types.includes(current) ? [current] : [])].map(v => ({ value: v, label: v }))),
       conversion: choices('conversion', CONVERSION_FILTERS.map(v => ({ value: v, label: t(conversionFilterLabel(v)) }))),
       success: choices('success', [{ value: 'true', label: t('usage.success.ok') }, { value: 'false', label: t('usage.success.failed') }]),
+      retried: choices('retried', [{ value: 'true', label: t('usage.attempts.filterYes') }, { value: 'false', label: t('usage.attempts.filterNo') }]),
       billing_status: choices('billing_status', ['billed', 'free', 'pending', 'failed'].map(v => ({ value: v, label: t(`usage.billing.status.${v}`) }))),
       stream: choices('stream', [{ value: 'true', label: t('usage.stream') }, { value: 'false', label: t('usage.nonStream') }])
     }

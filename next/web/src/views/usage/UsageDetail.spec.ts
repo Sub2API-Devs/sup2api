@@ -21,9 +21,9 @@ const row = {
   ] } }
 } as unknown as UsageRow
 
-function render(value = row, path?: string) {
+function render(value = row, path?: string, mine = false) {
   i18n.global.locale.value = 'zh'
-  return mount(UsageDetail, { props: { row: value, path }, global: {
+  return mount(UsageDetail, { props: { row: value, path, mine }, global: {
     plugins: [i18n], stubs: { ExprHistoryModal: true, BillingBreakdown: true }
   } })
 }
@@ -39,6 +39,27 @@ describe('CCGateway request log entry', () => {
     const hidden = render(ccg, '/usage/1')
     await flushPromises()
     expect(hidden.find('[data-testid="usage-request-log"]').exists()).toBe(false)
+  })
+})
+
+describe('call chain', () => {
+  const steps = [{ account_id: 16, status: 502, error_type: 'upstream_error', ms: 640, next: 'switch' }, { account_id: 12, status: 200, ms: 2950 }]
+  const retried = { ...row, attempts: 2, attempt_trail: { v: 1, steps } } as unknown as UsageRow
+
+  it('names the accounts the detailed record names, before the scheduling trace', async () => {
+    const named = steps.map((s, i) => ({ ...s, account_name: ['relay-1', 'claude-main'][i] }))
+    get.mockResolvedValueOnce({ ...retried, attempt_trail: { v: 1, steps: named }, anomalies: { scheduling: JSON.stringify({ v: 1, outcome: 'picked', skipped: [] }) } })
+    const wrapper = render(retried, '/usage/1')
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="attempt-account"]').map(a => a.text())).toEqual(['#16 relay-1', '#12 claude-main'])
+    const html = wrapper.html()
+    expect(html.indexOf('data-testid="usage-attempts"')).toBeLessThan(html.indexOf('data-testid="usage-scheduling"'))
+  })
+
+  it('leaves the accounts out of the caller\'s own records', () => {
+    const wrapper = render(retried, undefined, true)
+    expect(wrapper.findAll('[data-testid="attempt-step"]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="attempt-account"]').exists()).toBe(false)
   })
 })
 
