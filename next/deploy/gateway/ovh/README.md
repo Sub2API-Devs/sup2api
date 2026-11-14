@@ -4,6 +4,16 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-15 核心 **0.1.288**（`b06ef60bf`，develop 头，合并了 `feat/usage-attempt-chain`（`43a1a936`、`3c15fb10`、`22b6e289`），基于 develop `d08d3c8d9` = 0.1.287 上游同步；北京时间 02:55–02:58；计划 `d61b679ddde4eb917590b20213f23fad` rolling-v1 completed，02:55:17→02:58:03，先 ccp 后 ovh，`/readyz`（ovh 3130 与 api.prophey.ai）全程 200；无核心迁移，schema 仍 `1f73f300…9d4f`；Host API 仍 9；内置插件与 0.1.287 逐字节相同）：
+- 内容：使用记录调用链路（CONTRACTS §98）：网关记下每次发往上游的尝试（`usage_logs.anomalies.attempts`，只在 attempts ≥ 2 时写）；`GET /usage`、`/me/usage` 列表与详情返回 `attempt_trail`（列表只带账号 ID，详情补名称，无 `account:read` 换编号，自助只留状态 / 耗时），筛选 `retried`、导出“调用链路”列；控制台“重试 N”角标、账号列链路、详情“调用链路”。
+- 发布前核对：自 0.1.287（`14d52d2ec`）起只改 `next/server`（core、gateway、usage）、`next/web`、`next/docs` 与本文件；`runtime-contract`、`sdk`、`plugins`、核心迁移未变（最后仍是 0098）。
+- 构建：`stage/0.1.288/`（无插件重建模板，取自 `stage/0.1.287/`，内置集合 = `stage/0.1.287` 逐字节，`diff -r`）。清单 `53034b77a24e7c0c496486c17e156991ada0d9bc27531af34584c78b2e328acb`，bundle `2f902783e64beb544a4002c1da1a8f05dcf8d6e2a9b0ac713409f7722fcaae4c`，核心 sha256 `674959461d2066af5b584d4a9ce1157c124d827f2c00f6cf22b52dd853568fbe`，strategy rolling。`test.sh` TEST-OK（server 59 包、-race usage / gateway / gateway/convert / httpapi 4 包、sdk 15 包、控制台 266 个文件 2386 条与三个原生界面）。
+- `release.sh` 只 import，`--preflight-only` 选中 rolling-v1、无 blocker（expected_revision 548）后正式执行。new-api 渠道没有关（用户要求滚动发布、不停渠道）；不备份数据库。
+- 核验（`~/rel288/`，只读）：两节点 0.1.288；10 个插件两节点 active、ready、restarts 0（版本与 0.1.287 相同）；`errs.sh` 02:40–02:55 共 625 次、滚动期间 118 次、02:58 起 0 个 5xx / 499；ovh 日志只有让出 / 重启时的 WARN；clicodeplus 发布前后无 DNS 解析错误。`verify288.py`：`GET /usage?retried=maybe` 返回 400 invalid retried，`retried=true` 返回旧重试行且 `attempt_trail` 为 null（§98.6）；发布后约 30 分钟（到 03:29）1718 次请求没有发生重试（上一次重试在 00:27:38），未取到带调用链路的新记录。控制台只读检查（`pw/ui288.mjs`，1440 亮 / 暗、390 手机）：`/usage?retried=true` 正常加载、重试角标显示、旧行卡片提示“早于调用链路功能”，无页面错误与 API 4xx/5xx。
+- 汇总口径（§98.6）：滚动窗口约 3 分钟内没有重试行，不需要把小时汇总标脏重算。
+- 回滚：滚动版本，可用 0.1.287 清单 `d4522e88dd81609cb1a7f4de847fa55cab0e1264c49819fb096d50b4f793ab7b` 建计划回退（schema 相同）；回退后已写的 `anomalies.attempts` 由旧核心原样返回（§98.6）。
+- 脚本 `stage/0.1.288/`；工作树 `~/sup2api/release-0.1.288`；核验脚本与输出在 `~/rel288/`。
+
 2026-11-14 核心 **0.1.287**（`14d52d2ec`，分支 `fix/plugin-grant-revoke-cache`，基于 develop `52c8eb343`；北京时间 22:41–22:47；计划 `7c1e98c6c30b64fc284e3c5a42c4cd7c` rolling-v1 completed，22:41:26→22:47:52，先 ccp 后 ovh；无核心迁移，schema 仍 `1f73f300…9d4f`；Host API 仍 9；内置插件与 0.1.286 逐字节相同）：
 - 内容：① 管理员撤销过的低风险插件宿主权限不再被之后同意的“低风险默认授予”给回，只有显式授予才恢复（`grants.Revoked`，CONTRACTS §5.7）；② review 与同意读包前确认包仍在存储（Dir 看文件、外壳 Range 0-0），不在则 410 `package_gone` 并丢弃缓存；③ 角色页标识（key）置灰只读、只保留一个名称与描述（同值写入中英两份），`PATCH /roles/:id` 带不同 key 返回 400 `immutable`。
 - 构建：`stage/0.1.287/`（无插件重建模板，内置集合 = `stage/0.1.286` 逐字节，`diff -r`）。清单 `d4522e88dd81609cb1a7f4de847fa55cab0e1264c49819fb096d50b4f793ab7b`，核心 sha256 `6c5d83dcab8964fe2e0a3e1657597877671b08370d1f0290bcb0c6b95bbc62b5`。`test.sh` TEST-OK（server 59 包、-race 16 包、sdk、控制台 2350 条与三个原生界面）。
