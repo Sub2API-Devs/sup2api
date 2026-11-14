@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -279,15 +280,15 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	}
 
 	// Success; net (optional) narrowed then denied is fine: grant with narrower scope.
-	grants := append(explicitGuardGrants(), GrantInput{Permission: "net", Scope: map[string]any{"domains": []any{}}})
+	inputs := append(explicitGuardGrants(), GrantInput{Permission: "net", Scope: map[string]any{"domains": []any{}}})
 	// Handing the new plugin permissions to roles needs role:define (SEC-H2);
 	// role:assign alone is not enough.
 	e.authz.perms[e.admin]["role:assign"] = true
-	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants, RoleKeysForNewPermissions: []string{"admin"}}, e.admin); core.AsError(err).Code != "permission_denied" {
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: inputs, RoleKeysForNewPermissions: []string{"admin"}}, e.admin); core.AsError(err).Code != "permission_denied" {
 		t.Fatalf("role grant without role:define: %v", err)
 	}
 	e.authz.perms[e.admin]["role:define"] = true
-	res, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants, RoleKeysForNewPermissions: []string{"admin"}}, e.admin)
+	res, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: inputs, RoleKeysForNewPermissions: []string{"admin"}}, e.admin)
 	if err != nil {
 		t.Fatalf("consent: %v", err)
 	}
@@ -303,7 +304,7 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if status != StatusInstalled {
 		t.Fatalf("status = %s", status)
 	}
-	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants}, e.admin); core.AsError(err).Code != "conflict" {
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: inputs}, e.admin); core.AsError(err).Code != "conflict" {
 		t.Fatalf("double consent: %v", err)
 	}
 
@@ -375,6 +376,33 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if consent != ConsentApproved {
 		t.Fatalf("consent = %s", consent)
 	}
+	// The consent waits for 0.2.0's activation: 0.1.0 keeps running with its
+	// own grants (jobs, net), 0.2.0 is given its own (log, net denied).
+	g, _ := LoadGrants(ctx, e.db.Pool, "guard")
+	if _, ok := g["log"]; ok || g["jobs"].Status != GrantGranted || g["net"].Status != GrantGranted {
+		t.Fatalf("0.1.0 grants after the consent to 0.2.0: %+v", g)
+	}
+	g, _ = LoadVersionGrants(ctx, e.db.Pool, "guard", "0.2.0")
+	if _, ok := g["jobs"]; ok || g["log"].Status != GrantGranted || g["net"].Status != GrantDenied || g["log"].PluginVersion != "0.2.0" {
+		t.Fatalf("0.2.0 grants before its activation: %+v", g)
+	}
+	// Activation (the rollout commit): the staged set becomes the plugin's
+	// grants, and the one 0.2.0 no longer asks for is pruned.
+	if err := e.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := grants.Promote(ctx, tx, "guard", "0.2.0"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE plugins SET active_version = '0.2.0' WHERE key = 'guard'`); err != nil {
+			return err
+		}
+		return NewDefaultsApplier(nil).ApplyDefaults(ctx, tx, up, nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	g, _ = LoadGrants(ctx, e.db.Pool, "guard")
+	if _, ok := g["jobs"]; ok || g["log"].Status != GrantGranted {
+		t.Fatalf("grants after the activation of 0.2.0: %+v", g)
+	}
 	// A further version whose host permissions are all already granted is
 	// approved on upload (net was denied above, so it is dropped here).
 	cp := *up
@@ -394,27 +422,17 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if r3.ConsentStatus != ConsentApproved || len(r3.Diff.Added)+len(r3.Diff.Widened) != 0 {
 		t.Fatalf("same-permission upgrade review = %+v diff=%+v", r3.ConsentStatus, r3.Diff)
 	}
-	// Removed grant stays until activation; ApplyDefaults prunes it.
-	g, _ := LoadGrants(ctx, e.db.Pool, "guard")
-	if _, ok := g["jobs"]; !ok {
-		t.Fatal("jobs grant removed before activation")
-	}
-	if err := e.db.Tx(ctx, func(tx pgx.Tx) error {
-		return NewDefaultsApplier(nil).ApplyDefaults(ctx, tx, up, nil)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	g, _ = LoadGrants(ctx, e.db.Pool, "guard")
-	if _, ok := g["jobs"]; ok {
-		t.Fatal("jobs grant not pruned")
-	}
 
-	// Revoke one grant; net was denied by the upgrade consent (not re-approved).
+	// Revoke one grant, the one staged for 0.2.1 too; net was denied by the
+	// upgrade consent (not re-approved).
 	if g["net"].Status != GrantDenied {
 		t.Fatalf("net = %+v", g["net"])
 	}
 	if err := e.svc.RevokeGrant(ctx, "guard", "log", e.admin); err != nil {
 		t.Fatal(err)
+	}
+	if g, _ := LoadVersionGrants(ctx, e.db.Pool, "guard", "0.2.1"); g["log"].Status != GrantRevoked {
+		t.Fatalf("log staged for 0.2.1 after the revocation: %+v", g["log"])
 	}
 	if err := e.svc.RevokeGrant(ctx, "guard", "net", e.admin); core.AsError(err).Code != "not_found" {
 		t.Fatalf("revoke denied grant: %v", err)

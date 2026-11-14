@@ -1,6 +1,6 @@
--- Reverses core migration 0097_authz_hardening.sql (core 0.1.286): puts the
--- database back in the shape core 0.1.285 runs on (migrations through
--- 0096). Run it with every node stopped, as the database owner, in one go:
+-- Reverses core migrations 0097_authz_hardening.sql and
+-- 0098_plugin_staged_grants.sql (core 0.1.286): puts the database back in
+-- the shape core 0.1.285 runs on (migrations through 0096). Run it with every node stopped, as the database owner, in one go:
 --
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 0.1.286-authz-down.sql
 --
@@ -15,6 +15,10 @@
 --   2. Access keys: the same renames; group and id scopes are dropped.
 --   3. Schema: the tables, columns, index, trigger and function the
 --      migration added go, and so does its schema_migrations row.
+--   4. Staged plugin grants (0098): a version with a staged consent waits
+--      for a new one, as after an abandoned upgrade (core 0.1.285 would run
+--      it without them), audited as plugin.grants.withdraw; the table and
+--      the schema_migrations row go.
 -- Every change is audited by the system with via "rollback 0.1.286"; the
 -- authz version moves.
 
@@ -29,9 +33,24 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE id = '0097_authz_hardening.sql') THEN
         RAISE EXCEPTION 'migration 0097_authz_hardening.sql is not applied: nothing to roll back';
     END IF;
-    IF EXISTS (SELECT 1 FROM schema_migrations WHERE id > '0097_authz_hardening.sql') THEN
-        RAISE EXCEPTION 'migrations after 0097_authz_hardening.sql are applied: roll those back first';
+    IF EXISTS (SELECT 1 FROM schema_migrations WHERE id > '0098_plugin_staged_grants.sql') THEN
+        RAISE EXCEPTION 'migrations after 0098_plugin_staged_grants.sql are applied: roll those back first';
     END IF;
+    IF to_regclass('plugin_staged_grants') IS NOT NULL THEN
+        WITH reset AS (
+            UPDATE plugin_versions v SET consent_status = 'awaiting_consent'
+            WHERE v.consent_status = 'approved'
+              AND EXISTS (SELECT 1 FROM plugin_staged_grants s WHERE s.plugin_key = v.plugin_key AND s.version = v.version)
+            RETURNING v.plugin_key, v.version)
+        INSERT INTO audit_logs (user_id, action, target_type, target_id, detail)
+        SELECT NULL, 'plugin.grants.withdraw', 'plugin', r.plugin_key,
+            jsonb_build_object('via', 'rollback 0.1.286', 'version', r.version, 'reason', 'rollback',
+                'permissions', (SELECT COALESCE(jsonb_agg(s.permission ORDER BY s.permission), '[]') FROM plugin_staged_grants s
+                    WHERE s.plugin_key = r.plugin_key AND s.version = r.version AND s.status = 'granted'))
+        FROM reset r;
+        DROP TABLE plugin_staged_grants;
+    END IF;
+    DELETE FROM schema_migrations WHERE id = '0098_plugin_staged_grants.sql';
 END $$;
 
 -- The keys core 0.1.285 has and 0.1.286 replaced, each with its

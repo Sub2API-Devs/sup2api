@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 )
 
 // startCoordinator runs the coordinator loop for a rollout this node leads
@@ -296,9 +297,8 @@ func (c *Controller) migrate(ctx context.Context, r *rolloutRow) error {
 	if pkg.Manifest.Database == nil {
 		return nil
 	}
-	var granted bool
-	if err := c.o.DB.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugin_permission_grants
-		WHERE plugin_key = $1 AND permission = 'db.schema' AND status = 'granted')`, r.key).Scan(&granted); err != nil {
+	granted, err := grants.Holds(ctx, c.o.DB.Pool, r.key, *r.target, "db.schema", nil)
+	if err != nil {
 		return err
 	}
 	if !granted {
@@ -389,6 +389,9 @@ func (c *Controller) commit(ctx context.Context, r *rolloutRow) error {
 		target := deref(r.target)
 		if _, err := tx.Exec(ctx, `UPDATE plugins SET active_version = $2, desired_version = $2,
 			updated_at = now(), row_version = row_version + 1 WHERE key = $1`, r.key, target); err != nil {
+			return err
+		}
+		if err := grants.Promote(ctx, tx, r.key, target); err != nil {
 			return err
 		}
 		upgraded := r.action == "upgrade" || (prevActive != nil && *prevActive != target)

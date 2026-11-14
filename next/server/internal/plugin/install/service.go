@@ -5,7 +5,9 @@ package install
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"net/http"
 	"runtime"
 	"sync"
 
@@ -46,6 +48,11 @@ const (
 	PermGrantHigh     = "plugin:grant:high"
 	PermGrantCritical = "plugin:grant:critical"
 )
+
+// ErrPackageGone: the version is recorded but no node holds its package any
+// more (a failed upgrade's package, cleaned up), so it cannot be reviewed or
+// run until it is uploaded again (CONTRACTS §5.7).
+var ErrPackageGone = core.NewError(http.StatusGone, "package_gone", "the package of this version is no longer available; upload it again")
 
 // Deps are the collaborators of Service. Bus, Schemas and Accounts may be nil.
 type Deps struct {
@@ -154,6 +161,9 @@ func (s *Service) Package(ctx context.Context, key, version string) (*pkg.Packag
 		return nil, err
 	}
 	raw, err := s.d.Packages.Fetch(ctx, sha, url)
+	if errors.Is(err, blobs.ErrNotFound) {
+		return nil, ErrPackageGone.WithCause(err)
+	}
 	if err != nil {
 		return nil, err
 	}

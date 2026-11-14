@@ -9,6 +9,7 @@ import { toast } from '@sub2api/ui'
  */
 const KNOWN_ERRORS: Record<string, string> = {
   would_leave_scope: 'accounts.scopeErrors.wouldLeaveScope',
+  package_gone: 'plugins.errors.packageGone',
   'permission_denied proxy:manage:own': 'proxies.cannotCreate'
 }
 

@@ -313,6 +313,12 @@ func TestAuthzHardeningRollback(t *testing.T) {
 	h.exec(`INSERT INTO role_permission_scopes (role_id, permission_id, scope)
         SELECT r.id, p.id, 'group/12' FROM roles r, permissions p WHERE r.key = 'seller' AND p.key = 'account:test'`)
 	h.exec(`UPDATE user_access_keys SET permissions = permissions || '{account:test:group/12}' WHERE name = 'seller@x'`)
+	// A consent staged for a version not active yet (0098): 0.1.285 has no
+	// staged grants, so that version waits for a new consent.
+	h.exec(`INSERT INTO plugins (key, name, status, active_version) VALUES ('stg', '{}', 'enabled', '1.0.0')`)
+	h.exec(`INSERT INTO plugin_versions (plugin_key, version, manifest, manifest_hash, package_sha256, package_size, signature_status, consent_status)
+        VALUES ('stg', '1.0.0', '{}', 'h', 's', 1, 'unsigned', 'approved'), ('stg', '2.0.0', '{}', 'h', 's', 1, 'unsigned', 'approved')`)
+	h.exec(`INSERT INTO plugin_staged_grants (plugin_key, version, permission, status, manifest_hash) VALUES ('stg', '2.0.0', 'lock', 'granted', 'h')`)
 
 	down, err := os.ReadFile(filepath.Join("..", "..", "..", "deploy", "rollback", "0.1.286-authz-down.sql"))
 	require.NoError(t, err)
@@ -327,6 +333,8 @@ func TestAuthzHardeningRollback(t *testing.T) {
 		filterGrants(h.roleGrants("admin", "operator", "user", "seller", "mixed", "delegator", "updater", "super_admin"), grants))
 	require.Equal(t, keys, h.accessKeys())
 	require.Equal(t, "1", h.text(`SELECT count(*)::text FROM audit_logs WHERE detail->>'via' = 'rollback 0.1.286' AND detail->>'dropped' = 'account:test:group/12'`))
+	require.Equal(t, "1.0.0 approved, 2.0.0 awaiting_consent", h.text(`SELECT string_agg(version || ' ' || consent_status, ', ' ORDER BY version) FROM plugin_versions WHERE plugin_key = 'stg'`))
+	require.Equal(t, `["lock"]`, h.text(`SELECT (detail->'permissions')::text FROM audit_logs WHERE action = 'plugin.grants.withdraw' AND target_id = 'stg' AND detail->>'version' = '2.0.0'`))
 
 	_, err = h.db.Pool.Exec(h.ctx, string(down))
 	require.ErrorContains(t, err, "nothing to roll back")

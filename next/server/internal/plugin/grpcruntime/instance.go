@@ -681,7 +681,7 @@ func (i *Instance) restart(reason string) {
 func (i *Instance) Refresh(ctx context.Context) error {
 	i.refreshMu.Lock()
 	defer i.refreshMu.Unlock()
-	st, err := i.rt.loadSettings(ctx, i.pkg.Key)
+	st, err := i.rt.loadSettings(ctx, i.pkg)
 	if err != nil {
 		return err
 	}

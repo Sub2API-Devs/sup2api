@@ -647,7 +647,7 @@ stateDiagram-v2
 - 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准（2026-10-05 起不再要求再次输入密码，CONTRACTS §3.3）
 - 批准结果写入 `plugin_permission_grants(plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)`；管理员可以把范围改得比申请的更小（比如入账上限）
 - 运行时插件每次调用 HostService，核心都在服务端检查授权
-- 升级时新增权限或扩大范围，新版本进入 `awaiting_consent`，旧版本继续运行
+- 升级时新增权限或扩大范围，新版本进入 `awaiting_consent`，旧版本继续运行；有版本在运行时，对新版本的同意先记为待生效授予（`plugin_staged_grants`），只作用于新版本的实例，发布提交时才成为插件的授予，升级失败或取消时撤回（CONTRACTS §5.7）
 
 ### 5.6 插件数据库 schema 与迁移
 

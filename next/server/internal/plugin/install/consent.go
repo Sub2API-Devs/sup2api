@@ -13,6 +13,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -165,6 +166,20 @@ type consentable struct {
 	current       map[string]Grant
 }
 
+// staged reports that the decisions wait for the version's activation:
+// another version is active, and it keeps running with its own grants.
+func (c *consentable) staged() bool { return c.activeVersion != nil }
+
+// grantDecisions are the decisions as grant rows.
+func grantDecisions(ds []decision) []grants.Decision {
+	out := make([]grants.Decision, len(ds))
+	for i, d := range ds {
+		scope, _ := json.Marshal(d.scope)
+		out[i] = grants.Decision{Permission: d.permission, Scope: scope, Status: d.status}
+	}
+	return out
+}
+
 // loadConsentable locks the plugin and version rows and re-checkes every
 // barrier an approval must pass: uninstall in progress, consent status,
 // signature revocation, publisher revocation and exclusive resources.
@@ -255,17 +270,8 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	if err != nil {
 		return nil, err
 	}
-	for _, d := range decisions {
-		scope, _ := json.Marshal(d.scope)
-		if _, err := tx.Exec(ctx, `
-				INSERT INTO plugin_permission_grants (plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-				ON CONFLICT (plugin_key, permission) DO UPDATE SET
-				  scope = EXCLUDED.scope, status = EXCLUDED.status, plugin_version = EXCLUDED.plugin_version,
-				  manifest_hash = EXCLUDED.manifest_hash, granted_by = EXCLUDED.granted_by, granted_at = now()`,
-			key, d.permission, scope, d.status, version, c.manifestHash, nullID(actorID)); err != nil {
-			return nil, err
-		}
+	if err := grants.Record(ctx, tx, key, version, c.manifestHash, nullID(actorID), c.staged(), grantDecisions(decisions)); err != nil {
+		return nil, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE plugin_versions SET consent_status = 'approved' WHERE plugin_key = $1 AND version = $2`, key, version); err != nil {
 		return nil, err
@@ -306,11 +312,11 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 		}
 	}
 
-	grants, err := LoadGrants(ctx, tx, key)
+	granted, err := LoadVersionGrants(ctx, tx, key, version)
 	if err != nil {
 		return nil, err
 	}
-	res := &ConsentResult{PluginKey: key, Version: version, Status: status, Upgrade: c.upgrade, Grants: SortedGrants(grants)}
+	res := &ConsentResult{PluginKey: key, Version: version, Status: status, Upgrade: c.upgrade, Grants: SortedGrants(granted)}
 	summary := make([]map[string]any, 0, len(decisions))
 	for _, d := range decisions {
 		summary = append(summary, map[string]any{"permission": d.permission, "status": d.status, "scope": d.scope, "carried": d.carried})
@@ -600,15 +606,14 @@ func (s *Service) Reject(ctx context.Context, key, version string, actorID int64
 	})
 }
 
-// RevokeGrant marks one host permission grant revoked.
+// RevokeGrant marks one host permission grant revoked, staged ones included.
 func (s *Service) RevokeGrant(ctx context.Context, key, permission string, actorID int64) error {
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE plugin_permission_grants SET status = 'revoked', granted_by = $3, granted_at = now()
-			WHERE plugin_key = $1 AND permission = $2 AND status = 'granted'`, key, permission, nullID(actorID))
+		revoked, err := grants.Revoke(ctx, tx, key, permission, nullID(actorID))
 		if err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
+		if !revoked {
 			return core.ErrNotFound.WithMessage("grant not found")
 		}
 		if _, err := tx.Exec(ctx, `UPDATE plugins SET row_version=row_version+1,updated_at=now() WHERE key=$1`, key); err != nil {

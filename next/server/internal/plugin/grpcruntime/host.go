@@ -21,6 +21,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 )
 
 // Limits enforced by HostService. The rules of the kv calls (the limits of
@@ -65,8 +66,7 @@ func (h *hostServer) require(ctx context.Context, permission string) error {
 	// after an emergency revocation has committed in PG. Also reject a stale
 	// broader scope until the local settings have refreshed.
 	if db := h.i.rt.o.DB; db != nil {
-		var allowed bool
-		err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_permission_grants WHERE plugin_key=$1 AND permission=$2 AND status='granted' AND scope=$3::jsonb)`, h.key(), permission, []byte(h.i.Grants()[permission])).Scan(&allowed)
+		allowed, err := grants.Holds(ctx, db.Pool, h.key(), h.i.pkg.Version, permission, h.i.Grants()[permission])
 		if err != nil {
 			return status.Error(codes.Unavailable, "cannot verify current plugin grant")
 		}

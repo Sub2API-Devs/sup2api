@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -254,31 +255,17 @@ func approvedPluginsReady(ctx context.Context, db *store.DB, reg core.PluginRegi
 		if local.Manifest == nil {
 			return "", fmt.Errorf("plugin %s manifest is missing", p.key)
 		}
-		grantRows, err := db.Pool.Query(ctx, `SELECT permission FROM plugin_permission_grants WHERE plugin_key=$1 AND status='granted' ORDER BY permission`, p.key)
-		if err != nil {
-			return "", err
-		}
-		granted := map[string]bool{}
-		for grantRows.Next() {
-			var permission string
-			if err = grantRows.Scan(&permission); err != nil {
-				grantRows.Close()
-				return "", err
-			}
-			granted[permission] = true
-		}
-		err = grantRows.Err()
-		grantRows.Close()
+		granted, err := grants.Granted(ctx, db.Pool, p.key, local.Version, local.Manifest.HostPermissions)
 		if err != nil {
 			return "", err
 		}
 		for _, permission := range local.GrantedPermissions {
-			if !granted[permission] {
+			if _, ok := granted[permission]; !ok {
 				return "", fmt.Errorf("plugin %s permission revocation has not converged", p.key)
 			}
 		}
 		for _, permission := range local.Manifest.HostPermissions {
-			if !permission.Optional && !granted[permission.ID] {
+			if _, ok := granted[permission.ID]; !ok && !permission.Optional {
 				return "", fmt.Errorf("plugin %s required permission %s is not granted", p.key, permission.ID)
 			}
 		}

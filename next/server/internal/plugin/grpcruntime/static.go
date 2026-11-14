@@ -30,7 +30,7 @@ func (r *Runtime) LoadStatic(ctx context.Context, pkg *registry.Package) (*Stati
 	if err := r.checkHostCompat(pkg); err != nil {
 		return nil, err
 	}
-	st, err := r.loadSettings(ctx, pkg.Key)
+	st, err := r.loadSettings(ctx, pkg)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %s@%s: load settings: %w", pkg.Key, pkg.Version, err)
 	}
@@ -57,7 +57,7 @@ func (i *StaticInstance) Restarts() int { return 0 }
 func (i *StaticInstance) Refresh(ctx context.Context) error {
 	i.refreshMu.Lock()
 	defer i.refreshMu.Unlock()
-	st, err := i.rt.loadSettings(ctx, i.pkg.Key)
+	st, err := i.rt.loadSettings(ctx, i.pkg)
 	if err != nil {
 		return err
 	}

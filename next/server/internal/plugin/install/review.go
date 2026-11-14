@@ -9,6 +9,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grants"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -209,11 +210,21 @@ func riskOf(id string) string {
 	return manifest.RiskCritical
 }
 
-// LoadGrants reads all grant rows of a plugin.
+// LoadGrants reads all grant rows of a plugin: what its active version is
+// granted.
 func LoadGrants(ctx context.Context, q store.Querier, key string) (map[string]Grant, error) {
-	rows, err := q.Query(ctx, `
-		SELECT permission, scope, status, plugin_version, granted_by, granted_at
-		FROM plugin_permission_grants WHERE plugin_key = $1 ORDER BY permission`, key)
+	return loadGrants(ctx, q, `SELECT permission, scope, status, plugin_version, granted_by, granted_at
+		FROM plugin_permission_grants WHERE plugin_key = $1`, key)
+}
+
+// LoadVersionGrants reads the grant rows key@version runs with: the set
+// staged for it while it is not active, else the plugin's grants.
+func LoadVersionGrants(ctx context.Context, q store.Querier, key, version string) (map[string]Grant, error) {
+	return loadGrants(ctx, q, `SELECT permission, scope, status, plugin_version, granted_by, granted_at FROM `+grants.VersionRows, key, version)
+}
+
+func loadGrants(ctx context.Context, q store.Querier, sql string, args ...any) (map[string]Grant, error) {
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}

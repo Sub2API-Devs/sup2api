@@ -96,6 +96,7 @@ func setup(t *testing.T, grants map[string]string) *env {
 	}
 	key := randKey("rt")
 	m := registrytest.Manifest(key, "1.0.0")
+	m.HostPermissions = registrytest.Declare(grants)
 	pkg := registrytest.Package(t, m, registrytest.TestPlugin(t), map[string][]byte{
 		"migrations/0001_init.sql": []byte(`CREATE TABLE items (id int PRIMARY KEY);`),
 	})

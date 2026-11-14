@@ -187,6 +187,7 @@ export default {
     titleInstall: 'Install plugin',
     titleUpgrade: 'Upgrade plugin',
     notFound: 'Review information for this version is not available. Upload the package again or install it from the market.',
+    packageGone: 'The package of version {version} is no longer available on any node (it may have been cleaned up after a failed upgrade), so it cannot be reviewed or approved. Upload the package again or install it from the market.',
     fromCache: 'Showing the review returned at upload time.',
     signature: 'Signature',
     hostCompat: 'Host compat',
@@ -494,5 +495,8 @@ export default {
     short: '{n} resource(s) not granted',
     title: 'Resources not granted',
     hint: 'Another plugin claimed these first, or the core holds them now (for example after a core upgrade). The plugin runs without them: its endpoints below are not served. Disable or uninstall the conflicting plugin, or upgrade this one, then re-enable it.'
+  },
+  errors: {
+    packageGone: 'The package of this plugin version is no longer available on any node (it may have been cleaned up after a failed upgrade). Upload it again or install it from the market.'
   }
 }

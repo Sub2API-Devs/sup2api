@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
+import { api, isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, PluginRoleGrant, ReviewDiffItem } from '@/api/types'
 import { lt } from '@/i18n'
@@ -33,6 +33,8 @@ const version = computed(() => String(route.params.version))
 const review = ref<PluginReview | null>(null)
 const loading = ref(true)
 const loadError = ref('')
+/** The version's package is no longer on any node (410 package_gone): nothing to review or approve. */
+const packageGone = ref(false)
 const fromCache = ref(false)
 const submitting = ref(false)
 const rejecting = ref(false)
@@ -129,12 +131,16 @@ async function load() {
   loading.value = true
   loadError.value = ''
   fromCache.value = false
+  packageGone.value = false
   try {
     review.value = await api.get<PluginReview>(
       `/plugins/${encodeURIComponent(key.value)}/versions/${encodeURIComponent(version.value)}/review`
     )
   } catch (e) {
-    const cached = getReview(key.value, version.value)
+    // The review kept from the upload would offer to approve a package that is gone.
+    packageGone.value = isApiError(e) && e.code === 'package_gone'
+    if (packageGone.value) dropReview(key.value, version.value)
+    const cached = packageGone.value ? undefined : getReview(key.value, version.value)
     if (cached) {
       review.value = cached
       fromCache.value = true
@@ -211,8 +217,8 @@ onMounted(load)
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
 
     <SCard v-else-if="!review">
-      <SEmpty icon="warning" :text="t('plugins.consent.notFound')">
-        <SHint v-if="loadError" size="xs" tone="danger">{{ loadError }}</SHint>
+      <SEmpty icon="warning" :text="packageGone ? t('plugins.consent.packageGone', { version }) : t('plugins.consent.notFound')" data-testid="consent-unavailable">
+        <SHint v-if="loadError && !packageGone" size="xs" tone="danger">{{ loadError }}</SHint>
         <SButton size="sm" @click="load">{{ t('common.refresh') }}</SButton>
       </SEmpty>
     </SCard>
